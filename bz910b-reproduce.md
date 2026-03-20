@@ -5,7 +5,7 @@ Use this when you want to run PyPTO tests on `hng-atlas01` with the prebuilt ima
 ### 1) SSH to the server
 
 ```bash
-ssh -i ~/.ssh/id_ 192.168.150.11
+ssh -i ~/.ssh/id_ *server-ip*
 ```
 
 ### 2) Go to the repository
