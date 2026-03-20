@@ -1,0 +1,128 @@
+# PyPTO server/dev image
+#
+# BUILD:
+#   docker build -f Dockerfile.server -t pypto-dev-env:latest .
+#
+# RUN (interactive shell, bind current source tree):
+#   docker run --rm -it --privileged -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi:ro -v /usr/local/Ascend:/usr/local/Ascend:ro -v /dev:/dev -v "$PWD":/workspace/pypto -w /workspace/pypto pypto-dev-env:latest
+#
+# COMMON COMMANDS INSIDE CONTAINER:
+#   pip install -e ".[dev]"  # Optional when editing mounted source code
+#   python -c "import pypto; print('pypto ok')"
+#   pytest tests/ut -v
+#   pytest tests/st -v --forked --platform=a2a3 --device=0
+#   pytest tests/st -v --forked --codegen-only
+#   pytest tests/st/codegen/test_paged_attention.py -v --forked --platform=a2a3 --device=0
+#   python tests/lint/clang_tidy.py --jobs=$(nproc)
+#   pre-commit run --all-files
+#
+# NOTES:
+# - This image does NOT install CANN/PTO-ISA. It expects host mounts under /usr/local/Ascend and /dev (as used in the run command above).
+# - This image installs simpler runtime at /opt/simpler for tests/st.
+#
+FROM ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_CACHE_DIR=/tmp/pip-cache \
+    CC=gcc-15 \
+    CXX=g++-15
+
+# Match project CI defaults: Python 3.10 + gcc/g++-15 on Ubuntu 22.04.
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+      software-properties-common \
+      gnupg gpg-agent dirmngr && \
+    add-apt-repository -y ppa:deadsnakes/ppa && \
+    add-apt-repository -y ppa:ubuntu-toolchain-r/test && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+      python3.10 python3.10-dev python3.10-venv \
+      gcc-15 g++-15 build-essential \
+      cmake ninja-build pkg-config \
+      mpich libmpich-dev \
+      git curl ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-15 1 && \
+    update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-15 1 && \
+    update-alternatives --install /usr/bin/cc cc /usr/bin/gcc-15 1 && \
+    update-alternatives --install /usr/bin/c++ c++ /usr/bin/g++-15 1 && \
+    update-alternatives --install /usr/bin/python python /usr/bin/python3.10 1 && \
+    update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.10 1
+
+RUN git config --system --add safe.directory /workspace/pypto
+
+RUN curl -sS https://bootstrap.pypa.io/get-pip.py | python3
+
+WORKDIR /workspace/pypto
+
+# Install simpler runtime for tests/st and fuzz flows.
+RUN git clone --depth 1 --branch stable https://github.com/hw-native-sys/simpler /opt/simpler
+
+# Install PTOAS (required by PTOAS strategy tests in tests/st/codegen).
+ARG PTOAS_VERSION=v0.8
+ARG PTOAS_SHA256=7c73ba35accca6f0b1a05e09bbb1966ff1d390462c2193fa09ccf181a6af9982
+RUN curl --fail --location --retry 3 --retry-all-errors \
+      "https://github.com/zhangstevenunity/PTOAS/releases/download/${PTOAS_VERSION}/ptoas-bin-aarch64.tar.gz" \
+      -o /tmp/ptoas-bin-aarch64.tar.gz && \
+    echo "${PTOAS_SHA256}  /tmp/ptoas-bin-aarch64.tar.gz" | sha256sum -c - && \
+    mkdir -p /opt/ptoas-bin && \
+    tar -xzf /tmp/ptoas-bin-aarch64.tar.gz -C /opt/ptoas-bin && \
+    chmod +x /opt/ptoas-bin/ptoas /opt/ptoas-bin/bin/ptoas && \
+    rm -f /tmp/ptoas-bin-aarch64.tar.gz
+
+# Install Python toolchain first (stable layer, re-used across source edits).
+RUN python3 -m pip install --upgrade pip setuptools wheel && \
+    pip install \
+      "scikit-build-core>=0.10.0" \
+      "nanobind>=2.0.0" \
+      "ninja>=1.11.0" \
+      "cmake>=3.15"
+
+# Mirror CI image dependencies used across pre-commit/lint/unit/fuzz workflows.
+RUN pip install \
+      "numpy>=2.0" \
+      "pytest>=7.0.0" "pytest-forked>=1.0" "pytest-xdist==3.8.0" \
+      "pyright==1.1.407" "ruff==0.14.8" "clang-tidy==21.1.0" \
+      "pre-commit==4.5.1"
+
+# Match fuzz simulation environment from CI container image.
+RUN pip install \
+      "torch==2.6.0" --index-url https://download.pytorch.org/whl/cpu
+
+# Copy source after dependency layers for cache-efficient rebuilds.
+COPY . /workspace/pypto
+
+# Ensure required third-party sources exist (submodule checkout or fallback clone).
+RUN if [ ! -f 3rdparty/libbacktrace/configure.ac ]; then \
+      rm -rf 3rdparty/libbacktrace && \
+      git clone --depth 1 --branch macho-bundle-support https://github.com/Hzfengsy/libbacktrace.git 3rdparty/libbacktrace; \
+    fi && \
+    if [ ! -f 3rdparty/msgpack-c/include/msgpack.hpp ]; then \
+      rm -rf 3rdparty/msgpack-c && \
+      git clone --depth 1 --branch cpp_master https://github.com/msgpack/msgpack-c.git 3rdparty/msgpack-c; \
+    fi && \
+    test -f 3rdparty/libbacktrace/configure.ac && \
+    test -f 3rdparty/msgpack-c/include/msgpack.hpp
+
+# Install project exactly as CI jobs do.
+RUN pip install -v ".[dev]"
+
+#
+# Host-mounted Ascend runtime model:
+# - CANN/PTO-ISA are expected from host mounts (not installed in this image).
+# - Mount /usr/local/Ascend and /dev when running hardware tests.
+#
+ENV ASCEND_HOME_PATH=/usr/local/Ascend/cann-8.5.0 \
+    PTO_TILE_LIB_CODE_PATH=/usr/local/Ascend/cann-8.5.0 \
+    ASCEND_OPP_PATH=/usr/local/Ascend/ascend-toolkit/latest/opp \
+    MPI_HOME=/usr \
+    PTOAS_ROOT=/opt/ptoas-bin \
+    SIMPLER_ROOT=/opt/simpler \
+    LD_LIBRARY_PATH=/usr/local/Ascend/driver/lib64/driver:/usr/local/Ascend/ascend-toolkit/latest/lib64:${LD_LIBRARY_PATH:-} \
+    PYTHONPATH=/opt/simpler/python:/opt/simpler/examples/scripts:${PYTHONPATH:-} \
+    PATH=/opt/ptoas-bin:/opt/ptoas-bin/bin:${PATH}
+
+CMD ["bash"]
