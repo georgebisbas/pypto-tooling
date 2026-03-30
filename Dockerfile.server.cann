@@ -4,21 +4,31 @@
 #   docker build -f Dockerfile.server.cann -t pypto-3.0:cann .
 #
 # RUN (recommended, with source mount):
-#   docker run --rm -it --privileged -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi:ro -v /dev:/dev -v "$PWD":/workspace/hw-native-sys/pypto -w /workspace/hw-native-sys/pypto pypto-3.0:cann
+#   docker run --rm -it --privileged -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi:ro -v /usr/local/Ascend:/usr/local/Ascend:ro -v /dev:/dev -v "$PWD":/workspace/hw-native-sys/pypto -w /workspace/hw-native-sys/pypto pypto-3.0:cann
 #
 # RUN (immutable image validation, no source mount):
-#   docker run --rm -it --privileged -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi:ro -v /dev:/dev pypto-3.0:cann
+#   docker run --rm -it --privileged -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi:ro -v /usr/local/Ascend:/usr/local/Ascend:ro -v /dev:/dev pypto-3.0:cann
 #
 # COMMON COMMANDS INSIDE CONTAINER:
-#   pip install -e ".[dev]"  # Optional when editing mounted source code
+#
+#   # Verify the installed package works (do NOT set PYTHONPATH to python/):
 #   python -c "import pypto; print('pypto ok')"
 #   which ptoas
+#
+#   # For live Python edits without rebuilding the image, reinstall editable:
+#   pip install -e ".[dev]"
+#
+#   # Run tests (PTO_ISA_ROOT is baked in — no manual clone needed):
 #   pytest tests/ut -v
 #   pytest tests/st -v --forked --platform=a2a3 --device=0
 #
+# WARNING: Do NOT export PYTHONPATH="$(pwd)/python:..." — this causes pypto_core
+# (stubs-only source dir) to shadow the compiled .so in site-packages, leading to
+# "ImportError: cannot import name 'DataType' from 'pypto.pypto_core' (unknown location)".
+#
 # NOTES:
-# - Uses official CANN user-space image instead of host-mounted /usr/local/Ascend.
-# - Still requires device access from host (/dev) for hardware execution.
+# - Uses official CANN user-space image, but hardware runs still need host driver/toolkit mounts.
+# - Hardware execution requires both /usr/local/Ascend and /dev from the host, matching CI.
 #
 FROM quay.io/ascend/cann:8.5.0-910b-ubuntu22.04-py3.11
 
@@ -45,7 +55,19 @@ RUN git config --system --add safe.directory /workspace/hw-native-sys/pypto
 WORKDIR /workspace/hw-native-sys/pypto
 
 # Install simpler runtime for tests/st and fuzz flows.
-RUN git clone --depth 1 --branch stable https://github.com/hw-native-sys/simpler /opt/simpler
+# Keep this pinned to a TaskArg-compatible stable commit for reproducibility.
+ARG SIMPLER_COMMIT=ca2f44a5528d2df78a3efc519b58f712a4e88f4b
+RUN git clone https://github.com/hw-native-sys/simpler /opt/simpler && \
+  git -C /opt/simpler checkout "${SIMPLER_COMMIT}" && \
+  git -C /opt/simpler rev-parse --short HEAD
+
+# Install PTO-ISA (required by system tests that call code_runner).
+# Keep this pinned to simpler/.github/workflows/ci.yml (-c commit in ./ci.sh invocation).
+# ARG PTO_ISA_COMMIT=6622890
+ARG PTO_ISA_COMMIT=7546147
+RUN git clone https://github.com/PTO-ISA/pto-isa.git /opt/pto-isa && \
+  git -C /opt/pto-isa checkout "${PTO_ISA_COMMIT}" && \
+  git -C /opt/pto-isa rev-parse --short HEAD
 
 # Install PTOAS (required by PTOAS strategy tests in tests/st/codegen).
 ARG PTOAS_VERSION=v0.16
@@ -78,6 +100,9 @@ RUN pip install \
 RUN pip install \
       "torch==2.6.0" --index-url https://download.pytorch.org/whl/cpu
 
+# Build simpler's nanobind extension and prebuilt runtime cache used by tests/st.
+RUN pip install -v /opt/simpler
+
 COPY . /workspace/hw-native-sys/pypto
 
 # Ensure required third-party sources exist (submodule checkout or fallback clone).
@@ -94,9 +119,14 @@ RUN if [ ! -f 3rdparty/libbacktrace/configure.ac ]; then \
 
 RUN pip install -v ".[dev]"
 
-ENV MPI_HOME=/usr \
+ENV ASCEND_HOME_PATH=/usr/local/Ascend/cann-8.5.0 \
+    PTO_TILE_LIB_CODE_PATH=/usr/local/Ascend/cann-8.5.0 \
+    ASCEND_OPP_PATH=/usr/local/Ascend/ascend-toolkit/latest/opp \
+    MPI_HOME=/usr \
     PTOAS_ROOT=/opt/ptoas-bin \
     SIMPLER_ROOT=/opt/simpler \
+    PTO_ISA_ROOT=/opt/pto-isa \
+    LD_LIBRARY_PATH=/usr/local/Ascend/driver/lib64/driver:/usr/local/Ascend/ascend-toolkit/latest/lib64:${LD_LIBRARY_PATH:-} \
     PATH=/opt/ptoas-bin:/opt/ptoas-bin/bin:${PATH} \
     PYTHONPATH=/opt/simpler/python:/opt/simpler/examples/scripts:${PYTHONPATH:-}
 

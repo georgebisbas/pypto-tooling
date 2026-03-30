@@ -1,11 +1,11 @@
-## PyPTO 3.0 (hw-native-sys) BZ CI Test Tutorial
+## PyPTO 3.0 (hw-native-sys) Server Test Tutorial
 
 Use this when you want to run PyPTO tests on `hng-atlas01` with the prebuilt image.
 
 ### 1) SSH to the server
 
 ```bash
-ssh -i ~/.ssh/id_ *server-ip*
+ssh -i ~/.ssh/id_
 ```
 
 ### 2) Go to the repository
@@ -24,8 +24,17 @@ docker build -f Dockerfile.server -t pypto-dev-env:latest .
 
 ### 4) Start the container (NPU-enabled)
 
+Recommended mode (with source mount): use this for day-to-day development and testing.
+It mounts `~/hw-native-sys/pypto` into the container at `/workspace/hw-native-sys/pypto`.
+
 ```bash
-docker run --rm -it --privileged -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi:ro -v /usr/local/Ascend:/usr/local/Ascend:ro -v /dev:/dev -v "$PWD":/workspace/pypto -w /workspace/pypto pypto-dev-env:latest
+docker run --rm -it --privileged -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi:ro -v /usr/local/Ascend:/usr/local/Ascend:ro -v /dev:/dev -v "$PWD":/workspace/hw-native-sys/pypto -w /workspace/hw-native-sys/pypto pypto-dev-env:latest
+```
+
+Optional mode (without source mount): use this for immutable image validation only.
+
+```bash
+docker run --rm -it --privileged -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi:ro -v /usr/local/Ascend:/usr/local/Ascend:ro -v /dev:/dev pypto-dev-env:latest
 ```
 
 ---
@@ -47,11 +56,11 @@ Expected:
 - `SIMPLER_ROOT=/opt/simpler`
 - `ptoas` found in PATH
 
-If you are actively changing code in mounted repo, refresh editable install:
+If you are actively changing code in the mounted repo, refresh editable install:
 ```bash
 pip install -e ".[dev]"
 ```
-(If only running prebuilt code from the image, this is usually not necessary.)
+(If you run without source mount, this is usually not necessary.)
 
 ---
 
