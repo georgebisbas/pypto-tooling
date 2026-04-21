@@ -1,13 +1,14 @@
 # PyPTO server/dev image (official CANN base, more isolated user-space stack)
 #
 # BUILD:
-#   docker build -f Dockerfile.server.cann -t pypto-3.0:cann .
+#   docker build --no-cache -f Dockerfile.server.cann -t pypto-dev-env:latest .
+#   docker image inspect pypto-dev-env:latest --format '{{json .Config.Entrypoint}}'
 #
 # RUN (recommended, with source mount):
-#   docker run --rm -it --privileged -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi:ro -v /usr/local/Ascend:/usr/local/Ascend:ro -v /dev:/dev -v "$PWD":/workspace/hw-native-sys/pypto -w /workspace/hw-native-sys/pypto pypto-3.0:cann
+#   docker run --rm -it --privileged -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi:ro -v /usr/local/Ascend:/usr/local/Ascend:ro -v /dev:/dev -v "$PWD":/workspace/hw-native-sys/pypto -w /workspace/hw-native-sys/pypto pypto-dev-env:latest
 #
 # RUN (immutable image validation, no source mount):
-#   docker run --rm -it --privileged -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi:ro -v /usr/local/Ascend:/usr/local/Ascend:ro -v /dev:/dev pypto-3.0:cann
+#   docker run --rm -it --privileged -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi:ro -v /usr/local/Ascend:/usr/local/Ascend:ro -v /dev:/dev pypto-dev-env:latest
 #
 # COMMON COMMANDS INSIDE CONTAINER:
 #
@@ -56,7 +57,7 @@ WORKDIR /workspace/hw-native-sys/pypto
 
 # Install simpler runtime for tests/st and fuzz flows.
 # Keep this pinned to a TaskArg-compatible stable commit for reproducibility.
-ARG SIMPLER_COMMIT=b10403cd181cc72f0e6fb600b7c6bb8cdba61e54
+ARG SIMPLER_COMMIT=bb7965fb67e0ea627720e626592803f7f3e9314b
 RUN git clone https://github.com/hw-native-sys/simpler /opt/simpler && \
   git -C /opt/simpler checkout "${SIMPLER_COMMIT}" && \
   git -C /opt/simpler rev-parse --short HEAD
@@ -64,7 +65,7 @@ RUN git clone https://github.com/hw-native-sys/simpler /opt/simpler && \
 # Install PTO-ISA (required by system tests that call code_runner).
 # Keep this pinned to simpler/.github/workflows/ci.yml (-c commit in ./ci.sh invocation).
 # ARG PTO_ISA_COMMIT=6622890
-ARG PTO_ISA_COMMIT=7546147
+ARG PTO_ISA_COMMIT=6eecebc5
 RUN git clone https://github.com/PTO-ISA/pto-isa.git /opt/pto-isa && \
   git -C /opt/pto-isa checkout "${PTO_ISA_COMMIT}" && \
   git -C /opt/pto-isa rev-parse --short HEAD
@@ -126,8 +127,7 @@ ENV ASCEND_HOME_PATH=/usr/local/Ascend/cann-8.5.0 \
     PTOAS_ROOT=/opt/ptoas-bin \
     SIMPLER_ROOT=/opt/simpler \
     PTO_ISA_ROOT=/opt/pto-isa \
-    LD_LIBRARY_PATH=/usr/local/Ascend/driver/lib64/driver:/usr/local/Ascend/ascend-toolkit/latest/lib64 \
+    LD_LIBRARY_PATH=/usr/local/Ascend/driver/lib64/driver:/usr/local/Ascend/ascend-toolkit/latest/lib64:${LD_LIBRARY_PATH:-} \
     PATH=/opt/ptoas-bin:/opt/ptoas-bin/bin:${PATH} \
-    PYTHONPATH=/opt/simpler/python:/opt/simpler/examples/scripts
-
+    PYTHONPATH=/opt/simpler/python:/opt/simpler/examples/scripts:${PYTHONPATH:-}
 CMD ["bash"]

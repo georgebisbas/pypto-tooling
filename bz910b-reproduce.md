@@ -1,11 +1,11 @@
 ## PyPTO 3.0 (hw-native-sys) Server Test Tutorial
 
-Use this when you want to run PyPTO tests on `hng-atlas01` with the prebuilt image.
+Use this when you want to run PyPTO tests on `hng-atlas01` with the CANN-based image.
 
 ### 1) SSH to the server
 
 ```bash
-ssh -i ~/.ssh/id_
+ssh -i ~/.ssh/i....
 ```
 
 ### 2) Go to the repository
@@ -14,12 +14,24 @@ ssh -i ~/.ssh/id_
 cd ~/hw-native-sys/pypto
 ```
 
-### 3) (Optional) Rebuild image
+### 3) Build image (recommended)
 
-Skip this if `pypto-dev-env:latest` already exists and you do not need Dockerfile changes.
+Default to the CANN image. Rebuild whenever Dockerfile or startup script changes.
 
 ```bash
-docker build -f Dockerfile.server -t pypto-dev-env:latest .
+docker build --no-cache -f Dockerfile.server.cann -t pypto-dev-env:latest .
+```
+
+Quick sanity check that the image has the expected entrypoint:
+
+```bash
+docker image inspect pypto-dev-env:latest --format '{{json .Config.Entrypoint}}'
+```
+
+Expected:
+
+```text
+["/usr/local/bin/docker-entrypoint-cann.sh"]
 ```
 
 ### 4) Start the container (NPU-enabled)
@@ -123,6 +135,21 @@ You should see activity while kernels execute.
 
 ## Common issues and fixes
 
+- **`permission denied` on container start (exit code 126)**
+  - Symptom:
+    - `exec: "/workspace/hw-native-sys/pypto/scripts/docker-entrypoint-cann.sh": permission denied`
+  - Cause:
+    - stale image still using old entrypoint path or old cached layers.
+  - Fix:
+    ```bash
+    docker build --no-cache -f Dockerfile.server.cann -t pypto-dev-env:latest .
+    docker image inspect pypto-dev-env:latest --format '{{json .Config.Entrypoint}}'
+    ```
+    Confirm it prints:
+    ```text
+    ["/usr/local/bin/docker-entrypoint-cann.sh"]
+    ```
+
 - **`ptoas binary not found`**
   - In this image it should already be installed.
   - Check: `which ptoas` and `echo $PTOAS_ROOT`.
@@ -141,6 +168,15 @@ You should see activity while kernels execute.
   - Temporary fix if needed:
     ```bash
     git config --global --add safe.directory /workspace/pypto
+    ```
+
+- **`fatal error: 'tensor.h' file not found` during runtime tests**
+  - Usually indicates runtime/include resolution mismatch between mounted workspace and installed simpler runtime.
+  - Ensure you are using the CANN image built from `Dockerfile.server.cann` and that container startup succeeds through `/usr/local/bin/docker-entrypoint-cann.sh`.
+  - Re-run:
+    ```bash
+    python -c "import pypto; print('pypto ok')"
+    pytest tests/st/runtime/test_matmul.py -v --forked --platform=a2a3 --device=0
     ```
 
 ---
