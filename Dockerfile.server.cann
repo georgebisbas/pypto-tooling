@@ -56,7 +56,7 @@ WORKDIR /workspace/hw-native-sys/pypto
 
 # Install simpler runtime for tests/st and fuzz flows.
 # Keep this pinned to a TaskArg-compatible stable commit for reproducibility.
-ARG SIMPLER_COMMIT=ca2f44a5528d2df78a3efc519b58f712a4e88f4b
+ARG SIMPLER_COMMIT=b10403cd181cc72f0e6fb600b7c6bb8cdba61e54
 RUN git clone https://github.com/hw-native-sys/simpler /opt/simpler && \
   git -C /opt/simpler checkout "${SIMPLER_COMMIT}" && \
   git -C /opt/simpler rev-parse --short HEAD
@@ -126,8 +126,8 @@ ENV ASCEND_HOME_PATH=/usr/local/Ascend/cann-8.5.0 \
     PTOAS_ROOT=/opt/ptoas-bin \
     SIMPLER_ROOT=/opt/simpler \
     PTO_ISA_ROOT=/opt/pto-isa \
-    LD_LIBRARY_PATH=/usr/local/Ascend/driver/lib64/driver:/usr/local/Ascend/ascend-toolkit/latest/lib64:${LD_LIBRARY_PATH:-} \
+    LD_LIBRARY_PATH=/usr/local/Ascend/driver/lib64/driver:/usr/local/Ascend/ascend-toolkit/latest/lib64 \
     PATH=/opt/ptoas-bin:/opt/ptoas-bin/bin:${PATH} \
-    PYTHONPATH=/opt/simpler/python:/opt/simpler/examples/scripts:${PYTHONPATH:-}
+    PYTHONPATH=/opt/simpler/python:/opt/simpler/examples/scripts
 
 CMD ["bash"]
