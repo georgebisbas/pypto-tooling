@@ -2,6 +2,8 @@
 #
 # EXPECTED REPO LAYOUT (build context = hw-native-sys/):
 #
+# ONLY pypto/ MUST EXIST ON HOST — everything else is cloned or mounted.
+#
 #   workspace/hw-native-sys/
 #   ├── Dockerfile.server.cann       ← this file
 #   ├── pypto/                       ← main repo (required, copied into image)
@@ -13,6 +15,12 @@
 #   ├── pto-isa/                     ← cloned independently for editing
 #   └── pypto_top_level_documents/   ← design docs repo
 #
+# WHAT GETS CLONED DURING BUILD:
+#   /opt/pto-isa        — from github.com/PTO-ISA/pto-isa.git (pinned commit)
+#   /opt/ptoas-bin       — PTOAS binary (downloaded release tarball)
+#   ./runtime            — simpler fallback if submodule not checked out
+#   ./3rdparty/*         — libbacktrace/msgpack-c fallbacks if submodules missing
+#
 # BUILD:
 #   docker build -f Dockerfile.server.cann -t pypto3-dev-env:latest .
 #   docker image inspect pypto3-dev-env:latest --format '{{json .Config.Entrypoint}}'
@@ -20,8 +28,6 @@
 # RUN (recommended, with source mount):
 #   docker run --rm -it --privileged -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi:ro -v /usr/local/Ascend:/usr/local/Ascend:ro -v /dev:/dev -v /home/gbismpas/hw-native-sys:/workspace/hw-native-sys -w /workspace/hw-native-sys/pypto pypto3-dev-env:latest
 #
-# RUN (immutable image validation, no source mount):
-#   docker run --rm -it --privileged -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi:ro -v /usr/local/Ascend:/usr/local/Ascend:ro -v /dev:/dev pypto3-dev-env:latest
 #
 # COMMON COMMANDS INSIDE CONTAINER:
 #
@@ -36,9 +42,6 @@
 #   pytest tests/ut -v
 #   pytest tests/st -v --precompile-workers=128 --platform=a2a3 --device="0,1,2,3"
 #
-# WARNING: Do NOT export PYTHONPATH="$(pwd)/python:..." — this causes pypto_core
-# (stubs-only source dir) to shadow the compiled .so in site-packages, leading to
-# "ImportError: cannot import name 'DataType' from 'pypto.pypto_core' (unknown location)".
 #
 # NOTES:
 # - Uses official CANN user-space image, but hardware runs still need host driver/toolkit mounts.
