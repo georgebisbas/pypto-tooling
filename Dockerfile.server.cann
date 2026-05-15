@@ -1,14 +1,27 @@
 # PyPTO server/dev image (official CANN base, more isolated user-space stack)
 #
+# EXPECTED REPO LAYOUT (build context = hw-native-sys/):
+#
+#   workspace/hw-native-sys/
+#   ├── Dockerfile.server.cann       ← this file
+#   ├── pypto/                       ← main repo (required, copied into image)
+#   │   ├── pyproject.toml
+#   │   ├── runtime/                 ← simpler submodule
+#   │   └── ...
+#   ├── simpler/                     ← cloned independently for editing
+#   ├── PTOAS/                       ← cloned independently for editing
+#   ├── pto-isa/                     ← cloned independently for editing
+#   └── pypto_top_level_documents/   ← design docs repo
+#
 # BUILD:
-#   docker build --no-cache -f Dockerfile.server.cann -t pypto-dev-env:latest .
-#   docker image inspect pypto-dev-env:latest --format '{{json .Config.Entrypoint}}'
+#   docker build -f Dockerfile.server.cann -t pypto3-dev-env:latest .
+#   docker image inspect pypto3-dev-env:latest --format '{{json .Config.Entrypoint}}'
 #
 # RUN (recommended, with source mount):
-#   docker run --rm -it --privileged -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi:ro -v /usr/local/Ascend:/usr/local/Ascend:ro -v /dev:/dev -v "$PWD":/workspace/hw-native-sys/pypto -w /workspace/hw-native-sys/pypto pypto-dev-env:latest
+#   docker run --rm -it --privileged -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi:ro -v /usr/local/Ascend:/usr/local/Ascend:ro -v /dev:/dev -v /home/gbismpas/hw-native-sys:/workspace/hw-native-sys -w /workspace/hw-native-sys/pypto pypto3-dev-env:latest
 #
 # RUN (immutable image validation, no source mount):
-#   docker run --rm -it --privileged -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi:ro -v /usr/local/Ascend:/usr/local/Ascend:ro -v /dev:/dev pypto-dev-env:latest
+#   docker run --rm -it --privileged -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi:ro -v /usr/local/Ascend:/usr/local/Ascend:ro -v /dev:/dev pypto3-dev-env:latest
 #
 # COMMON COMMANDS INSIDE CONTAINER:
 #
@@ -21,7 +34,7 @@
 #
 #   # Run tests (PTO_ISA_ROOT is baked in — no manual clone needed):
 #   pytest tests/ut -v
-#   pytest tests/st -v --forked --platform=a2a3 --device=0
+#   pytest tests/st -v --precompile-workers=128 --platform=a2a3 --device="0,1,2,3"
 #
 # WARNING: Do NOT export PYTHONPATH="$(pwd)/python:..." — this causes pypto_core
 # (stubs-only source dir) to shadow the compiled .so in site-packages, leading to
@@ -54,7 +67,11 @@ RUN apt-get update && \
 ENV CC=gcc-15 \
     CXX=g++-15
 
-RUN git config --system --add safe.directory /workspace/hw-native-sys/pypto
+RUN git config --system --add safe.directory /workspace/hw-native-sys/pypto && \
+    git config --system --add safe.directory /workspace/hw-native-sys/simpler && \
+    git config --system --add safe.directory /workspace/hw-native-sys/PTOAS && \
+    git config --system --add safe.directory /workspace/hw-native-sys/pto-isa && \
+    git config --system --add safe.directory /workspace/hw-native-sys/pypto_top_level_documents
 
 WORKDIR /workspace/hw-native-sys/pypto
 
@@ -68,9 +85,11 @@ RUN git clone https://github.com/PTO-ISA/pto-isa.git /opt/pto-isa && \
   git -C /opt/pto-isa checkout "${PTO_ISA_COMMIT}" && \
   git -C /opt/pto-isa rev-parse --short HEAD
 
+ENV PTO_ISA_ROOT=/opt/pto-isa
+
 # Install PTOAS (required by PTOAS strategy tests in tests/st/codegen).
-ARG PTOAS_VERSION=v0.33
-ARG PTOAS_SHA256=3207eafb4db5363c74c20d694c34d5e33622e2f3f225bf6b609727263832fdc5
+ARG PTOAS_VERSION=v0.36
+ARG PTOAS_SHA256=698f753b67ca4387e2e4ef96dfdbb35d71295e94f9f5b20a545b34647f548efc
 RUN curl --fail --location --retry 3 --retry-all-errors \
       "https://github.com/hw-native-sys/PTOAS/releases/download/${PTOAS_VERSION}/ptoas-bin-aarch64.tar.gz" \
       -o /tmp/ptoas-bin-aarch64.tar.gz && \
@@ -99,7 +118,7 @@ RUN pip install \
 RUN pip install \
       "torch==2.6.0" --index-url https://download.pytorch.org/whl/cpu
 
-COPY . /workspace/hw-native-sys/pypto
+COPY pypto /workspace/hw-native-sys/pypto
 
 # Ensure required third-party sources exist (submodule checkout or fallback clone).
 RUN if [ ! -f 3rdparty/libbacktrace/configure.ac ]; then \
@@ -119,7 +138,10 @@ RUN if [ ! -f 3rdparty/libbacktrace/configure.ac ]; then \
     test -f runtime/pyproject.toml
 
 # Build simpler's nanobind extension and prebuilt runtime cache used by tests/st.
-RUN pip install --no-build-isolation ./runtime
+# Remove any stale build/ directory carried in by COPY (matches daily_ci.yml).
+RUN rm -rf ./runtime/build && \
+    pip install --no-build-isolation ./runtime && \
+    rm -rf /opt/simpler
 
 RUN pip install --no-build-isolation -v ".[dev]"
 
@@ -132,5 +154,7 @@ ENV ASCEND_HOME_PATH=/usr/local/Ascend/cann-8.5.0 \
     PTO_ISA_ROOT=/opt/pto-isa \
     LD_LIBRARY_PATH=/usr/local/Ascend/driver/lib64/driver:/usr/local/Ascend/ascend-toolkit/latest/lib64:${LD_LIBRARY_PATH:-} \
     PATH=/opt/ptoas-bin:/opt/ptoas-bin/bin:${PATH} \
-    PYTHONPATH=/workspace/hw-native-sys/pypto/runtime/python:/workspace/hw-native-sys/pypto/runtime/examples/scripts:${PYTHONPATH:-}
+    PYTHONPATH=/workspace/hw-native-sys/pypto/runtime/python:/workspace/hw-native-sys/pypto/runtime/examples/scripts \
+    PYTHONPATH=${PYTHONPATH}:/usr/local/Ascend/cann-8.5.0/python/site-packages:/usr/local/Ascend/cann-8.5.0/opp/built-in/op_impl/ai_core/tbe \
+    PYTHONPATH=${PYTHONPATH}:/usr/local/Ascend/ascend-toolkit/latest/python/site-packages:/usr/local/Ascend/ascend-toolkit/latest/opp/built-in/op_impl/ai_core/tbe
 CMD ["bash"]
