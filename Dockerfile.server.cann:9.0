@@ -3,6 +3,7 @@
 # EXPECTED REPO LAYOUT (build context = hw-native-sys/):
 #
 # ONLY pypto/ MUST EXIST ON HOST — everything else is cloned or mounted.
+# This dockerfile uses: commit aeca5d6 (https://github.com/hw-native-sys/pypto/commit/aeca5d6eddee1fd0b8465330fb7e307c85cb491f)
 #
 #   workspace/hw-native-sys/
 #   ├── Dockerfile.server.cann:9.0   ← this file
