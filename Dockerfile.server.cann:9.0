@@ -4,7 +4,6 @@
 #
 # pypto/ MUST EXIST ON HOST, and pypto/runtime/ (the simpler submodule)
 # MUST be checked out on host.
-# This dockerfile uses: commit aeca5d6 (https://github.com/hw-native-sys/pypto/commit/aeca5d6eddee1fd0b8465330fb7e307c85cb491f)
 #
 #   workspace/hw-native-sys/
 #   ├── Dockerfile.server.cann:9.0   ← this file
@@ -60,9 +59,10 @@
 #
 #   # L3 distributed examples (multi-chip):
 #   python examples/workers/l3/allreduce_distributed/main.py -p a2a3 -d 0-1
-#   python examples/workers/l3/ep_dispatch_combine/main.py   -p a2a3 -d 0-1
 #   python examples/workers/l3/ffn_tp_parallel/main.py       -p a2a3 -d 0-1
 #   python examples/workers/l3/multi_chip_dispatch/main.py   -p a2a3 -d 0-1
+#   (hccl bootstrap)
+#   python examples/workers/l3/ep_dispatch_combine/main.py   -p a2a3 -d 0-1
 #
 # COMMON COMMANDS INSIDE CONTAINER (pypto):
 #
@@ -72,7 +72,7 @@
 #   python -c "import pypto; print('pypto ok')"
 #   which ptoas
 #
-#   # For live Python edits without rebuilding the image, reinstall editable:
+#   # (optional for testing) For live Python edits without rebuilding the image, reinstall editable:
 #   pip install -e ".[dev]"
 #
 #   # Unit tests:
