@@ -2,34 +2,35 @@
 #
 # EXPECTED REPO LAYOUT (build context = hw-native-sys/):
 #
-# ONLY pypto/ MUST EXIST ON HOST — everything else is cloned or mounted.
+# pypto/ MUST EXIST ON HOST, and pypto/runtime/ (the simpler submodule)
+# MUST be checked out on host.
 # This dockerfile uses: commit aeca5d6 (https://github.com/hw-native-sys/pypto/commit/aeca5d6eddee1fd0b8465330fb7e307c85cb491f)
 #
 #   workspace/hw-native-sys/
 #   ├── Dockerfile.server.cann:9.0   ← this file
 #   ├── pypto/                       ← main repo (required, copied into image)
 #   │   ├── pyproject.toml
-#   │   ├── runtime/                 ← simpler submodule
+#   │   ├── runtime/                 ← required submodule (must be checked out)
 #   │   └── ...
-#   ├── simpler/                     ← cloned independently for editing
 #   ├── PTOAS/                       ← cloned independently for editing
 #   ├── pto-isa/                     ← cloned independently for editing
 #   └── pypto_top_level_documents/   ← design docs repo
 #
-# WHAT GETS CLONED DURING BUILD:
-#   /opt/pto-isa        — from github.com/PTO-ISA/pto-isa.git (pinned commit)
-#   /opt/ptoas-bin       — PTOAS binary (downloaded release tarball)
-#   ./runtime            — simpler fallback if submodule not checked out
-#   ./3rdparty/*         — libbacktrace/msgpack-c fallbacks if submodules missing
+# WHAT GETS COPIED / CLONED DURING BUILD:
+#   /workspace/hw-native-sys/pypto   — copied from build context (required)
+#   /workspace/hw-native-sys/pypto/runtime — simpler submodule (required)
+#   /opt/pto-isa                     — from github.com/PTO-ISA/pto-isa.git (pinned commit)
+#   /opt/ptoas-bin                   — PTOAS binary (downloaded release tarball)
+#   ./3rdparty/*                     — libbacktrace/msgpack-c fallbacks if submodules missing
 #
 # BUILD:
 #   docker build -f "Dockerfile.server.cann:9.0" -t pypto3-dev-env:cann9 .
 #
 # RUN (single-device):
-#   docker run --rm -it --privileged --ipc=host -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi:ro -v /usr/local/Ascend/driver:/usr/local/Ascend/driver:ro -v /dev:/dev -v /home/gbismpas/hw-native-sys:/workspace/hw-native-sys -w /workspace/hw-native-sys/pypto pypto3-dev-env:cann9
+#   docker run --rm -it --privileged --ipc=host -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi:ro -v /usr/local/Ascend/driver:/usr/local/Ascend/driver:ro -v /dev:/dev -v $HOME/hw-native-sys:/workspace/hw-native-sys -w /workspace/hw-native-sys/pypto pypto3-dev-env:cann9
 #
 # RUN (multi-device, distributed / HCCL):
-#   docker run --rm -it --privileged --ipc=host --cap-add=SYS_PTRACE --security-opt seccomp=unconfined -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi:ro -v /usr/local/Ascend/driver:/usr/local/Ascend/driver:ro -v /dev:/dev -v /home/gbismpas/hw-native-sys:/workspace/hw-native-sys -w /workspace/hw-native-sys/simpler pypto3-dev-env:cann9
+#   docker run --rm -it --privileged --ipc=host --cap-add=SYS_PTRACE --security-opt seccomp=unconfined -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi:ro -v /usr/local/Ascend/driver:/usr/local/Ascend/driver:ro -v /dev:/dev -v $HOME/hw-native-sys:/workspace/hw-native-sys -w /workspace/hw-native-sys/pypto/runtime pypto3-dev-env:cann9
 #
 # NOTE: Do NOT mount /usr/local/Ascend — the image already contains CANN 9.0.0.
 #   Only the host kernel-driver user-space (/usr/local/Ascend/driver) is needed.
@@ -50,12 +51,9 @@
 #   ✅ simpler L2 tests  (28/28, a2a3, devices 0-3)
 #        pytest tests/ -v --platform=a2a3 --device="0,1,2,3"
 #
-# COMMON COMMANDS INSIDE CONTAINER (simpler):
+# COMMON COMMANDS INSIDE CONTAINER (simpler submodule):
 #
-#   cd /workspace/hw-native-sys/simpler
-#
-#   # Rebuild simpler C++ extensions against CANN 9.0 (required after fresh container):
-#   pip install --no-build-isolation .
+#   cd /workspace/hw-native-sys/pypto/runtime
 #
 #   # L2 tests (real NPU):
 #   pytest tests/ -v --platform=a2a3 --device="0,1,2,3"
@@ -115,15 +113,14 @@ ENV CC=gcc-15 \
     CXX=g++-15
 
 RUN git config --system --add safe.directory /workspace/hw-native-sys/pypto && \
-    git config --system --add safe.directory /workspace/hw-native-sys/simpler && \
     git config --system --add safe.directory /workspace/hw-native-sys/PTOAS && \
-    git config --system --add safe.directory /workspace/hw-native-sys/pto-isa && \
-    git config --system --add safe.directory /workspace/hw-native-sys/pypto_top_level_documents
+  git config --system --add safe.directory /workspace/hw-native-sys/pto-isa && \
+  git config --system --add safe.directory /workspace/hw-native-sys/pypto_top_level_documents
 
 WORKDIR /workspace/hw-native-sys/pypto
 
-# Install simpler runtime for tests/st and fuzz flows.
-# simpler is a submodule at runtime/ — installed from the COPY'd source tree.
+# pypto/runtime is the only supported simpler source location in this image.
+# Keep the runtime submodule checked out on host.
 
 # Install PTO-ISA (required by system tests that call code_runner).
 # Keep this pinned to the commit used in ci.yml --pto-isa-commit.
@@ -167,6 +164,12 @@ RUN pip install \
 
 COPY pypto /workspace/hw-native-sys/pypto
 
+# Fail fast with clear errors if required repos/submodules are missing.
+RUN test -f /workspace/hw-native-sys/pypto/pyproject.toml || \
+      { echo 'BUILD ERROR: pypto/ missing or incomplete in build context'; exit 1; } && \
+    test -f /workspace/hw-native-sys/pypto/runtime/pyproject.toml || \
+      { echo 'BUILD ERROR: pypto/runtime/ missing. Run: git -C pypto submodule update --init --recursive'; exit 1; }
+
 # Ensure required third-party sources exist (submodule checkout or fallback clone).
 RUN if [ ! -f 3rdparty/libbacktrace/configure.ac ]; then \
       rm -rf 3rdparty/libbacktrace && \
@@ -176,19 +179,14 @@ RUN if [ ! -f 3rdparty/libbacktrace/configure.ac ]; then \
       rm -rf 3rdparty/msgpack-c && \
       git clone --depth 1 --branch cpp_master https://github.com/msgpack/msgpack-c.git 3rdparty/msgpack-c; \
     fi && \
-    if [ ! -f runtime/pyproject.toml ]; then \
-      rm -rf runtime && \
-      git clone https://github.com/hw-native-sys/simpler runtime; \
-    fi && \
     test -f 3rdparty/libbacktrace/configure.ac && \
     test -f 3rdparty/msgpack-c/include/msgpack.hpp && \
     test -f runtime/pyproject.toml
 
-# Build simpler's nanobind extension and prebuilt runtime cache used by tests/st.
+# Build simpler C++ extension from the required runtime submodule.
 # Remove any stale build/ directory carried in by COPY (matches daily_ci.yml).
-RUN rm -rf ./runtime/build && \
-    pip install --no-build-isolation ./runtime && \
-    rm -rf /opt/simpler
+RUN rm -rf /workspace/hw-native-sys/pypto/runtime/build && \
+    pip install --no-build-isolation /workspace/hw-native-sys/pypto/runtime
 
 RUN pip install --no-build-isolation -v ".[dev]"
 
@@ -202,11 +200,11 @@ ENV ASCEND_HOME_PATH=/usr/local/Ascend/cann-9.0.0 \
     ASCEND_OPP_PATH=/usr/local/Ascend/ascend-toolkit/latest/opp \
     MPI_HOME=/usr \
     PTOAS_ROOT=/opt/ptoas-bin \
-    SIMPLER_ROOT=/workspace/hw-native-sys/simpler \
+    SIMPLER_ROOT=/workspace/hw-native-sys/pypto/runtime \
     PTO_ISA_ROOT=/opt/pto-isa \
     LD_LIBRARY_PATH=/usr/local/Ascend/driver/lib64/driver:/usr/local/Ascend/cann-9.0.0/aarch64-linux/lib64:/usr/local/Ascend/ascend-toolkit/latest/lib64:${LD_LIBRARY_PATH:-} \
     PATH=/opt/ptoas-bin:/opt/ptoas-bin/bin:${PATH} \
-    PYTHONPATH=/workspace/hw-native-sys/simpler/python:/workspace/hw-native-sys/simpler/examples/scripts:/workspace/hw-native-sys/pypto/runtime/python:/workspace/hw-native-sys/pypto/runtime/examples/scripts \
+    PYTHONPATH=/workspace/hw-native-sys/pypto/runtime/python:/workspace/hw-native-sys/pypto/runtime/examples/scripts \
     PYTHONPATH=${PYTHONPATH}:/usr/local/Ascend/cann-9.0.0/python/site-packages:/usr/local/Ascend/cann-9.0.0/opp/built-in/op_impl/ai_core/tbe \
     PYTHONPATH=${PYTHONPATH}:/usr/local/Ascend/ascend-toolkit/latest/python/site-packages:/usr/local/Ascend/ascend-toolkit/latest/opp/built-in/op_impl/ai_core/tbe
 CMD ["bash"]
