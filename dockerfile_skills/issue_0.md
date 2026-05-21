@@ -78,3 +78,47 @@ One of the following is needed:
 Until one of the above is done, `comm_alloc_windows` and `allocate_domain` tests will remain permanently broken on this machine. All other pypto/simpler tests are unaffected.
 
 Completed: *Add driver/CANN version findings to SKILL.md* (12/12)
+
+
+
+### Update 2024-06-12
+
+Compacted conversation
+
+Searched for text `issue report\|machine controllers\|Subject:\|**To:\|Request:\|Action Required` (`hw-native-sys` · `SKILL.md`), no results
+
+The issue report wasn't persisted in a file — it was only in the conversation. Here it is, updated with the corrected driver direction:
+
+---
+
+**Subject: hng-atlas01 — NPU driver upgrade required: 25.5.1 → 26.0.rc1**
+
+**Background:**
+We are running containerized workloads on `hng-atlas01` using CANN 9.0.0 (`quay.io/ascend/cann:9.0.0-910b-ubuntu22.04-py3.12`). The container mounts the host NPU driver at runtime.
+
+**Problem:**
+All tests that exercise HCCL collective communication (allreduce, allgather, etc.) fail at startup with ACL error **507899** (`aclrtIpcMemImportByKey`):
+
+```
+[ERROR] RUNTIME(xxx) ... aclrtIpcMemSetAttr failed: value 64 for parameter nameLen is invalid. Expected value: [0, 64)
+ACL error: 507899
+```
+
+**Root cause:**
+The host NPU driver is **25.5.1** (`V100R001C23SPC006B220`). This driver predates CANN 9.0.0's IPC key format, which uses `nameLen=64`. The driver rejects any value ≥ 64. This is a binary ABI mismatch — it cannot be fixed in software.
+
+**Evidence:**
+- `simpler/docs/install.md` explicitly lists the supported A3 environment as: **CANN 9.0.0 community + driver 26.0.rc1**
+- CANN 9.0.0's `ascend_toolkit_install.info` lists `compatible_version=[V100R001C25]` (= 26.x) as the target
+- Exhaustive testing of every `aclrtIpcMem*` API variant all return 507899 on driver 25.5.1
+
+**Action requested:**
+Please upgrade the NPU driver on **hng-atlas01** from **25.5.1 → 26.0.rc1** (or the latest 26.x release).
+
+Download: Ascend HDK driver/firmware page on the [Huawei support site](https://support.huawei.com/enterprise/zh/ascend-computing/ascend-hdk-pid-252764743/software) — same link as in `simpler/docs/install.md`.
+
+Install flow: install driver + firmware → reboot → no other changes needed (CANN 9.0.0 stays as-is in the container).
+
+**No code changes are needed. This is a host infrastructure fix only.**
+
+Updated todo list
