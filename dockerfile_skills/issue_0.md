@@ -121,4 +121,10 @@ Install flow: install driver + firmware → reboot → no other changes needed (
 
 **No code changes are needed. This is a host infrastructure fix only.**
 
-Updated todo list
+
+
+
+
+## Useful links:
+
+https://github.com/hw-native-sys/simpler/blob/827fc2784eb9a4cb46493facb7930a427dc527d6/docs/install.md?plain=1#L5
