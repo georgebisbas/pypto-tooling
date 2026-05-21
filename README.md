@@ -1,49 +1,55 @@
 # pypto-tooling
 
-Utility repository for building and running the PyPTO server/dev container image on Ascend 910B hardware.
+Dockerfiles and runbooks for PyPTO and simpler development on Ascend 910B.
 
-## What this repo contains
+## Repository Contents
 
-- `Dockerfile.server.cann:9.0`: Main image definition based on `quay.io/ascend/cann:9.0.0-910b-ubuntu22.04-py3.12`.
-- `bz910b-reproduce.md`: reproduction/test runbook aligned with the current Dockerfile.
+- [README.md](README.md): Repository index and quick usage.
+- [Dockerfile.server.cann:9.0](Dockerfile.server.cann:9.0): Server/dev image that uses a local pypto build context.
+- [Dockerfile.hw-native-sys.cann9.0](Dockerfile.hw-native-sys.cann9.0): Standalone hw-native-sys image that clones pypto from GitHub.
+- [Dockerfile.simpler.cann9.0](Dockerfile.simpler.cann9.0): Standalone simpler image that clones simpler from GitHub.
+- [docker-entrypoint-cann.sh](docker-entrypoint-cann.sh): Runtime helper for workspace/runtime symlink handling.
+- [bz910b-reproduce.md](bz910b-reproduce.md): Reproduction and test workflow guide.
+- [dockerfile_skills/SKILL.md](dockerfile_skills/SKILL.md): Internal Dockerfile construction/debugging notes.
+- [dockerfile_skills/issue_0.md](dockerfile_skills/issue_0.md): Detailed issue log for comm_alloc_windows/HCCL environment mismatch.
 
-## Current image behavior
+## Purpose of Each File
 
-- Build context should be the `hw-native-sys` root that contains a `pypto/` directory.
-- The image includes CANN 9.0.0 and expects only host driver mount (`/usr/local/Ascend/driver`) at runtime.
-- The image command is `bash`.
+- [README.md](README.md): Top-level index of the repository, with build commands and runtime guidance.
+- [Dockerfile.server.cann:9.0](Dockerfile.server.cann:9.0): Build a server/dev image from a local hw-native-sys workspace where pypto is copied from build context; best for local iteration.
+- [Dockerfile.hw-native-sys.cann9.0](Dockerfile.hw-native-sys.cann9.0): Build a standalone PyPTO image by cloning repositories during build; best for reproducible CI-like setup without local source dependencies.
+- [Dockerfile.simpler.cann9.0](Dockerfile.simpler.cann9.0): Build a standalone simpler-only image for runtime and worker validation when pypto is not required.
+- [docker-entrypoint-cann.sh](docker-entrypoint-cann.sh): Runtime helper script that normalizes runtime layout (workspace/runtime symlink behavior) before launching the container command.
+- [bz910b-reproduce.md](bz910b-reproduce.md): Operator runbook for reproducing tests and validating NPU execution on Ascend 910B hosts.
+- [dockerfile_skills/SKILL.md](dockerfile_skills/SKILL.md): Internal engineering notes and patterns for constructing/debugging these Dockerfiles.
+- [dockerfile_skills/issue_0.md](dockerfile_skills/issue_0.md): Historical incident report and root-cause details for the HCCL IPC/driver compatibility issue.
 
-## Quick start
+## Build Commands
 
-From your host `hw-native-sys` root:
+Build server/dev image (requires local pypto in build context):
 
 ```bash
 docker build --no-cache -f "Dockerfile.server.cann:9.0" -t pypto3-dev-env:cann9 .
 ```
 
-Run with NPU access (recommended):
+Build standalone hw-native-sys image (stdin Dockerfile):
 
 ```bash
-docker run --rm -it --privileged --ipc=host \
-	-v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi:ro \
-	-v /usr/local/Ascend/driver:/usr/local/Ascend/driver:ro \
-	-v /dev:/dev \
-	-v "$HOME/hw-native-sys":/workspace/hw-native-sys \
-	-w /workspace/hw-native-sys/pypto \
-	pypto3-dev-env:cann9
+docker build -t pypto3-hw-native-sys:cann9 - < Dockerfile.hw-native-sys.cann9.0
 ```
 
-Sanity check inside container:
+Build standalone simpler image (stdin Dockerfile):
 
 ```bash
-python -c "import pypto; print('pypto ok')"
-which ptoas
-echo "$ASCEND_HOME_PATH"
-echo "$SIMPLER_ROOT"
+docker build -t simpler-cann9 - < Dockerfile.simpler.cann9.0
 ```
 
-## Notes
+## Runtime Note
 
-- Do not mount host `/usr/local/Ascend` into the container; that can shadow the baked CANN version.
-- For the full test workflow and troubleshooting, see `bz910b-reproduce.md`.
-- The Dockerfile name includes `:`, so pass it to `docker build -f` in quotes.
+Mount only the host driver path at runtime:
+
+```text
+/usr/local/Ascend/driver
+```
+
+Do not mount /usr/local/Ascend from host, because it can shadow the image's baked CANN version.
