@@ -23,11 +23,22 @@
 # BUILD (custom prefix / pinned pto-isa / different commit):
 #   docker build --build-arg PYPTO_COMMIT=024f4a30 --build-arg PTO_ISA_COMMIT=2c607938 -t pypto3-hw-native-sys:cann9 - < Dockerfile.hw-native-sys.cann9.0
 #
-# RUN (single-device):
+# RUN (single-device, NO HCCL):
 #   docker run --rm -it --privileged --ipc=host -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi:ro -v /usr/local/Ascend/driver:/usr/local/Ascend/driver:ro -v /dev:/dev pypto3-hw-native-sys:cann9
 #
-# RUN (multi-device, distributed / HCCL):
-#   docker run --rm -it --privileged --ipc=host --cap-add=SYS_PTRACE --security-opt seccomp=unconfined -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi:ro -v /usr/local/Ascend/driver:/usr/local/Ascend/driver:ro -v /dev:/dev pypto3-hw-native-sys:cann9
+# RUN (multi-device, distributed / HCCL — MUST use --pid=host):
+#   docker run --rm -it --privileged --ipc=host --pid=host --cap-add=SYS_PTRACE --security-opt seccomp=unconfined -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi:ro -v /usr/local/Ascend/driver:/usr/local/Ascend/driver:ro -v /dev:/dev pypto3-hw-native-sys:cann9
+#
+# WHY --pid=host FOR HCCL:
+#   simpler's Path-D symmetric-pool setup calls aclrtIpcMemSetImportPid(myName,
+#   peerPids) with peerPids harvested via getpid() in each rank. Inside a child
+#   PID namespace getpid() returns the *container* PID, but the Ascend devmm
+#   kernel module verifies the *host* PID of the importer against the recorded
+#   whitelist. Mismatch -> aclrtIpcMemImportByKey returns 507899 and dmesg
+#   shows "[ascend] [devmm] [ERROR] _devmm_ipc_node_open: Wlist verify fail".
+#   --pid=host shares the host PID namespace so getpid() == kernel-visible PID
+#   and the whitelist matches. simpler's own CI (runs-on: [self-hosted, a2a3])
+#   sidesteps this by running directly on the hardware host, never in Docker.
 #
 # NOTE: Do NOT mount /usr/local/Ascend — the image contains CANN baked in.
 #   Only the host kernel-driver user-space (/usr/local/Ascend/driver) is needed.
@@ -57,13 +68,13 @@
 #   # Scene tests — NO HCCL (tests/st/a2a3 uses level=3 without allocate_domain):
 #   pytest tests/st/a2a3/ -v --platform a2a3 --device 0,1,2,3 --pto-session-timeout 600 --clone-protocol https --require-pto-isa --pto-isa-commit 2c607938
 #
-#   # HCCL UT — LD_PRELOAD (baked into image ENV) fixes the comm_init segfault.
-#   # NOTE: test_platform_comm and test_dynamic_alloc_hw still FAIL with
-#   #   comm_alloc_windows failed (aclrtIpcMemImportByKey -> 507899)
-#   # Root cause: CANN 9.0.0 IPC key format is rejected by driver 25.5.1.
-#   # Fix requires a compatible CANN+driver pair (see SKILL.md for details).
+#   # HCCL UT — REQUIRES the container to be started with --pid=host (see RUN
+#   #   block above). The image's LD_PRELOAD=libhccl.so handles the weak-symbol
+#   #   problem at comm_init; --pid=host handles the IPC PID-whitelist problem
+#   #   at comm_alloc_windows. Missing either one -> SIGSEGV or
+#   #   "comm_alloc_windows failed with code -1, aclrtIpcMemImportByKey -> 507899".
 #   pytest tests/ut/py/test_worker/test_dynamic_alloc_hw.py tests/ut/py/test_worker/test_platform_comm.py -m requires_hardware --platform a2a3 --device 0,1,2,3 -v
-#   # HCCL examples — allocate_domain (same IPC limitation applies):
+#   # HCCL examples — allocate_domain (same --pid=host requirement applies):
 #   pytest examples/workers/l3/ examples/a2a3/tensormap_and_ringbuffer/deferred_notify_demo examples/a2a3/tensormap_and_ringbuffer/async_notify_demo examples/a2a3/tensormap_and_ringbuffer/sdma_async_completion_demo -v --platform a2a3 --device 0,1,2,3 --pto-session-timeout 600 --clone-protocol https --require-pto-isa --pto-isa-commit 2c607938
 
 # ARG before FROM: drives the base image tag.
@@ -203,9 +214,24 @@ ENV ASCEND_HOME_PATH=${CANN_HOME} \
     SIMPLER_ROOT=${PYPTO_DIR}/runtime \
     PTO_ISA_ROOT=${PTO_ISA_DIR}
 ENV LD_LIBRARY_PATH=/usr/local/Ascend/driver/lib64/driver:${CANN_HOME}/aarch64-linux/lib64:/usr/local/Ascend/ascend-toolkit/latest/lib64:${LD_LIBRARY_PATH:-}
-# Preload libhccl.so globally so its weak symbols in libhost_runtime.so resolve at dlopen time.
-# Without this, HcclGetRootInfo and friends stay NULL -> SIGSEGV on any HCCL comm_init call.
-# libhccl.so is NOT in libhost_runtime.so's DT_NEEDED; LD_LIBRARY_PATH alone is not enough.
+
+# HCCL fix #1 (image-side): preload libhccl.so with RTLD_GLOBAL so its symbols
+# are visible to libhost_runtime.so. simpler's host_runtime.so has WEAK
+# undefined references to HcclGetRootInfo / HcclCommInitRootInfo / HcclBarrier
+# / HcclCommDestroy and does NOT list libhccl.so in DT_NEEDED. Without a
+# global preload those relocations resolve to NULL -> SIGSEGV on comm_init.
+# LD_LIBRARY_PATH alone is not enough — the resolution decision happens at
+# host_runtime.so load time, before any HCCL call.
+#
+# HCCL fix #2 (run-side, NOT in this image): the container MUST be started
+# with --pid=host. Inside a child PID namespace, simpler's getpid()-based
+# IPC peer whitelist (aclrtIpcMemSetImportPid) stores container PIDs while
+# the kernel devmm module checks the importer's host PID -> aclrtIpcMemImportByKey
+# returns 507899. See the top-of-file RUN block for the full command.
+RUN test -f "${CANN_HOME}/aarch64-linux/lib64/libhccl.so" \
+    || (echo "ERROR: libhccl.so missing at ${CANN_HOME}/aarch64-linux/lib64/libhccl.so" \
+        && ls -la "${CANN_HOME}/aarch64-linux/lib64/" | grep -i hccl \
+        && exit 1)
 ENV LD_PRELOAD=${CANN_HOME}/aarch64-linux/lib64/libhccl.so
 ENV PATH=${PTOAS_DIR}:${PTOAS_DIR}/bin:${PATH}
 ENV PYTHONPATH=${PYPTO_DIR}/runtime/python:${PYPTO_DIR}/runtime/examples/scripts

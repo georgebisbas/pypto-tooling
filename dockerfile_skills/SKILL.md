@@ -312,6 +312,39 @@ HCCL picks the wrong NIC on some machines. The `HCCL_SOCKET_IFNAME` env
 var can override, but our CI and Dockerfiles intentionally don't set it
 (the runner's default interface is correct).
 
+### `comm_alloc_windows failed with code -1` + `ImportByKey(...) -> 507899`
+
+This is usually an Ascend driver/runtime ABI mismatch, not a pypto/simpler
+logic bug. Most common cause: container CANN runtime and host-mounted driver
+stack are not a validated pair.
+
+Fast checks:
+
+1. Host: `npu-smi info` (active driver/firmware version)
+2. Container: verify mounted `/usr/local/Ascend/driver` metadata matches host
+3. Confirm reboot/module reload actually activated the new driver
+
+If versions don't match expected compatibility, fix host driver state first.
+Changing Python/test code will not resolve this signature.
+
+### Segfault in `comm_init` after driver upgrade
+
+If `ImportByKey` mismatch disappears but tests now crash with a hard segfault
+during `comm_init`, treat this as runtime/process-model instability first.
+
+Strong signal from our incident: tests emitted fork warnings before crash
+(`process is multi-threaded, use of fork() may lead to deadlocks`). With
+ACL/HCCL loaded, `fork` in multi-threaded parents can crash child comm init.
+
+Triage order:
+
+1. Re-run only on non-busy NPUs (for example `2,3`), avoid contended device 0
+2. Reproduce with `spawn`/`forkserver` start method
+3. Capture core dump and ACL/HCCL debug logs for vendor escalation
+
+If `spawn` avoids the crash, classify as runtime + process-model issue, not
+simpler orchestration logic.
+
 ### `aclInit failed` / `aclrtSetDevice failed`
 
 Device files missing. Verify `--privileged` and `-v /dev:/dev` are present.
@@ -327,6 +360,13 @@ every file must be cloned at build time.
 
 CI bumped the PTOAS version. Check `ci.yml` for `PTOAS_VERSION` and
 `PTOAS_SHA256` and update both ARGs in the Dockerfile.
+
+### `error: custom op 'pto.declare_local_array' is unknown`
+
+This is a PTOAS/toolchain mismatch: pypto emitted a newer op that the current
+ptoas binary does not support. Upgrade ptoas to the version pinned in CI.
+
+In our incident this was resolved by moving to PTOAS v0.40 (matching CI).
 
 ### `echo` vs `printf` in /etc/bash.bashrc
 
