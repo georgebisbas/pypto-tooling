@@ -379,6 +379,223 @@ RUN echo "[ -f ${CANN_HOME}/set_env.sh ] && { source ${CANN_HOME}/set_env.sh 2>/
 
 ---
 
+## Compile-time pypto distributed bugs (DSL / IR passes)
+
+These bugs do not surface as Docker, driver, or HCCL errors. They surface as
+**silent semantic failures** — a multi-rank test passes only on rank 0, or a
+factory-built program compiles to the wrong shape with no diagnostic. The
+triage flow below is the one that worked in the L3 GEMM bring-up
+(`feat/l3-allreduce-gemm`).
+
+### Triage order for silent multi-rank correctness failures
+
+When a multi-rank L3 test produces wrong output but no diagnostic:
+
+1. **Dump the frontend IR first**, before suspecting passes, codegen, runtime,
+   or the simpler dispatcher. Use `dump_passes=True` on `ir.compile(...)` and
+   read `00_frontend.py` (the AST parser's output). If a statement is already
+   missing there, the bug is in the parser or the `@pl.program` decorator —
+   not in any pass.
+2. **Inspect the generated `orchestration/host_orch.py`** for the number of
+   `orch.submit_next_level(...)` calls. If a multi-rank host_orch emitted only
+   one call, the `CollectCommGroups` pass refused to form a `CommGroup` (see
+   the recipe below).
+3. Only after the IR and the orchestration look correct, treat it as a runtime
+   issue and use the "Common failures and fixes" section above.
+
+### 1. Multi-rank dispatch needs a comm window (`CollectCommGroups` recipe)
+
+**Symptom.** In a multi-rank L3 program, only rank 0's output is correct;
+other ranks' output buffers remain at their pre-call values (typically all
+zeros). No error, no warning.
+
+**Root cause.**
+`pypto/src/ir/transforms/collect_comm_groups_pass.cpp` forms a `CommGroup`
+only when the host orchestrator contains at least one
+`pld.alloc_window_buffer` paired with a `pld.window` view that is passed
+positionally to a dispatched `chip_orch` under a recognised `device=` form
+(`ConstInt` or the induction var of `pl.range(pld.world_size())` /
+`pl.range(<int>)`). Without that, adjacent `self.chip_orch(...)` dispatches
+collapse into a single `orch.submit_next_level` to worker 0 in the generated
+`orchestration/host_orch.py` and only rank 0 runs.
+
+**Fix recipe for kernels with no real collectives.** Carry an unused 4-byte
+INT32 scratch window through `chip_orch` solely to engage the pass.
+
+```python
+@pl.function(type=pl.FunctionType.Orchestration)
+def chip_orch(
+    self,
+    a_shard: pl.Tensor[[m0, k], pl.FP32],
+    b: pl.Tensor[[k, n], pl.FP32],
+    c_shard: pl.Out[pl.Tensor[[m0, n], pl.FP32]],
+    _scratch: pl.InOut[pld.DistributedTensor[[1, 1], pl.INT32]],
+) -> pl.Tensor[[m0, n], pl.FP32]:
+    return self.gemm(a_shard, b, c_shard)
+
+@pl.function(level=pl.Level.HOST, role=pl.Role.Orchestrator)
+def host_orch(
+    self,
+    a: pl.Tensor[a_shape, pl.FP32],
+    b: pl.Tensor[[k, n], pl.FP32],
+    c: pl.Out[pl.Tensor[c_shape, pl.FP32]],
+) -> pl.Tensor[c_shape, pl.FP32]:
+    scratch_buf = pld.alloc_window_buffer(4)  # 1x1 INT32
+    for r in pl.range(pld.world_size()):
+        scratch = pld.window(scratch_buf, [1, 1], dtype=pl.INT32)
+        self.chip_orch(a[r], b, c[r], scratch, device=r)
+    return c
+```
+
+**Reference.** First documented in `tests/st/distributed/l3_gemm_programs.py`
+("Multi-rank dispatch recipe" section of the module docstring). Every passing
+multi-rank ST in `tests/st/distributed/` (`test_l3_notify_wait`,
+`test_l3_allreduce`, `test_l3_put`, `test_l3_get`) carries a real comm window
+because those tests are explicitly testing collectives — the bug is only
+observable when the kernel has **no** real comm of its own.
+
+### 2. Avoid `pl.range(1)` in the P=1 branch (Simplify single-trip unroll)
+
+**Symptom.** A P=1 program built from a factory that uses
+`for r in pl.range(pld.world_size())` fails to codegen with an unresolved
+induction-variable reference on the lowered `device=` argument.
+
+**Root cause.** The Simplify pass single-trip-unrolls `for r in pl.range(1)`
+but leaves `device=r` on the lowered call. Subsequent lower passes do not
+resolve `r` to a constant after unroll.
+
+**Fix.** In the P=1 branch, emit a direct `self.chip_orch(..., device=0)`
+call rather than a loop. Only use `for r in pl.range(pld.world_size())` when
+`nranks >= 2`.
+
+```python
+if nranks == 1:
+    @pl.program
+    class FooP1:
+        @pl.function(level=pl.Level.HOST, role=pl.Role.Orchestrator)
+        def host_orch(self, ...):
+            self.chip_orch(a[0], b, c[0], device=0)
+            return c
+    return FooP1
+
+@pl.program
+class FooPN:
+    @pl.function(level=pl.Level.HOST, role=pl.Role.Orchestrator)
+    def host_orch(self, ...):
+        scratch_buf = pld.alloc_window_buffer(4)
+        for r in pl.range(pld.world_size()):
+            scratch = pld.window(scratch_buf, [1, 1], dtype=pl.INT32)
+            self.chip_orch(a[r], b, c[r], scratch, device=r)
+        return c
+return FooPN
+```
+
+### 3. `@pl.program` class-name collision in factory `if/else` branches
+
+**Symptom.** A factory `build_foo(*, nranks)` that returns different program
+class shapes per branch silently compiles the wrong shape. The runtime
+decorator argument is the correct class object, but the compiled IR matches
+a different branch.
+
+**Root cause.**
+`python/pypto/language/parser/decorator.py` recovers source via
+`inspect.getsourcelines(cls)` and then uses `ast.walk` over the parsed source
+to find an `ast.ClassDef` matching `cls.__name__`. If a factory has two
+`class Foo:` definitions across an `if/else`, `ast.walk` returns the first
+one in source order regardless of which class object was actually passed in.
+
+**Fix.** Give each branch's class a distinct name (`FooP1` vs `FooPN`,
+`FooSmall` vs `FooLarge`, etc.). This is a project-wide invariant for any
+pypto factory that returns differently-shaped program classes.
+
+**Reference.** First documented in `tests/st/distributed/l3_gemm_programs.py`
+(top of module docstring, "The P=1 and P>=2 branches use DISTINCT class
+names").
+
+### 4. Per-iteration window rebind inside the dispatch loop
+
+**Symptom.** Multi-rank dispatch loop using `for r in pl.range(pld.world_size())`
+with a single `scratch = pld.window(buf, ...)` bound **above** the loop emits
+only one dispatch (or the wrong number).
+
+**Root cause.** `CollectCommGroups` identifies windows by their producer
+expression. Binding `pld.window(buf, ...)` once outside the loop and reusing
+the same SSA value across iterations is **not** an equivalent program — the
+pass sees one window consumed once, not P windows consumed once each.
+
+**Fix.** Re-emit the `pld.window(buf, ...)` call inside the loop body so each
+iteration produces a fresh window view:
+
+```python
+for r in pl.range(pld.world_size()):
+    scratch = pld.window(scratch_buf, [1, 1], dtype=pl.INT32)  # rebind per iter
+    self.chip_orch(a[r], b, c[r], scratch, device=r)
+```
+
+The underlying `scratch_buf` (the `alloc_window_buffer` return value) is
+allocated once and reused; only the per-iteration window view is rebound.
+
+### 5. Diagnose parser-level statement drops with frontend IR
+
+**Symptom.** You inspect the generated `orchestration/host_orch.py` (under
+the `dump_passes` output directory) and see fewer dispatches than your DSL
+source has — or the dispatches are missing arguments.
+
+**Root cause hypothesis.** A statement was dropped by the AST→IR translation
+in the parser, or `@pl.program` matched the wrong `ClassDef` (see Sub 3) and
+compiled an unrelated body.
+
+**Diagnostic recipe.** Dump the **frontend IR** (the first numbered
+`00_frontend.py` produced by `dump_passes=True`) and compare against the
+Python source:
+
+```python
+import pypto.language as pl
+from pypto import ir
+from pypto.ir.distributed_compiled_program import DistributedConfig
+
+program = build_my_program(nranks=2)
+compiled = ir.compile(
+    program,
+    platform="a2a3",
+    distributed_config=DistributedConfig(device_ids=[0, 1], num_sub_workers=0),
+    dump_passes=True,
+    dump_dir="/tmp/pypto_dump",
+)
+# read /tmp/pypto_dump/<program>/00_frontend.py
+```
+
+If a statement is already missing in `00_frontend.py`, the bug is upstream of
+all passes — parser or decorator. If the statement is present in
+`00_frontend.py` but missing in a later numbered file, it's a pass bug;
+bisect by reading the numbered files in order.
+
+**Reference.** This is the workflow that pinned down the `@pl.program`
+class-name-collision bug during L3 GEMM bring-up. The throwaway
+`_dump_l3_gemm_codegen.py` helper that did this used to live at
+`tests/st/distributed/_dump_l3_gemm_codegen.py` and has since been retired
+(the diagnostic logic is a one-shot `ir.compile(..., dump_passes=True)`
+call; no helper needed).
+
+### Tensor-argument direction maps to simpler TensorMap behaviour
+
+For completeness — this is not a bug, but it surfaced often enough during
+bring-up to be worth recording.
+
+| pypto direction       | simpler `TensorArgType` | TensorMap behaviour          |
+|-----------------------|--------------------------|------------------------------|
+| `pl.Tensor[...]`      | `INPUT`                  | Lookup only                  |
+| `pl.Out[pl.Tensor]`   | `OUTPUT_EXISTING`        | Insert only (no lookup)      |
+| `pl.InOut[pl.Tensor]` | `INOUT`                  | Lookup + insert              |
+
+Use `Out` when the buffer's pre-call contents are irrelevant. Use `InOut`
+when a downstream `chip_orch` dispatch in the same `host_orch` needs the
+buffer as input. Mismatching `Out` for a value that is read back leaves the
+simpler `TensorMap` unable to wire up the dependency, with no error — the
+read silently sees stale or uninitialised memory.
+
+---
+
 ## Debugging a Dockerfile interactively
 
 1. Build with a target stage or up to the failing line
