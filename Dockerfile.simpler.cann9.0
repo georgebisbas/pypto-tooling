@@ -7,8 +7,8 @@
 # All paths are driven by build args:
 #   CANN_VERSION    (default: 9.0.0)  — selects base image tag and all cann-* paths
 #   INSTALL_PREFIX  (default: /opt)   — root for simpler and pto-isa installs
-#   SIMPLER_COMMIT  (default: 896bd025) — simpler commit to build from; changing it busts cache
-#   PTO_ISA_COMMIT  (default: auto)   — pto-isa commit; auto-derives from simpler's CI if not set
+#   SIMPLER_COMMIT  (default: 2fd34d9) — simpler commit to build from; changing it busts cache
+#   PTO_ISA_COMMIT  (default: ddafa8da) — pto-isa commit paired with SIMPLER_COMMIT 2fd34d9
 #
 # REQUIREMENTS:
 #   - Internet access during build (GitHub)
@@ -24,7 +24,7 @@
 #   docker build -t simpler-cann9 - < Dockerfile.simpler.cann9.0
 #
 # BUILD (pinned simpler + pinned pto-isa):
-#   docker build --build-arg SIMPLER_COMMIT=896bd025 --build-arg PTO_ISA_COMMIT=50d9c806 -t simpler-cann9 - < Dockerfile.simpler.cann9.0
+#   docker build --build-arg SIMPLER_COMMIT=2fd34d9 --build-arg PTO_ISA_COMMIT=ddafa8da -t simpler-cann9 - < Dockerfile.simpler.cann9.0
 #
 # RUN (single-device):
 #   docker run --rm -it --privileged --ipc=host -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi:ro -v /usr/local/Ascend/driver:/usr/local/Ascend/driver:ro -v /dev:/dev simpler-cann9
@@ -66,9 +66,9 @@ FROM quay.io/ascend/cann:${CANN_VERSION}-910b-ubuntu22.04-py3.12
 
 ARG CANN_VERSION=9.0.0
 ARG INSTALL_PREFIX=/opt
-# PTO_ISA_COMMIT defaults to empty — auto-derived from simpler's CI at build time.
-ARG PTO_ISA_COMMIT=
-ARG SIMPLER_COMMIT=896bd025
+# PTO_ISA_COMMIT defaults to ddafa8da — paired with SIMPLER_COMMIT 2fd34d9 per simpler CI.
+ARG PTO_ISA_COMMIT=ddafa8da
+ARG SIMPLER_COMMIT=2fd34d9
 
 ENV CANN_VERSION=${CANN_VERSION} \
     INSTALL_PREFIX=${INSTALL_PREFIX}
