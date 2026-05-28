@@ -86,6 +86,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
       git curl ca-certificates \
+      ccache \
       build-essential cmake ninja-build pkg-config \
       mpich libmpich-dev && \
     if ! command -v g++-15 >/dev/null 2>&1; then \
