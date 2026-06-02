@@ -17,7 +17,8 @@
 #   - CANN >= 9.0.0
 #
 # SCOPE: real NPU execution tested only on a2a3 platform.
-#   Simulator mode (a2a3sim) is NOT supported — requires C++23 <format> / GCC 13+.
+#   a2a3sim needs real GCC 15+ (_Float16 in pto-isa CPU sim); the build installs
+#   gcc-15/g++-15 from ubuntu-toolchain-r/test when available.
 #
 # BUILD (defaults):
 #   docker build -t pypto3-hw-native-sys:cann9 - < Dockerfile.hw-native-sys.cann9.0
@@ -119,11 +120,14 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-      git curl ca-certificates \
+      git curl ca-certificates software-properties-common gnupg \
       ccache \
       build-essential cmake ninja-build pkg-config \
       graphviz \
       mpich libmpich-dev && \
+    add-apt-repository -y ppa:ubuntu-toolchain-r/test && \
+    apt-get update && \
+    (apt-get install -y --no-install-recommends gcc-15 g++-15 || true) && \
     if ! command -v g++-15 >/dev/null 2>&1; then \
       ln -sf "$(command -v g++)" /usr/local/bin/g++-15; \
     fi && \
