@@ -9,7 +9,7 @@
 #   PYPTO_COMMIT    (default: full SHA of github main) — must exist on github.com/hw-native-sys/pypto
 #                   Use 40-char SHA when pinning an older commit (GitHub fetch rejects short SHAs).
 #   PTO_ISA_COMMIT  (default: auto)     — pto-isa commit; auto-derives from ci.yml if not set
-#   PTOAS_VERSION   (default: v0.42)    — PTOAS release (must match pypto CI)
+#   PTOAS_VERSION   (default: v0.43)    — PTOAS release (must match pypto CI)
 #
 # REQUIREMENTS:
 #   - Internet access during build (GitHub)
@@ -24,7 +24,7 @@
 #   docker build -t pypto3-hw-native-sys:cann9 - < Dockerfile.hw-native-sys.cann9.0
 #
 # BUILD (custom prefix / pinned pto-isa / different commit):
-#   docker build --build-arg PYPTO_COMMIT=df72a2f94ccdbaa4595c240b800d3f5a871fdda3 -t pypto3-hw-native-sys:cann9 - < Dockerfile.hw-native-sys.cann9.0
+#   docker build --build-arg PYPTO_COMMIT=896985317ed910221aaea9e0cc5bec340068fec3 -t pypto3-hw-native-sys:cann9 - < Dockerfile.hw-native-sys.cann9.0
 #
 # RUN (single-device, NO HCCL):
 #   docker run --rm -it --privileged --ipc=host -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi:ro -v /usr/local/Ascend/driver:/usr/local/Ascend/driver:ro -v /dev:/dev pypto3-hw-native-sys:cann9
@@ -49,7 +49,7 @@
 # COMMANDS INSIDE CONTAINER — mirrors pypto .github/workflows/ci.yml job order.
 #   INSTALL_PREFIX=/opt, CANN_VERSION=9.0.0. CANN env is sourced from bash.bashrc.
 #   Device lists are inlined below (change 0,1,2,3 / 0 to match your host).
-#   PTO-ISA: image installs 8bd3ac8f… (from ci.yml) unless PTO_ISA_COMMIT was overridden at build.
+#   PTO-ISA: image installs 016396b5… (from ci.yml) unless PTO_ISA_COMMIT was overridden at build.
 #
 #   cd /opt/pypto
 #   npu-smi info
@@ -69,13 +69,15 @@
 #   # --- system-tests (job: system-tests; NPU container in CI) ---
 #   pytest tests/st tests/st/codegen/torch/test_torch_codegen_paged_attention.py -v --device="0,1,2,3" --precompile-workers=128 --pto-isa-commit=8bd3ac8f30bd237f9eaf12c142002a5cc0edb143 --ignore=tests/st/distributed --ignore=tests/st/codegen
 #   # L2 multi-orch — separate pytest process (Worker level=2 poisons level=3 in the same process).
-#   pytest tests/st/distributed/test_l2_multi_orch.py -v --device="0,1,2,3" --pto-isa-commit=8bd3ac8f30bd237f9eaf12c142002a5cc0edb143
+#   pytest tests/st/distributed/test_l2_multi_orch.py -v --device="0,1,2,3" --pto-isa-commit=016396b57e2c17093f1194e6acd89bb112b0ab24
 #   # Swimlane — single device, forked.
-#   pytest tests/st/runtime/framework_and_models/test_perf_swimlane.py -v --device=0 --platform=a2a3 --enable-l2-swimlane --forked --pto-isa-commit=8bd3ac8f30bd237f9eaf12c142002a5cc0edb143
+#   pytest tests/st/runtime/framework_and_models/test_perf_swimlane.py -v --device=0 --platform=a2a3 --enable-l2-swimlane --forked --pto-isa-commit=016396b57e2c17093f1194e6acd89bb112b0ab24
+#   # Dump-tensor — single device, forked (older pto-isa pin per ci.yml).
+#   pytest tests/st/runtime/framework_and_models/test_dump_tag.py -v --device=0 --platform=a2a3 --dump-tensor --pto-isa-commit=2c607938 --forked
 #
 #   # --- dist-system-tests (job: dist-system-tests; HCCL, bare-metal in CI) ---
-#   # CI runs without a GHA container; in Docker use --pid=host (see RUN block). pto-isa pin differs from system-tests.
-#   pytest tests/st/distributed -v --device="0,1,2,3" --pto-isa-commit=6909e5c4 --ignore=tests/st/distributed/test_l2_multi_orch.py
+#   # CI runs without a GHA container; in Docker use --pid=host (see RUN block).
+#   pytest tests/st/distributed -v --device="0,1,2,3" --pto-isa-commit=016396b57e2c17093f1194e6acd89bb112b0ab24 --ignore=tests/st/distributed/test_l2_multi_orch.py
 #
 #   # --- Not covered by this image / CI job mapping ---
 #   # pre-commit: pre-commit run --all-files  (job: pre-commit; needs .git checkout hooks)
@@ -87,10 +89,10 @@
 #   pip install --no-build-isolation .   # after editing runtime sources
 #   pytest tests/ut -m "not requires_hardware" -v --clone-protocol https
 #   pytest tests -m requires_hardware --platform a2a3 --device 0,1,2,3 -v --ignore=tests/ut/py/test_worker/test_dynamic_alloc_hw.py --ignore=tests/ut/py/test_worker/test_platform_comm.py
-#   pytest tests/st/a2a3/ -v --platform a2a3 --device 0,1,2,3 --pto-session-timeout 600 --clone-protocol https --require-pto-isa --pto-isa-commit 8bd3ac8f30bd237f9eaf12c142002a5cc0edb143
+#   pytest tests/st/a2a3/ -v --platform a2a3 --device 0,1,2,3 --pto-session-timeout 600 --clone-protocol https --require-pto-isa --pto-isa-commit 016396b57e2c17093f1194e6acd89bb112b0ab24
 #   # HCCL UT + L3 examples — container MUST use --pid=host; LD_PRELOAD=libhccl.so is set in image.
 #   pytest tests/ut/py/test_worker/test_dynamic_alloc_hw.py tests/ut/py/test_worker/test_platform_comm.py -m requires_hardware --platform a2a3 --device 0,1,2,3 -v
-#   pytest examples/workers/l3/ examples/a2a3/tensormap_and_ringbuffer/deferred_notify_demo examples/a2a3/tensormap_and_ringbuffer/async_notify_demo examples/a2a3/tensormap_and_ringbuffer/sdma_async_completion_demo -v --platform a2a3 --device 0,1,2,3 --pto-session-timeout 600 --clone-protocol https --require-pto-isa --pto-isa-commit 8bd3ac8f30bd237f9eaf12c142002a5cc0edb143
+#   pytest examples/workers/l3/ examples/a2a3/tensormap_and_ringbuffer/deferred_notify_demo examples/a2a3/tensormap_and_ringbuffer/async_notify_demo examples/a2a3/tensormap_and_ringbuffer/sdma_async_completion_demo -v --platform a2a3 --device 0,1,2,3 --pto-session-timeout 600 --clone-protocol https --require-pto-isa --pto-isa-commit 016396b57e2c17093f1194e6acd89bb112b0ab24
 
 # ARG before FROM: drives the base image tag.
 ARG CANN_VERSION=9.0.0
@@ -142,7 +144,7 @@ ENV CC=gcc-15 \
 # Clone pypto at the pinned commit (changing PYPTO_COMMIT busts the layer cache automatically).
 # Uses a blobless clone (--filter=blob:none) so any commit SHA can be checked out;
 # GitHub does not allow shallow-fetching arbitrary SHAs directly.
-ARG PYPTO_COMMIT=df72a2f94ccdbaa4595c240b800d3f5a871fdda3
+ARG PYPTO_COMMIT=896985317ed910221aaea9e0cc5bec340068fec3
 RUN git clone --filter=blob:none https://github.com/hw-native-sys/pypto.git "${PYPTO_DIR}" && \
     if ! git -C "${PYPTO_DIR}" cat-file -e "${PYPTO_COMMIT}^{commit}" 2>/dev/null; then \
       git -C "${PYPTO_DIR}" fetch origin "${PYPTO_COMMIT}"; \
@@ -188,8 +190,8 @@ RUN if [ -z "${PTO_ISA_COMMIT}" ]; then \
 ENV PTO_ISA_ROOT=${PTO_ISA_DIR}
 
 # Install PTOAS binary.
-ARG PTOAS_VERSION=v0.42
-ARG PTOAS_SHA256=216c68fc9bb629a41ae2c9d1d0ec2f912b48b67c7c8f57687d6161e2f07c66a6
+ARG PTOAS_VERSION=v0.43
+ARG PTOAS_SHA256=a7f4e2e67808a36c1491b24a46505105a50aee1d202c0bba25621132b70d806a
 RUN curl --fail --location --retry 3 --retry-all-errors \
       "https://github.com/hw-native-sys/PTOAS/releases/download/${PTOAS_VERSION}/ptoas-bin-aarch64.tar.gz" \
       -o /tmp/ptoas-bin-aarch64.tar.gz && \
