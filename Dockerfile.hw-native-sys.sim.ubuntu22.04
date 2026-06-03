@@ -26,6 +26,16 @@
 #   pytest tests/st/runtime/cross_core/test_cross_core.py -v --forked --platform=a2a3sim --pto-isa-commit=016396b57e2c17093f1194e6acd89bb112b0ab24
 #   pytest tests/st/runtime/cross_core/test_cross_core.py -v --forked --platform=a5sim --pto-isa-commit=016396b57e2c17093f1194e6acd89bb112b0ab24
 #
+# EXAMPLES (inside container, copy/paste one-liners):
+#   cd /opt/pypto && python examples/hello_world.py
+#   cd /opt/pypto && python examples/models/01_ffn.py
+#
+# EXPECTED OUTPUT WHEN EXAMPLES SUCCEED:
+#   - hello_world.py prints a final line: OK
+#   - model examples print [perf_hint] lines with paths under build_output/.../report/perf_hints.log
+#   - INFO_V9 scheduler/swimlane logs are expected in sim mode (timing + tasks_scheduled summaries)
+#   - non-fatal deprecation warnings may appear; run is still considered successful if process exits 0
+#
 # CI-LIKE SIMULATION MATRIX (copy/paste one-liners):
 #   cd /opt/pypto && pytest tests/ut -n auto --maxprocesses 8 -v
 #   cd /opt/pypto && pytest tests/st/codegen -v --codegen-only --ignore=tests/st/codegen/torch/test_torch_codegen_paged_attention.py

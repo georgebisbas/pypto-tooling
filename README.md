@@ -8,6 +8,7 @@ Dockerfiles and runbooks for PyPTO and simpler development on Ascend 910B.
 - [Dockerfile.hw-native-sys.cann9.0](Dockerfile.hw-native-sys.cann9.0): Standalone PyPTO image that clones all sources from GitHub at build time.
 - [Dockerfile.server.cann:9.0](Dockerfile.server.cann:9.0): Server/dev image that uses a local pypto build context.
 - [Dockerfile.simpler.cann9.0](Dockerfile.simpler.cann9.0): Standalone simpler image with pinned commit support and HCCL-safe runtime defaults.
+- [Dockerfile.hw-native-sys.sim.ubuntu22.04](Dockerfile.hw-native-sys.sim.ubuntu22.04): Standalone local simulation image for PyPTO (`a2a3sim`/`a5sim`) on x86_64 without NPU devices.
 - [docker-entrypoint-cann.sh](docker-entrypoint-cann.sh): Runtime helper for workspace/runtime symlink handling.
 - [bz910b-reproduce.md](bz910b-reproduce.md): Reproduction and test workflow guide.
 - [dockerfile_skills/SKILL.md](dockerfile_skills/SKILL.md): Internal Dockerfile construction/debugging notes.
@@ -19,6 +20,7 @@ Dockerfiles and runbooks for PyPTO and simpler development on Ascend 910B.
 - [Dockerfile.hw-native-sys.cann9.0](Dockerfile.hw-native-sys.cann9.0): Build a standalone PyPTO image by cloning repositories during build; best for reproducible CI-like setup without local source dependencies.
 - [Dockerfile.server.cann:9.0](Dockerfile.server.cann:9.0): Build a server/dev image from a local hw-native-sys workspace where pypto is copied from build context; best for local iteration.
 - [Dockerfile.simpler.cann9.0](Dockerfile.simpler.cann9.0): Build a standalone simpler-only image for runtime and worker validation when pypto is not required.
+- [Dockerfile.hw-native-sys.sim.ubuntu22.04](Dockerfile.hw-native-sys.sim.ubuntu22.04): Build a standalone simulation-only PyPTO image for local development/testing on CPU-hosted simulators (`a2a3sim`, `a5sim`).
 - [docker-entrypoint-cann.sh](docker-entrypoint-cann.sh): Runtime helper script that normalizes runtime layout (workspace/runtime symlink behavior) before launching the container command.
 - [bz910b-reproduce.md](bz910b-reproduce.md): Operator runbook for reproducing tests and validating NPU execution on Ascend 910B hosts.
 - [dockerfile_skills/SKILL.md](dockerfile_skills/SKILL.md): Internal engineering notes and patterns for constructing/debugging these Dockerfiles.
@@ -72,6 +74,53 @@ docker build \
   -t simpler-cann9 \
   - < Dockerfile.simpler.cann9.0
 ```
+
+Build standalone local simulation image (no NPU required):
+
+```bash
+docker build -t pypto3-hw-native-sys:sim -f Dockerfile.hw-native-sys.sim.ubuntu22.04 .
+```
+
+Build standalone local simulation image (pinned commits):
+
+```bash
+docker build --build-arg PYPTO_COMMIT=896985317ed910221aaea9e0cc5bec340068fec3 --build-arg PTO_ISA_COMMIT=016396b57e2c17093f1194e6acd89bb112b0ab24 -t pypto3-hw-native-sys:sim -f Dockerfile.hw-native-sys.sim.ubuntu22.04 .
+```
+
+## Runtime Notes (Local Simulation)
+
+This mode is for local CPU-hosted simulator workflows only (`a2a3sim`, `a5sim`):
+
+```bash
+docker run --rm -it pypto3-hw-native-sys:sim
+```
+
+Inside the container:
+
+```bash
+cd /opt/pypto
+python -c "import pypto; print('pypto ok')"
+which ptoas && ptoas --version
+
+# Unit tests
+pytest tests/ut -n auto --maxprocesses 8 -v
+
+# Full ST matrix on simulators (long run)
+pytest tests/st -v --forked --platform=a2a3sim,a5sim --pto-isa-commit=016396b57e2c17093f1194e6acd89bb112b0ab24
+```
+
+Optional CI-aligned simulator subset:
+
+```bash
+pytest tests/st/runtime/ops/test_assemble.py tests/st/runtime/ops/test_mscatter.py tests/st/runtime/framework_and_models/test_qwen3_decode_scope3_mixed.py tests/st/runtime/control_flow/test_dyn_orch_shape.py::TestDynOrchShapeOperations::test_dyn_orch_paged_attention -v --platform=a5sim --forked --pto-isa-commit=016396b57e2c17093f1194e6acd89bb112b0ab24 -k "not TestMscatter"
+pytest tests/st/runtime/cross_core/test_cross_core.py -v --forked --platform=a5sim --pto-isa-commit=016396b57e2c17093f1194e6acd89bb112b0ab24
+pytest tests/st/runtime/cross_core/test_cross_core.py -v --forked --platform=a2a3sim --pto-isa-commit=016396b57e2c17093f1194e6acd89bb112b0ab24
+```
+
+Simulation image scope notes:
+
+- No `--privileged`, no `/dev` mount, and no `/usr/local/Ascend/driver` mount are required.
+- Do not use this image for onboard NPU execution (`a2a3`, `a5`); use the CANN-based Dockerfiles instead.
 
 ## Runtime Notes (Ascend 910B)
 
