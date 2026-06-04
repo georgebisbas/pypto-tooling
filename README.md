@@ -11,6 +11,7 @@ Dockerfiles and runbooks for PyPTO and simpler development on Ascend 910B.
 - [Dockerfile.hw-native-sys.sim.ubuntu22.04](Dockerfile.hw-native-sys.sim.ubuntu22.04): Standalone local simulation image for PyPTO (`a2a3sim`/`a5sim`) on x86_64 without NPU devices.
 - [docker-entrypoint-cann.sh](docker-entrypoint-cann.sh): Runtime helper for workspace/runtime symlink handling.
 - [bz910b-reproduce.md](bz910b-reproduce.md): Reproduction and test workflow guide.
+- [profiling/](profiling/): Personal collective benchmark harness for PyPTO vs simpler L3 collectives.
 - [dockerfile_skills/SKILL.md](dockerfile_skills/SKILL.md): Internal Dockerfile construction/debugging notes.
 - [dockerfile_skills/issue_0.md](dockerfile_skills/issue_0.md): Detailed issue log for comm_alloc_windows/HCCL environment mismatch.
 
@@ -23,6 +24,7 @@ Dockerfiles and runbooks for PyPTO and simpler development on Ascend 910B.
 - [Dockerfile.hw-native-sys.sim.ubuntu22.04](Dockerfile.hw-native-sys.sim.ubuntu22.04): Build a standalone simulation-only PyPTO image for local development/testing on CPU-hosted simulators (`a2a3sim`, `a5sim`).
 - [docker-entrypoint-cann.sh](docker-entrypoint-cann.sh): Runtime helper script that normalizes runtime layout (workspace/runtime symlink behavior) before launching the container command.
 - [bz910b-reproduce.md](bz910b-reproduce.md): Operator runbook for reproducing tests and validating NPU execution on Ascend 910B hosts.
+- [profiling/](profiling/): Personal harness: equivalence-driven benchmark drivers, artifact bundles, and figure generation for collectives performance analysis.
 - [dockerfile_skills/SKILL.md](dockerfile_skills/SKILL.md): Internal engineering notes and patterns for constructing/debugging these Dockerfiles.
 - [dockerfile_skills/issue_0.md](dockerfile_skills/issue_0.md): Historical incident report and root-cause details for the HCCL IPC/driver compatibility issue.
 

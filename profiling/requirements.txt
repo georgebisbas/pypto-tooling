@@ -1,0 +1,3 @@
+# Personal benchmark harness — figures and tables only (no pypto install required)
+matplotlib>=3.8
+pandas>=2.0
