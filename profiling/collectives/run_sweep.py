@@ -21,6 +21,103 @@ from collectives.golden import fill_rank_inputs, verify_outputs
 
 _HERE = Path(__file__).resolve().parent
 _HCCL_BENCH = _HERE / "hccl_bench.py"
+_HCCL_BENCH_CPP = _HERE / "hccl_bench.cc"
+_HCCL_BENCH_BIN = _HERE / ".hccl_bench_bin"
+
+
+def _resolve_ascend_home() -> Path | None:
+    candidates = [
+        os.environ.get("ASCEND_HOME_PATH"),
+        "/usr/local/Ascend/ascend-toolkit/latest",
+        "/usr/local/Ascend/latest",
+    ]
+    for candidate in candidates:
+        if not candidate:
+            continue
+        path = Path(candidate)
+        if path.is_dir():
+            return path
+    return None
+
+
+def _find_header_roots(ascend_home: Path) -> list[Path]:
+    header_roots: list[Path] = []
+    for acl_header in ascend_home.rglob("acl/acl.h"):
+        include_root = acl_header.parent.parent
+        if (include_root / "hccl" / "hccl.h").is_file() and include_root not in header_roots:
+            header_roots.append(include_root)
+    return header_roots
+
+
+def _find_library_dirs(ascend_home: Path) -> list[Path]:
+    library_dirs: list[Path] = []
+    for hccl_lib in ascend_home.rglob("libhccl.so"):
+        lib_dir = hccl_lib.parent
+        if (lib_dir / "libascendcl.so").is_file() and lib_dir not in library_dirs:
+            library_dirs.append(lib_dir)
+    return library_dirs
+
+
+def _ensure_hccl_bench_binary() -> Path:
+    if not _HCCL_BENCH_CPP.is_file():
+        raise FileNotFoundError(f"HCCL bench source not found: {_HCCL_BENCH_CPP}")
+
+    ascend_home = _resolve_ascend_home()
+    if ascend_home is None:
+        raise FileNotFoundError(
+            "Could not find Ascend toolkit root. Set ASCEND_HOME_PATH to the toolkit installation directory."
+        )
+
+    include_dirs = _find_header_roots(ascend_home)
+    if not include_dirs:
+        raise FileNotFoundError(
+            f"Could not find acl/acl.h and hccl/hccl.h under {ascend_home}. "
+            "Set ASCEND_HOME_PATH to a toolkit root that contains the public Ascend headers."
+        )
+
+    library_dirs = _find_library_dirs(ascend_home)
+    if not library_dirs:
+        raise FileNotFoundError(
+            f"Could not find libhccl.so and libascendcl.so under {ascend_home}. "
+            "Set ASCEND_HOME_PATH to a toolkit root that contains the Ascend shared libraries."
+        )
+
+    needs_rebuild = (
+        not _HCCL_BENCH_BIN.is_file()
+        or _HCCL_BENCH_BIN.stat().st_mtime < _HCCL_BENCH_CPP.stat().st_mtime
+    )
+    if not needs_rebuild:
+        return _HCCL_BENCH_BIN
+
+    cmd = [
+        "g++",
+        "-std=c++17",
+        "-O2",
+        "-pthread",
+        str(_HCCL_BENCH_CPP),
+    ]
+    for include_dir in include_dirs:
+        cmd.extend(["-I", str(include_dir)])
+    for library_dir in library_dirs:
+        cmd.extend(["-L", str(library_dir)])
+        cmd.append(f"-Wl,-rpath,{library_dir}")
+    cmd.extend([
+        "-lhccl",
+        "-lascendcl",
+        "-o",
+        str(_HCCL_BENCH_BIN),
+    ])
+    proc = subprocess.run(
+        cmd,
+        cwd=_HERE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        check=False,
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(f"failed to build HCCL bench helper:\n{proc.stdout[-2000:]}")
+    return _HCCL_BENCH_BIN
 
 
 def _cmd_validate_case(path: str) -> int:
@@ -160,11 +257,13 @@ _HCCL_MARKERS = [
 
 def _run_hccl_once(case: EquivalenceCase, extra_flags: list[str] | None = None) -> tuple[bool, str, list[str], float, dict[str, float]]:
     """Single HCCL HcclAllReduce invocation. Returns (ok, error, lines, total_s, phases)."""
-    if not _HCCL_BENCH.is_file():
-        return False, f"HCCL bench script not found: {_HCCL_BENCH}", [], 0.0, {}
+    try:
+        bench_bin = _ensure_hccl_bench_binary()
+    except (FileNotFoundError, RuntimeError) as exc:
+        return False, str(exc), [], 0.0, {}
     visible_devices = _devices_comma(case.device_ids)
     cmd = [
-        sys.executable, str(_HCCL_BENCH),
+        str(bench_bin),
         "--count", str(case.count),
         "--dtype", case.dtype,
         "--devices", _devices_comma(case.device_ids),
