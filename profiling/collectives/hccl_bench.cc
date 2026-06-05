@@ -12,6 +12,7 @@
 #include <string>
 #include <thread>
 #include <vector>
+#include <condition_variable>
 
 namespace {
 
@@ -25,6 +26,13 @@ struct ThreadResult {
     bool ok = false;
     std::string error;
     double wall_s = 0.0;
+};
+
+struct InitBarrier {
+    std::mutex mu;
+    std::condition_variable cv;
+    uint32_t ready = 0;
+    bool released = false;
 };
 
 std::mutex g_log_mu;
@@ -113,8 +121,27 @@ void CleanupBuffers(void* send_buf, void* recv_buf, void* host_buf, void* out_bu
     }
 }
 
+bool WaitForCollectiveStart(uint32_t rank, uint32_t world_size, InitBarrier* barrier, ThreadResult* result)
+{
+    std::unique_lock<std::mutex> lock(barrier->mu);
+    barrier->ready += 1;
+    if (barrier->ready == world_size) {
+        std::cout << "HCCL_COMM_SETUP_OK world_size=" << world_size << std::endl;
+        barrier->released = true;
+        barrier->cv.notify_all();
+        return true;
+    }
+    barrier->cv.wait(lock, [&]() { return barrier->released; });
+    if (!barrier->released) {
+        result->ok = false;
+        result->error = "collective start barrier released unexpectedly";
+        return false;
+    }
+    return true;
+}
+
 void RunRank(uint32_t rank, uint32_t world_size, uint32_t device_id, const HcclRootInfo* root_info,
-             uint64_t count, ThreadResult* result)
+             uint64_t count, InitBarrier* barrier, ThreadResult* result)
 {
     void* send_buf = nullptr;
     void* recv_buf = nullptr;
@@ -190,6 +217,11 @@ void RunRank(uint32_t rank, uint32_t world_size, uint32_t device_id, const HcclR
             + std::to_string(acl_ret));
     if (acl_ret != ACL_SUCCESS) {
         fail("aclrtCreateStream -> " + std::to_string(acl_ret));
+        return;
+    }
+
+    if (!WaitForCollectiveStart(rank, world_size, barrier, result)) {
+        CleanupBuffers(send_buf, recv_buf, host_buf, out_buf, stream, comm);
         return;
     }
 
@@ -311,10 +343,11 @@ int main(int argc, char** argv)
 
     std::vector<std::thread> threads;
     std::vector<ThreadResult> results(config.devices.size());
+    InitBarrier barrier;
     threads.reserve(config.devices.size());
     for (size_t index = 0; index < config.devices.size(); ++index) {
         threads.emplace_back(RunRank, static_cast<uint32_t>(index), static_cast<uint32_t>(config.devices.size()),
-                             config.devices[index], root_info, config.count, &results[index]);
+                             config.devices[index], root_info, config.count, &barrier, &results[index]);
     }
     for (size_t index = 0; index < threads.size(); ++index) {
         threads[index].join();

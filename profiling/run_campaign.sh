@@ -112,7 +112,7 @@ python3 -m collectives.summarize --run-dir "$RUN_DIR" --emit-report
 # Plot
 echo ""
 echo "--- figures ---"
-python3 -m collectives.plot_figures --run-dir "$RUN_DIR" --figures strong_scaling_t_total,paired_stack_ratio
+python3 -m collectives.plot_figures --run-dir "$RUN_DIR" --figures strong_scaling_t_total,paired_stack_ratio,phase_breakdown
 
 echo ""
 echo "============================================"
@@ -120,4 +120,5 @@ echo " Done: ${RUN_DIR}"
 echo "   results.json  — merged runs"
 echo "   reports/summary.md"
 echo "   figures/paired_stack_ratio.png"
+echo "   figures/phase_breakdown.png"
 echo "============================================"

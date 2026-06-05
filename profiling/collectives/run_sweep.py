@@ -245,12 +245,16 @@ def _run_simpler_once(case: EquivalenceCase, extra_flags: list[str] | None = Non
 
 
 _PYPTO_MARKERS = [
+    ("startup", "PYPTO_COMPILE_BEGIN"),
+    ("compile", "PYPTO_RUNTIME_BEGIN"),
+    ("execute", "PYPTO_ALLREDUCE_OK"),
     ("test_result", "PASSED"),
     ("test_result", "FAILED"),
     ("test_result", "ERROR"),
 ]
 
 _HCCL_MARKERS = [
+    ("init", "HCCL_COMM_SETUP_OK"),
     ("execute", "HCCL_ALLREDUCE_OK"),
 ]
 
@@ -358,6 +362,27 @@ def _run_stack_multi(
                     except Exception:
                         pass
                     break
+        if stack == "pypto":
+            for line in lines:
+                if line.startswith("PYPTO_COMPILE_PROFILE "):
+                    parts = line.strip().split()
+                    compile_fields: dict[str, float | str] = {}
+                    for part in parts[1:]:
+                        if "=" not in part:
+                            continue
+                        key, value = part.split("=", 1)
+                        if key == "path":
+                            compile_fields[key] = value
+                        else:
+                            try:
+                                compile_fields[key] = float(value)
+                            except ValueError:
+                                compile_fields[key] = value
+                    if "passes" in compile_fields:
+                        details.append(f"passes={float(compile_fields['passes']):.2f}s")
+                    if "codegen" in compile_fields:
+                        details.append(f"codegen={float(compile_fields['codegen']):.2f}s")
+                    break
 
         detail_str = ", ".join(details)
         print(f"{wall:.3f}s {status}  [{detail_str}]")
@@ -369,6 +394,24 @@ def _run_stack_multi(
         sample = {"round": r, "phase": label, "wall_s": round(wall, 6), "ok": ok}
         if phases:
             sample["phases"] = {k: round(v, 6) for k, v in phases.items()}
+        if stack == "pypto":
+            for line in lines:
+                if line.startswith("PYPTO_COMPILE_PROFILE "):
+                    parts = line.strip().split()
+                    compile_fields: dict[str, Any] = {}
+                    for part in parts[1:]:
+                        if "=" not in part:
+                            continue
+                        key, value = part.split("=", 1)
+                        if key == "path":
+                            compile_fields[key] = value
+                        else:
+                            try:
+                                compile_fields[key] = round(float(value), 6)
+                            except ValueError:
+                                compile_fields[key] = value
+                    sample["compile_profile"] = compile_fields
+                    break
         sample["bw_mb_s"] = round(bw / 1e6, 6)
         samples.append(sample)
         if not ok:
@@ -393,6 +436,47 @@ def _run_stack_multi(
         mean, stdev = 0.0, 0.0
 
     return all_ok, last_error, samples, mean, stdev
+
+
+def _aggregate_timed_phase_means(samples: list[dict[str, Any]]) -> dict[str, float]:
+    timed = [sample for sample in samples if str(sample.get("phase", "")).startswith("timed")]
+    if not timed:
+        return {}
+
+    phase_totals: dict[str, float] = {}
+    phase_counts: dict[str, int] = {}
+    for sample in timed:
+        phases = sample.get("phases", {})
+        for name, value in phases.items():
+            phase_totals[name] = phase_totals.get(name, 0.0) + float(value)
+            phase_counts[name] = phase_counts.get(name, 0) + 1
+
+    return {
+        name: round(phase_totals[name] / phase_counts[name], 6)
+        for name in sorted(phase_totals)
+        if phase_counts[name] > 0
+    }
+
+
+def _aggregate_timed_compile_profile_means(samples: list[dict[str, Any]]) -> dict[str, float]:
+    timed = [sample for sample in samples if str(sample.get("phase", "")).startswith("timed")]
+    if not timed:
+        return {}
+
+    numeric_totals: dict[str, float] = {}
+    numeric_counts: dict[str, int] = {}
+    for sample in timed:
+        compile_profile = sample.get("compile_profile", {})
+        for name, value in compile_profile.items():
+            if isinstance(value, (int, float)):
+                numeric_totals[name] = numeric_totals.get(name, 0.0) + float(value)
+                numeric_counts[name] = numeric_counts.get(name, 0) + 1
+
+    return {
+        name: round(numeric_totals[name] / numeric_counts[name], 6)
+        for name in sorted(numeric_totals)
+        if numeric_counts[name] > 0
+    }
 
 
 def _print_diagnostics(case: EquivalenceCase, args) -> None:
@@ -516,6 +600,8 @@ def _cmd_pair_mesh(args: argparse.Namespace) -> int:
             "correctness": "pass" if all_ok else "fail",
             "wall_s_mean": round(mean, 6),
             "wall_s_stdev": round(stdev, 6),
+            "phase_means": _aggregate_timed_phase_means(samples),
+            "compile_profile_means": _aggregate_timed_compile_profile_means(samples),
             "n_warmup": case.warmup_rounds,
             "n_timed": case.timed_rounds,
             "artifact_bundle": str(bundle.bundle_dir),
