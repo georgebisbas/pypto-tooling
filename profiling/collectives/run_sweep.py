@@ -162,6 +162,7 @@ def _run_hccl_once(case: EquivalenceCase, extra_flags: list[str] | None = None) 
     """Single HCCL HcclAllReduce invocation. Returns (ok, error, lines, total_s, phases)."""
     if not _HCCL_BENCH.is_file():
         return False, f"HCCL bench script not found: {_HCCL_BENCH}", [], 0.0, {}
+    visible_devices = _devices_comma(case.device_ids)
     cmd = [
         sys.executable, str(_HCCL_BENCH),
         "--count", str(case.count),
@@ -170,7 +171,11 @@ def _run_hccl_once(case: EquivalenceCase, extra_flags: list[str] | None = None) 
     ] + (extra_flags or [])
     return _run_with_phases(
         cmd, str(_HERE),
-        {**os.environ, "PYTHONUNBUFFERED": "1"},
+        {
+            **os.environ,
+            "PYTHONUNBUFFERED": "1",
+            "ASCEND_RT_VISIBLE_DEVICES": visible_devices,
+        },
         timeout=300, markers=_HCCL_MARKERS,
     )
 
