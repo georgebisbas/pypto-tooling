@@ -99,6 +99,14 @@ def _rank_thread(rank: int, world_size: int, device_id: int, count: int,
         for i in range(count):
             host_arr[i] = float(i + rank * 100)
         _acl.aclrtMemcpy(send_buf, nbytes, host_buf, nbytes, 1)  # ACL_MEMCPY_HOST_TO_DEVICE = 1
+        # Verify H2D: read back and check first few elements
+        check_buf = ctypes.c_void_p()
+        _acl.aclrtMallocHost(ctypes.byref(check_buf), nbytes)
+        _acl.aclrtMemcpy(check_buf, nbytes, send_buf, nbytes, 2)  # D2H
+        check_arr = np.ctypeslib.as_array(ctypes.cast(check_buf, ctypes.POINTER(ctypes.c_float)), (count,))
+        print(f"[diag] rank {rank} H2D verify output[0:4]={[float(check_arr[i]) for i in range(min(4,count))]} "
+              f"expected={[float(i+rank*100) for i in range(min(4,count))]}", flush=True)
+        _acl.aclrtFreeHost(check_buf)
         _acl.aclrtFreeHost(host_buf)
 
         # Init HCCL comm
@@ -149,10 +157,11 @@ def _rank_thread(rank: int, world_size: int, device_id: int, count: int,
             "max_err": max_err if max_err >= 1e-3 else None,
         })
         if max_err >= 1e-3:
-            print(f"[diag] rank {rank} GOLDEN MISMATCH max_err={max_err:.6f} "
-                  f"first 4 output: {[float(out_arr[i]) for i in range(min(4, count))]} "
-                  f"expected: {[float(world_size*i+expected_base) for i in range(min(4, count))]}",
-                  flush=True)
+            raw = [float(out_arr[i]) for i in range(min(16, count))]
+            exp = [float(world_size * i + expected_base) for i in range(min(16, count))]
+            print(f"[diag] rank {rank} GOLDEN MISMATCH max_err={max_err:.6f}")
+            print(f"[diag]   output[0:16]={raw}")
+            print(f"[diag]   expected[0:16]={exp}", flush=True)
 
     except Exception as e:
         import traceback
