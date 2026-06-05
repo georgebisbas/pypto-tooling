@@ -419,6 +419,8 @@ def _cmd_pair_mesh(args: argparse.Namespace) -> int:
         print(f"  {stack}: mean={mean:.4f}s stdev={stdev:.4f}s {status}")
         if not all_ok and last_error:
             print(f"  first error: {last_error[:200]}")
+            print(f"  stopping after {stack} failure; skipping remaining stacks")
+            break
 
     # Write results.json
     results = {
