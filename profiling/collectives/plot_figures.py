@@ -4,6 +4,7 @@ Figure catalog (see notes spec §6b):
   - paired_stack_ratio    — bar chart: pypto/simpler wall-time ratio per case
   - strong_scaling_t_total — T vs P by variant/stack (needs multi-P campaign)
     - phase_breakdown       — stacked bars: startup/compile/init/execute by stack
+    - compile_breakdown     — pypto compile sub-stages: passes/codegen/other
   - strong_scaling_efficiency — E(P)
   - message_size_bw_eff   — Campaign B crossover
   - pmu_utilization       — From pmu.csv on anomaly cells
@@ -20,6 +21,7 @@ FIGURE_IDS = (
     "paired_stack_ratio",
     "strong_scaling_t_total",
     "phase_breakdown",
+    "compile_breakdown",
     "strong_scaling_efficiency",
     "message_size_bw_eff",
     "pmu_utilization",
@@ -186,6 +188,71 @@ def _plot_phase_breakdown(runs: list[dict], fig_dir: Path) -> Path:
     return path
 
 
+def _plot_compile_breakdown(runs: list[dict], fig_dir: Path) -> Path:
+    """Stacked bars: pypto compile sub-stages from compile_profile_means."""
+    plt = _load_matplotlib()
+    if plt is None:
+        return _text_fallback(runs, fig_dir, "compile_breakdown")
+
+    filtered = []
+    for run in runs:
+        if run.get("stack") != "pypto":
+            continue
+        profile = run.get("compile_profile_means", {})
+        if not profile:
+            continue
+        total = float(profile.get("total", 0.0))
+        passes = float(profile.get("passes", 0.0))
+        codegen = float(profile.get("codegen", 0.0))
+        other = max(0.0, total - passes - codegen)
+        filtered.append({
+            "label": f"P{run.get('p', '?')}\npypto",
+            "passes": passes,
+            "codegen": codegen,
+            "other": other,
+        })
+
+    if not filtered:
+        print("  compile_breakdown: no pypto compile profile data")
+        return fig_dir / "compile_breakdown.png"
+
+    fig, ax = plt.subplots(figsize=(max(6, len(filtered) * 1.5), 5))
+    labels = [row["label"] for row in filtered]
+    bottoms = [0.0] * len(filtered)
+    colors = {
+        "passes": "#1f77b4",
+        "codegen": "#ff7f0e",
+        "other": "#7f8c8d",
+    }
+    for key in ("passes", "codegen", "other"):
+        values = [float(row[key]) for row in filtered]
+        if not any(values):
+            continue
+        ax.bar(
+            range(len(filtered)),
+            values,
+            bottom=bottoms,
+            color=colors[key],
+            edgecolor="white",
+            label=key,
+        )
+        bottoms = [bottom + value for bottom, value in zip(bottoms, values)]
+
+    ax.set_xticks(range(len(filtered)))
+    ax.set_xticklabels(labels, fontsize=8)
+    ax.set_ylabel("Mean compile time (s)")
+    ax.set_title("PyPTO compile breakdown")
+    ax.legend(ncols=3, fontsize=8)
+    ax.grid(True, axis="y", alpha=0.25)
+    fig.tight_layout()
+
+    path = fig_dir / "compile_breakdown.png"
+    fig.savefig(path, dpi=150)
+    plt.close(fig)
+    print(f"  compile_breakdown → {path}")
+    return path
+
+
 def _text_fallback(runs: list[dict], fig_dir: Path, fig_id: str) -> Path:
     """Write a text summary when matplotlib is not installed."""
     path = fig_dir / f"{fig_id}.txt"
@@ -197,6 +264,20 @@ def _text_fallback(runs: list[dict], fig_dir: Path, fig_id: str) -> Path:
                 continue
             phase_text = ", ".join(f"{name}={value:.4f}s" for name, value in sorted(phases.items()))
             lines.append(f"  {run['case_id']} {run['stack']}: {phase_text}")
+    elif fig_id == "compile_breakdown":
+        for run in sorted(runs, key=lambda r: (r.get("p", 0), r.get("stack", ""))):
+            if run.get("stack") != "pypto":
+                continue
+            profile = run.get("compile_profile_means", {})
+            if not profile:
+                continue
+            total = float(profile.get("total", 0.0))
+            passes = float(profile.get("passes", 0.0))
+            codegen = float(profile.get("codegen", 0.0))
+            other = max(0.0, total - passes - codegen)
+            lines.append(
+                f"  {run['case_id']} pypto: passes={passes:.4f}s, codegen={codegen:.4f}s, other={other:.4f}s, total={total:.4f}s"
+            )
     else:
         groups: dict[str, dict[str, float | None]] = {}
         for r in runs:
@@ -242,6 +323,8 @@ def main(argv: list[str] | None = None) -> int:
             _plot_strong_scaling_t_total(runs, fig_dir)
         elif fig_id == "phase_breakdown":
             _plot_phase_breakdown(runs, fig_dir)
+        elif fig_id == "compile_breakdown":
+            _plot_compile_breakdown(runs, fig_dir)
         else:
             print(f"  {fig_id}: not yet implemented")
 

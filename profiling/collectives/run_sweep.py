@@ -246,7 +246,8 @@ def _run_simpler_once(case: EquivalenceCase, extra_flags: list[str] | None = Non
 
 _PYPTO_MARKERS = [
     ("startup", "PYPTO_COMPILE_BEGIN"),
-    ("compile", "PYPTO_RUNTIME_BEGIN"),
+    ("compile", "PYPTO_RUNTIME_INIT_BEGIN"),
+    ("init", "PYPTO_RUNTIME_EXECUTE_BEGIN"),
     ("execute", "PYPTO_ALLREDUCE_OK"),
     ("test_result", "PASSED"),
     ("test_result", "FAILED"),

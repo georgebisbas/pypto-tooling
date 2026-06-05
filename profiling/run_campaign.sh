@@ -102,7 +102,6 @@ merged['runs'].sort(key=lambda r: (r.get('p', 0), r.get('stack', '')))
 Path('${MERGED}').write_text(json.dumps(merged, indent=2) + '\n')
 print(f'  merged {len(merged[\"runs\"])} runs from {len(files)} cases → ${MERGED}')
 " -- "${RESULTS_FILES[@]}"
-"
 
 # Summarize
 echo ""
@@ -112,7 +111,7 @@ python3 -m collectives.summarize --run-dir "$RUN_DIR" --emit-report
 # Plot
 echo ""
 echo "--- figures ---"
-python3 -m collectives.plot_figures --run-dir "$RUN_DIR" --figures strong_scaling_t_total,paired_stack_ratio,phase_breakdown
+python3 -m collectives.plot_figures --run-dir "$RUN_DIR" --figures strong_scaling_t_total,paired_stack_ratio,phase_breakdown,compile_breakdown
 
 echo ""
 echo "============================================"
@@ -121,4 +120,5 @@ echo "   results.json  — merged runs"
 echo "   reports/summary.md"
 echo "   figures/paired_stack_ratio.png"
 echo "   figures/phase_breakdown.png"
+echo "   figures/compile_breakdown.png"
 echo "============================================"

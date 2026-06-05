@@ -39,13 +39,14 @@ profiling/
 | `equivalence.py`, `golden.py`, `artifacts.py` | ✅ Working |
 | `run_sweep.py` (validate-case, pair-mesh) | ✅ Implemented (E1) |
 | `summarize.py` (aggregation, paired comparison, reports) | ✅ Implemented (E2) |
-| `plot_figures.py` (total-time + phase breakdown figures) | 🟡 Basic (E3) |
+| `plot_figures.py` (total-time + phase/compile breakdown figures) | 🟡 Basic (E3) |
 
 Current figure outputs from a full campaign include:
 
 - `figures/strong_scaling_t_total.png` — total wall time vs `P`
 - `figures/paired_stack_ratio.png` — `pypto / simpler` ratio per case
 - `figures/phase_breakdown.png` — stacked `startup/compile/init/execute` phase means per stack
+- `figures/compile_breakdown.png` — PyPTO compile sub-stages (`passes` / `codegen` / residual other)
 
 ## Quick start
 
