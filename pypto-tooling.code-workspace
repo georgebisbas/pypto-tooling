@@ -1,0 +1,14 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../pypto-3.0-notes"
+		},
+		{
+			"path": "../hw-native-sys/simpler"
+		}
+	],
+	"settings": {}
+}

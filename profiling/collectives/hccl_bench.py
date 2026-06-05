@@ -1,0 +1,235 @@
+"""HCCL HcclAllReduce microbenchmark — invoked as subprocess by run_sweep.py.
+
+Uses ctypes + threading (one thread per device), matching the HCCL example at
+hccl/examples/02_collectives/01_allreduce/main.cc.  Threads share the same
+process so no spawn/fork hang issues.
+
+Matches the same (count, dtype, device_ids) contract as the simpler/pypto
+runners — same input formula (rank_linear_v1), same golden (allreduce_sum_v1).
+"""
+
+import argparse
+import ctypes
+import json
+import sys
+import threading
+import time
+
+import numpy as np
+
+# ---------------------------------------------------------------------------
+# HCCL C API (libhccl.so)
+# ---------------------------------------------------------------------------
+HCCL_REDUCE_SUM = 0
+HCCL_SUCCESS = 0
+_DTYPE_MAP = {"fp32": 0, "fp16": 1}
+
+_lib = ctypes.CDLL("libhccl.so", mode=ctypes.RTLD_GLOBAL)
+_lib.HcclGetRootInfo.argtypes = [ctypes.c_void_p]
+_lib.HcclGetRootInfo.restype = ctypes.c_int
+_lib.HcclCommInitRootInfo.argtypes = [
+    ctypes.c_uint32, ctypes.c_void_p, ctypes.c_uint32,
+    ctypes.POINTER(ctypes.c_void_p),
+]
+_lib.HcclCommInitRootInfo.restype = ctypes.c_int
+_lib.HcclCommDestroy.argtypes = [ctypes.c_void_p]
+_lib.HcclCommDestroy.restype = ctypes.c_int
+_lib.HcclAllReduce.argtypes = [
+    ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64, ctypes.c_int,
+    ctypes.c_int, ctypes.c_void_p, ctypes.c_void_p,
+]
+_lib.HcclAllReduce.restype = ctypes.c_int
+
+# ---------------------------------------------------------------------------
+# ACL API (libascendcl.so)
+# ---------------------------------------------------------------------------
+_acl = ctypes.CDLL("libascendcl.so", mode=ctypes.RTLD_GLOBAL)
+_acl.aclInit.argtypes = [ctypes.c_char_p]
+_acl.aclInit.restype = ctypes.c_int
+_acl.aclFinalize.restype = ctypes.c_int
+_acl.aclrtGetDeviceCount.restype = ctypes.c_int
+_acl.aclrtSetDevice.argtypes = [ctypes.c_int32]
+_acl.aclrtSetDevice.restype = ctypes.c_int
+_acl.aclrtMalloc.argtypes = [ctypes.POINTER(ctypes.c_void_p), ctypes.c_size_t, ctypes.c_int]
+_acl.aclrtMalloc.restype = ctypes.c_int
+_acl.aclrtFree.argtypes = [ctypes.c_void_p]
+_acl.aclrtFree.restype = ctypes.c_int
+_acl.aclrtMallocHost.argtypes = [ctypes.POINTER(ctypes.c_void_p), ctypes.c_size_t]
+_acl.aclrtMallocHost.restype = ctypes.c_int
+_acl.aclrtFreeHost.argtypes = [ctypes.c_void_p]
+_acl.aclrtFreeHost.restype = ctypes.c_int
+_acl.aclrtMemcpy.argtypes = [
+    ctypes.c_void_p, ctypes.c_size_t, ctypes.c_void_p, ctypes.c_size_t, ctypes.c_int,
+]
+_acl.aclrtMemcpy.restype = ctypes.c_int
+_acl.aclrtCreateStream.argtypes = [ctypes.POINTER(ctypes.c_void_p)]
+_acl.aclrtCreateStream.restype = ctypes.c_int
+_acl.aclrtDestroyStream.argtypes = [ctypes.c_void_p]
+_acl.aclrtDestroyStream.restype = ctypes.c_int
+_acl.aclrtSynchronizeStream.argtypes = [ctypes.c_void_p]
+_acl.aclrtSynchronizeStream.restype = ctypes.c_int
+
+
+def _rank_thread(rank: int, world_size: int, device_id: int, count: int,
+                 dtype_str: str, root_info: ctypes.c_void_p,
+                 results: list) -> None:
+    """One thread per NPU — init HCCL comm, run HcclAllReduce, verify golden."""
+    try:
+        ret = _acl.aclrtSetDevice(device_id)
+        print(f"[diag] rank {rank} aclrtSetDevice({device_id}) → {ret}", flush=True)
+        if ret != 0:
+            results.append({"rank": rank, "ok": False,
+                            "error": f"aclrtSetDevice({device_id}) → {ret}"})
+            return
+
+        elem_size = 4 if dtype_str == "fp32" else 2
+        nbytes = count * elem_size
+        data_type = _DTYPE_MAP.get(dtype_str, 0)
+
+        # Device buffers
+        send_buf = ctypes.c_void_p()
+        recv_buf = ctypes.c_void_p()
+        _acl.aclrtMalloc(ctypes.byref(send_buf), nbytes, 0)  # ACL_MEM_MALLOC_HUGE_ONLY
+        _acl.aclrtMalloc(ctypes.byref(recv_buf), nbytes, 0)
+
+        # Host input: rank_linear_v1
+        host_buf = ctypes.c_void_p()
+        _acl.aclrtMallocHost(ctypes.byref(host_buf), nbytes)
+        host_arr = np.ctypeslib.as_array(ctypes.cast(host_buf, ctypes.POINTER(ctypes.c_float)), (count,))
+        for i in range(count):
+            host_arr[i] = float(i + rank * 100)
+        _acl.aclrtMemcpy(send_buf, nbytes, host_buf, nbytes, 1)  # ACL_MEMCPY_HOST_TO_DEVICE = 1
+        _acl.aclrtFreeHost(host_buf)
+
+        # Init HCCL comm
+        comm = ctypes.c_void_p()
+        ret = _lib.HcclCommInitRootInfo(world_size, root_info, rank, ctypes.byref(comm))
+        print(f"[diag] rank {rank} HcclCommInitRootInfo → {ret}", flush=True)
+        if ret != HCCL_SUCCESS:
+            results.append({"rank": rank, "ok": False, "error": f"HcclCommInitRootInfo → {ret}"})
+            return
+
+        stream = ctypes.c_void_p()
+        _acl.aclrtCreateStream(ctypes.byref(stream))
+
+        # Timed AllReduce
+        t0 = time.perf_counter()
+        ret = _lib.HcclAllReduce(send_buf, recv_buf, count, data_type,
+                                  HCCL_REDUCE_SUM, comm, stream)
+        _acl.aclrtSynchronizeStream(stream)
+        wall = time.perf_counter() - t0
+        print(f"[diag] rank {rank} HcclAllReduce → {ret} wall={wall:.6f}s", flush=True)
+
+        if ret != HCCL_SUCCESS:
+            results.append({"rank": rank, "ok": False, "error": f"HcclAllReduce → {ret}"})
+            return
+
+        # Verify golden: allreduce_sum_v1
+        out_buf = ctypes.c_void_p()
+        _acl.aclrtMallocHost(ctypes.byref(out_buf), nbytes)
+        _acl.aclrtMemcpy(out_buf, nbytes, recv_buf, nbytes, 2)  # ACL_MEMCPY_DEVICE_TO_HOST = 2
+        out_arr = np.ctypeslib.as_array(ctypes.cast(out_buf, ctypes.POINTER(ctypes.c_float)), (count,))
+
+        expected_base = 100 * world_size * (world_size - 1) // 2
+        max_err = 0.0
+        for i in range(count):
+            expected = float(world_size * i + expected_base)
+            err = abs(float(out_arr[i]) - expected)
+            if err > max_err:
+                max_err = err
+
+        _acl.aclrtFreeHost(out_buf)
+        _lib.HcclCommDestroy(comm)
+        _acl.aclrtDestroyStream(stream)
+        _acl.aclrtFree(send_buf)
+        _acl.aclrtFree(recv_buf)
+
+        results.append({
+            "rank": rank, "ok": max_err < 1e-3, "wall_s": wall,
+            "max_err": max_err if max_err >= 1e-3 else None,
+        })
+        if max_err >= 1e-3:
+            print(f"[diag] rank {rank} GOLDEN MISMATCH max_err={max_err:.6f} "
+                  f"first 4 output: {[float(out_arr[i]) for i in range(min(4, count))]} "
+                  f"expected: {[float(world_size*i+expected_base) for i in range(min(4, count))]}",
+                  flush=True)
+
+    except Exception as e:
+        import traceback
+        results.append({"rank": rank, "ok": False,
+                        "error": f"{e}\n{traceback.format_exc()}"})
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="HCCL AllReduce benchmark")
+    parser.add_argument("--count", type=int, required=True)
+    parser.add_argument("--dtype", default="fp32")
+    parser.add_argument("--devices", required=True)
+    args = parser.parse_args()
+
+    device_ids = [int(d) for d in args.devices.split(",")]
+    world_size = len(device_ids)
+
+    # Init ACL, generate root info on device 0 (matches HCCL example pattern)
+    ret = _acl.aclInit(None)
+    print(f"[diag] aclInit → {ret}")
+    if ret != 0:
+        print(f"ERROR: aclInit failed: {ret}")
+        return 1
+
+    ret = _acl.aclrtSetDevice(0)
+    print(f"[diag] aclrtSetDevice(0) → {ret}")
+    if ret != 0:
+        print(f"ERROR: aclrtSetDevice(0) failed: {ret}")
+        return 1
+
+    root_info_buf = ctypes.c_void_p()
+    ret = _acl.aclrtMallocHost(ctypes.byref(root_info_buf), 4104)
+    print(f"[diag] aclrtMallocHost(4104) → {ret}")
+    if ret != 0:
+        print(f"ERROR: aclrtMallocHost failed: {ret}")
+        return 1
+
+    ret = _lib.HcclGetRootInfo(root_info_buf)
+    print(f"[diag] HcclGetRootInfo → {ret}")
+    if ret != HCCL_SUCCESS:
+        print(f"HcclGetRootInfo failed: {ret}")
+        return 1
+
+    # One thread per device
+    print(f"[diag] spawning {world_size} thread(s) for devices {device_ids}")
+    results: list[dict] = []
+    threads = []
+    for rank, dev in enumerate(device_ids):
+        t = threading.Thread(target=_rank_thread,
+                             args=(rank, world_size, dev, args.count, args.dtype,
+                                   root_info_buf, results),
+                             daemon=True)
+        t.start()
+        threads.append(t)
+        print(f"[diag]   thread rank={rank} dev={dev} started")
+
+    for i, t in enumerate(threads):
+        t.join(timeout=60)
+        print(f"[diag]   thread rank={i} joined (alive={t.is_alive()})")
+
+    _acl.aclrtFreeHost(root_info_buf)
+    _acl.aclFinalize()
+
+    all_ok = all(r.get("ok") for r in results) and len(results) == world_size
+    if all_ok:
+        walls = [r["wall_s"] for r in results]
+        print(f"HCCL: mean={sum(walls)/len(walls):.6f}s "
+              f"per_rank={json.dumps([round(w, 6) for w in walls])}")
+        print("HCCL_ALLREDUCE_OK")
+        return 0
+    else:
+        for r in results:
+            if not r.get("ok"):
+                print(f"HCCL rank {r['rank']}: {r.get('error', 'unknown')}")
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
+

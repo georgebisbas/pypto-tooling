@@ -18,7 +18,12 @@ def pypto_root() -> Path:
 
 
 def simpler_root() -> Path:
-    return Path(os.environ.get("SIMPLER_ROOT", _default_hw_native_sys() / "simpler")).resolve()
+    default = _default_hw_native_sys() / "simpler"
+    # Docker: simpler is the runtime submodule inside pypto
+    docker_path = _default_hw_native_sys() / "pypto" / "runtime"
+    if not default.is_dir() and docker_path.is_dir():
+        default = docker_path
+    return Path(os.environ.get("SIMPLER_ROOT", default)).resolve()
 
 
 def pypto_notes_root() -> Path:

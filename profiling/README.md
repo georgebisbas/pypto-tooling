@@ -38,7 +38,8 @@ profiling/
 |-----------|--------|
 | `equivalence.py`, `golden.py`, `artifacts.py` | ✅ Working |
 | `run_sweep.py` (validate-case, pair-mesh) | ✅ Implemented (E1) |
-| `summarize.py`, `plot_figures.py` | Planned (E2–E4) |
+| `summarize.py` (aggregation, paired comparison, reports) | ✅ Implemented (E2) |
+| `plot_figures.py` (paired_stack_ratio; others planned) | 🟡 Basic (E3) |
 
 ## Quick start
 

@@ -1,5 +1,5 @@
 {
-  "variant": "mesh",
+  "variant": "ring",
   "p": 2,
   "count": 256,
   "dtype": "fp32",
@@ -11,7 +11,7 @@
   "orch_profile": "mesh_l3_host_domain_v1",
   "orch_tier": "logical",
   "num_sub_workers": 0,
-  "warmup_rounds": 1,
+  "warmup_rounds": 2,
   "timed_rounds": 5,
   "measure": "execute_only"
 }
