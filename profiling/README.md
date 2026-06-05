@@ -39,7 +39,14 @@ profiling/
 | `equivalence.py`, `golden.py`, `artifacts.py` | ✅ Working |
 | `run_sweep.py` (validate-case, pair-mesh) | ✅ Implemented (E1) |
 | `summarize.py` (aggregation, paired comparison, reports) | ✅ Implemented (E2) |
-| `plot_figures.py` (paired_stack_ratio; others planned) | 🟡 Basic (E3) |
+| `plot_figures.py` (total-time + phase/compile breakdown figures) | 🟡 Basic (E3) |
+
+Current figure outputs from a full campaign include:
+
+- `figures/strong_scaling_t_total.png` — total wall time vs `P`
+- `figures/paired_stack_ratio.png` — `pypto / simpler` ratio per case
+- `figures/phase_breakdown.png` — stacked `startup/compile/init/execute` phase means per stack
+- `figures/compile_breakdown.png` — PyPTO compile sub-stages (`passes` / `codegen` / residual other)
 
 ## Quick start
 
@@ -54,8 +61,13 @@ python -m collectives.run_sweep validate-case \
 python -m collectives.run_sweep pair-mesh \
   --case-file collectives/cases/mesh_p2_n256_fp32.json \
   --stacks simpler,pypto \
+  --timed-rounds 2 \
+  --warmup-rounds 0 \
   --campaign demo \
   --out results/campaigns/demo/run_001/results.json
+
+# Fast smoke test: only P=2, minimal repetitions
+bash run_campaign.sh --p-values 2 --warmup-rounds 0 --timed-rounds 2
 ```
 
 Manual (for debugging a single stack):

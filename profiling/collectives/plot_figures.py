@@ -3,6 +3,8 @@
 Figure catalog (see notes spec §6b):
   - paired_stack_ratio    — bar chart: pypto/simpler wall-time ratio per case
   - strong_scaling_t_total — T vs P by variant/stack (needs multi-P campaign)
+    - phase_breakdown       — stacked bars: startup/compile/init/execute by stack
+    - compile_breakdown     — pypto compile sub-stages: passes/codegen/other
   - strong_scaling_efficiency — E(P)
   - message_size_bw_eff   — Campaign B crossover
   - pmu_utilization       — From pmu.csv on anomaly cells
@@ -11,25 +13,35 @@ Figure catalog (see notes spec §6b):
 from __future__ import annotations
 
 import argparse
+import importlib
 import json
 from pathlib import Path
 
 FIGURE_IDS = (
     "paired_stack_ratio",
     "strong_scaling_t_total",
+    "phase_breakdown",
+    "compile_breakdown",
     "strong_scaling_efficiency",
     "message_size_bw_eff",
     "pmu_utilization",
 )
 
 
+def _load_matplotlib():
+    """Return pyplot configured for headless PNG rendering, or ``None`` if unavailable."""
+    try:
+        matplotlib = importlib.import_module("matplotlib")
+        matplotlib.use("Agg")
+        return importlib.import_module("matplotlib.pyplot")
+    except ImportError:
+        return None
+
+
 def _plot_paired_stack_ratio(runs: list[dict], fig_dir: Path) -> Path:
     """Bar chart: pypto/simpler ratio per case_id. Falls back to text if no matplotlib."""
-    try:
-        import matplotlib
-        matplotlib.use("Agg")
-        import matplotlib.pyplot as plt
-    except ImportError:
+    plt = _load_matplotlib()
+    if plt is None:
         return _text_fallback(runs, fig_dir, "paired_stack_ratio")
 
     # Group by case_id
@@ -62,8 +74,8 @@ def _plot_paired_stack_ratio(runs: list[dict], fig_dir: Path) -> Path:
     ax.set_title("Paired stack ratio (lower = pypto closer to simpler)")
     ax.legend()
 
-    for bar, val in zip(bars, ratios):
-        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.02,
+    for rect, val in zip(bars, ratios):
+        ax.text(rect.get_x() + rect.get_width() / 2, rect.get_height() + 0.02,
                 f"{val:.2f}×", ha="center", va="bottom", fontsize=8)
 
     fig.tight_layout()
@@ -76,11 +88,8 @@ def _plot_paired_stack_ratio(runs: list[dict], fig_dir: Path) -> Path:
 
 def _plot_strong_scaling_t_total(runs: list[dict], fig_dir: Path) -> Path:
     """Line chart: wall time vs P, one line per stack. Needs multi-P campaign data."""
-    try:
-        import matplotlib
-        matplotlib.use("Agg")
-        import matplotlib.pyplot as plt
-    except ImportError:
+    plt = _load_matplotlib()
+    if plt is None:
         return _text_fallback(runs, fig_dir, "strong_scaling_t_total")
 
     # Group by (stack, P): compute mean wall time
@@ -120,24 +129,171 @@ def _plot_strong_scaling_t_total(runs: list[dict], fig_dir: Path) -> Path:
     return path
 
 
+def _plot_phase_breakdown(runs: list[dict], fig_dir: Path) -> Path:
+    """Stacked bars: canonical phase means per (case, stack)."""
+    plt = _load_matplotlib()
+    if plt is None:
+        return _text_fallback(runs, fig_dir, "phase_breakdown")
+
+    phase_order = ("startup", "compile", "init", "execute")
+    stack_order = ("hccl", "simpler", "pypto")
+    stack_colors = {
+        "startup": "#95a5a6",
+        "compile": "#3498db",
+        "init": "#9b59b6",
+        "execute": "#2ecc71",
+    }
+
+    filtered = [run for run in runs if run.get("phase_means")]
+    if not filtered:
+        print("  phase_breakdown: no phase data")
+        return fig_dir / "phase_breakdown.png"
+
+    def _phase_sort_key(run: dict) -> tuple[int, str, int]:
+        stack = run.get("stack", "")
+        stack_idx = stack_order.index(stack) if stack in stack_order else 99
+        return (run.get("p", 0), run.get("case_id", ""), stack_idx)
+
+    filtered.sort(key=_phase_sort_key)
+    labels = [f"P{run.get('p', '?')}\n{run['stack']}" for run in filtered]
+
+    fig, ax = plt.subplots(figsize=(max(8, len(filtered) * 1.25), 5))
+    bottoms = [0.0] * len(filtered)
+    for phase_name in phase_order:
+        values = [float(run.get("phase_means", {}).get(phase_name, 0.0)) for run in filtered]
+        if not any(values):
+            continue
+        ax.bar(
+            range(len(filtered)),
+            values,
+            bottom=bottoms,
+            color=stack_colors[phase_name],
+            edgecolor="white",
+            label=phase_name,
+        )
+        bottoms = [bottom + value for bottom, value in zip(bottoms, values)]
+
+    ax.set_xticks(range(len(filtered)))
+    ax.set_xticklabels(labels, fontsize=8)
+    ax.set_ylabel("Mean phase time (s)")
+    ax.set_title("Phase breakdown by stack")
+    ax.legend(ncols=4, fontsize=8)
+    ax.grid(True, axis="y", alpha=0.25)
+    fig.tight_layout()
+
+    path = fig_dir / "phase_breakdown.png"
+    fig.savefig(path, dpi=150)
+    plt.close(fig)
+    print(f"  phase_breakdown → {path}")
+    return path
+
+
+def _plot_compile_breakdown(runs: list[dict], fig_dir: Path) -> Path:
+    """Stacked bars: pypto compile sub-stages from compile_profile_means."""
+    plt = _load_matplotlib()
+    if plt is None:
+        return _text_fallback(runs, fig_dir, "compile_breakdown")
+
+    filtered = []
+    for run in runs:
+        if run.get("stack") != "pypto":
+            continue
+        profile = run.get("compile_profile_means", {})
+        if not profile:
+            continue
+        total = float(profile.get("total", 0.0))
+        passes = float(profile.get("passes", 0.0))
+        codegen = float(profile.get("codegen", 0.0))
+        other = max(0.0, total - passes - codegen)
+        filtered.append({
+            "label": f"P{run.get('p', '?')}\npypto",
+            "passes": passes,
+            "codegen": codegen,
+            "other": other,
+        })
+
+    if not filtered:
+        print("  compile_breakdown: no pypto compile profile data")
+        return fig_dir / "compile_breakdown.png"
+
+    fig, ax = plt.subplots(figsize=(max(6, len(filtered) * 1.5), 5))
+    labels = [row["label"] for row in filtered]
+    bottoms = [0.0] * len(filtered)
+    colors = {
+        "passes": "#1f77b4",
+        "codegen": "#ff7f0e",
+        "other": "#7f8c8d",
+    }
+    for key in ("passes", "codegen", "other"):
+        values = [float(row[key]) for row in filtered]
+        if not any(values):
+            continue
+        ax.bar(
+            range(len(filtered)),
+            values,
+            bottom=bottoms,
+            color=colors[key],
+            edgecolor="white",
+            label=key,
+        )
+        bottoms = [bottom + value for bottom, value in zip(bottoms, values)]
+
+    ax.set_xticks(range(len(filtered)))
+    ax.set_xticklabels(labels, fontsize=8)
+    ax.set_ylabel("Mean compile time (s)")
+    ax.set_title("PyPTO compile breakdown")
+    ax.legend(ncols=3, fontsize=8)
+    ax.grid(True, axis="y", alpha=0.25)
+    fig.tight_layout()
+
+    path = fig_dir / "compile_breakdown.png"
+    fig.savefig(path, dpi=150)
+    plt.close(fig)
+    print(f"  compile_breakdown → {path}")
+    return path
+
+
 def _text_fallback(runs: list[dict], fig_dir: Path, fig_id: str) -> Path:
     """Write a text summary when matplotlib is not installed."""
     path = fig_dir / f"{fig_id}.txt"
     lines = [f"# {fig_id} (text fallback — install matplotlib for charts)", ""]
-    groups: dict[str, dict[str, float | None]] = {}
-    for r in runs:
-        groups.setdefault(r["case_id"], {})[r["stack"]] = r.get("wall_s")
-    for cid in sorted(groups):
-        s = groups[cid].get("simpler")
-        p = groups[cid].get("pypto")
-        ratio = f"{p/s:.2f}×" if s and p and s > 0 else "—"
-        lines.append(f"  {cid}: simpler={s} pypto={p} ratio={ratio}")
+    if fig_id == "phase_breakdown":
+        for run in sorted(runs, key=lambda r: (r.get("p", 0), r.get("stack", ""))):
+            phases = run.get("phase_means", {})
+            if not phases:
+                continue
+            phase_text = ", ".join(f"{name}={value:.4f}s" for name, value in sorted(phases.items()))
+            lines.append(f"  {run['case_id']} {run['stack']}: {phase_text}")
+    elif fig_id == "compile_breakdown":
+        for run in sorted(runs, key=lambda r: (r.get("p", 0), r.get("stack", ""))):
+            if run.get("stack") != "pypto":
+                continue
+            profile = run.get("compile_profile_means", {})
+            if not profile:
+                continue
+            total = float(profile.get("total", 0.0))
+            passes = float(profile.get("passes", 0.0))
+            codegen = float(profile.get("codegen", 0.0))
+            other = max(0.0, total - passes - codegen)
+            lines.append(
+                f"  {run['case_id']} pypto: passes={passes:.4f}s, codegen={codegen:.4f}s, other={other:.4f}s, total={total:.4f}s"
+            )
+    else:
+        groups: dict[str, dict[str, float | None]] = {}
+        for r in runs:
+            groups.setdefault(r["case_id"], {})[r["stack"]] = r.get("wall_s")
+        for cid in sorted(groups):
+            s = groups[cid].get("simpler")
+            p = groups[cid].get("pypto")
+            ratio = f"{p/s:.2f}×" if s and p and s > 0 else "—"
+            lines.append(f"  {cid}: simpler={s} pypto={p} ratio={ratio}")
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     print(f"  {fig_id} → {path} (text)")
     return path
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Load one merged campaign ``results.json`` and emit the requested figures."""
     parser = argparse.ArgumentParser(description="Plot benchmark figures")
     parser.add_argument("--run-dir", type=Path, required=True)
     parser.add_argument("--figures", default="paired_stack_ratio",
@@ -165,6 +321,10 @@ def main(argv: list[str] | None = None) -> int:
             _plot_paired_stack_ratio(runs, fig_dir)
         elif fig_id == "strong_scaling_t_total":
             _plot_strong_scaling_t_total(runs, fig_dir)
+        elif fig_id == "phase_breakdown":
+            _plot_phase_breakdown(runs, fig_dir)
+        elif fig_id == "compile_breakdown":
+            _plot_compile_breakdown(runs, fig_dir)
         else:
             print(f"  {fig_id}: not yet implemented")
 

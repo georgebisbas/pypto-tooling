@@ -10,5 +10,5 @@ Python package for Phase E collective benchmarks. See [../README.md](../README.m
 | `config.py` | `PYPTO_ROOT`, `SIMPLER_ROOT` resolution |
 | `run_sweep.py` | `pair-mesh` and single-stack runners (E1) |
 | `summarize.py` | Tables, `vs_paired_stack`, `--emit-report` (E2–E4) |
-| `plot_figures.py` | Figure catalog from `results.json` (E4) |
+| `plot_figures.py` | Figure catalog from `results.json` including total-time, phase-breakdown, and PyPTO compile-breakdown plots (E4) |
 | `cases/*.json` | Checked-in `EquivalenceCase` fixtures |

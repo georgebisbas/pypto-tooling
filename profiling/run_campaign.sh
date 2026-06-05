@@ -5,6 +5,7 @@
 # Usage (auto-detects local vs Docker layout):
 #   cd pypto-tooling/profiling
 #   bash run_campaign.sh
+#   bash run_campaign.sh --p-values 2 --timed-rounds 2 --warmup-rounds 0
 #
 # Override paths:
 #   PYPTO_ROOT=/custom/pypto SIMPLER_ROOT=/custom/simpler bash run_campaign.sh
@@ -45,18 +46,90 @@ export PYPTO_ROOT SIMPLER_ROOT
 echo "PYPTO_ROOT=$PYPTO_ROOT"
 echo "SIMPLER_ROOT=$SIMPLER_ROOT"
 
-CAMPAIGN="${1:-strong_scaling_mesh}"
+usage() {
+    cat <<'EOF'
+Usage: bash run_campaign.sh [campaign] [options]
+
+Options:
+  --campaign NAME          Campaign name (default: strong_scaling_mesh)
+  --p-values CSV           Comma-separated P values (default: 2,4,8)
+  --count N                Override case count passed to run_sweep.py
+  --warmup-rounds N        Override warmup rounds passed to run_sweep.py
+  --timed-rounds N         Override timed rounds passed to run_sweep.py
+  -h, --help               Show this help
+EOF
+}
+
+CAMPAIGN="strong_scaling_mesh"
+P_VALUES_CSV="2,4,8"
+COUNT_OVERRIDE=""
+WARMUP_OVERRIDE=""
+TIMED_OVERRIDE=""
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --campaign)
+            CAMPAIGN="$2"
+            shift 2
+            ;;
+        --p-values)
+            P_VALUES_CSV="$2"
+            shift 2
+            ;;
+        --count)
+            COUNT_OVERRIDE="$2"
+            shift 2
+            ;;
+        --warmup-rounds)
+            WARMUP_OVERRIDE="$2"
+            shift 2
+            ;;
+        --timed-rounds)
+            TIMED_OVERRIDE="$2"
+            shift 2
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        *)
+            if [[ "$CAMPAIGN" == "strong_scaling_mesh" ]]; then
+                CAMPAIGN="$1"
+                shift
+            else
+                echo "ERROR: unknown argument: $1"
+                usage
+                exit 1
+            fi
+            ;;
+    esac
+done
+
 TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
 RUN_DIR="results/campaigns/${CAMPAIGN}/run_${TIMESTAMP}"
 mkdir -p "$RUN_DIR"
 
-P_VALUES=(2 4 8)
+IFS=',' read -r -a P_VALUES <<< "$P_VALUES_CSV"
 RESULTS_FILES=()
+
+RUN_SWEEP_EXTRA_ARGS=()
+if [[ -n "$COUNT_OVERRIDE" ]]; then
+    RUN_SWEEP_EXTRA_ARGS+=(--count "$COUNT_OVERRIDE")
+fi
+if [[ -n "$WARMUP_OVERRIDE" ]]; then
+    RUN_SWEEP_EXTRA_ARGS+=(--warmup-rounds "$WARMUP_OVERRIDE")
+fi
+if [[ -n "$TIMED_OVERRIDE" ]]; then
+    RUN_SWEEP_EXTRA_ARGS+=(--timed-rounds "$TIMED_OVERRIDE")
+fi
 
 echo "============================================"
 echo " Campaign: ${CAMPAIGN}"
 echo " Run dir:  ${RUN_DIR}"
 echo " Ranks:    ${P_VALUES[*]}"
+if [[ ${#RUN_SWEEP_EXTRA_ARGS[@]} -gt 0 ]]; then
+    echo " Overrides: ${RUN_SWEEP_EXTRA_ARGS[*]}"
+fi
 echo "============================================"
 
 for P in "${P_VALUES[@]}"; do
@@ -74,6 +147,7 @@ for P in "${P_VALUES[@]}"; do
         --case-file "$CASE_FILE" \
         --stacks hccl,simpler,pypto \
         --campaign "$CAMPAIGN" \
+        "${RUN_SWEEP_EXTRA_ARGS[@]}" \
         --out "$OUT_FILE" || {
         echo "FATAL: P=${P} failed (exit $?), stopping."
         exit 1
@@ -102,7 +176,6 @@ merged['runs'].sort(key=lambda r: (r.get('p', 0), r.get('stack', '')))
 Path('${MERGED}').write_text(json.dumps(merged, indent=2) + '\n')
 print(f'  merged {len(merged[\"runs\"])} runs from {len(files)} cases → ${MERGED}')
 " -- "${RESULTS_FILES[@]}"
-"
 
 # Summarize
 echo ""
@@ -112,7 +185,7 @@ python3 -m collectives.summarize --run-dir "$RUN_DIR" --emit-report
 # Plot
 echo ""
 echo "--- figures ---"
-python3 -m collectives.plot_figures --run-dir "$RUN_DIR" --figures strong_scaling_t_total,paired_stack_ratio
+python3 -m collectives.plot_figures --run-dir "$RUN_DIR" --figures strong_scaling_t_total,paired_stack_ratio,phase_breakdown,compile_breakdown
 
 echo ""
 echo "============================================"
@@ -120,4 +193,6 @@ echo " Done: ${RUN_DIR}"
 echo "   results.json  — merged runs"
 echo "   reports/summary.md"
 echo "   figures/paired_stack_ratio.png"
+echo "   figures/phase_breakdown.png"
+echo "   figures/compile_breakdown.png"
 echo "============================================"

@@ -21,6 +21,103 @@ from collectives.golden import fill_rank_inputs, verify_outputs
 
 _HERE = Path(__file__).resolve().parent
 _HCCL_BENCH = _HERE / "hccl_bench.py"
+_HCCL_BENCH_CPP = _HERE / "hccl_bench.cc"
+_HCCL_BENCH_BIN = _HERE / ".hccl_bench_bin"
+
+
+def _resolve_ascend_home() -> Path | None:
+    candidates = [
+        os.environ.get("ASCEND_HOME_PATH"),
+        "/usr/local/Ascend/ascend-toolkit/latest",
+        "/usr/local/Ascend/latest",
+    ]
+    for candidate in candidates:
+        if not candidate:
+            continue
+        path = Path(candidate)
+        if path.is_dir():
+            return path
+    return None
+
+
+def _find_header_roots(ascend_home: Path) -> list[Path]:
+    header_roots: list[Path] = []
+    for acl_header in ascend_home.rglob("acl/acl.h"):
+        include_root = acl_header.parent.parent
+        if (include_root / "hccl" / "hccl.h").is_file() and include_root not in header_roots:
+            header_roots.append(include_root)
+    return header_roots
+
+
+def _find_library_dirs(ascend_home: Path) -> list[Path]:
+    library_dirs: list[Path] = []
+    for hccl_lib in ascend_home.rglob("libhccl.so"):
+        lib_dir = hccl_lib.parent
+        if (lib_dir / "libascendcl.so").is_file() and lib_dir not in library_dirs:
+            library_dirs.append(lib_dir)
+    return library_dirs
+
+
+def _ensure_hccl_bench_binary() -> Path:
+    if not _HCCL_BENCH_CPP.is_file():
+        raise FileNotFoundError(f"HCCL bench source not found: {_HCCL_BENCH_CPP}")
+
+    ascend_home = _resolve_ascend_home()
+    if ascend_home is None:
+        raise FileNotFoundError(
+            "Could not find Ascend toolkit root. Set ASCEND_HOME_PATH to the toolkit installation directory."
+        )
+
+    include_dirs = _find_header_roots(ascend_home)
+    if not include_dirs:
+        raise FileNotFoundError(
+            f"Could not find acl/acl.h and hccl/hccl.h under {ascend_home}. "
+            "Set ASCEND_HOME_PATH to a toolkit root that contains the public Ascend headers."
+        )
+
+    library_dirs = _find_library_dirs(ascend_home)
+    if not library_dirs:
+        raise FileNotFoundError(
+            f"Could not find libhccl.so and libascendcl.so under {ascend_home}. "
+            "Set ASCEND_HOME_PATH to a toolkit root that contains the Ascend shared libraries."
+        )
+
+    needs_rebuild = (
+        not _HCCL_BENCH_BIN.is_file()
+        or _HCCL_BENCH_BIN.stat().st_mtime < _HCCL_BENCH_CPP.stat().st_mtime
+    )
+    if not needs_rebuild:
+        return _HCCL_BENCH_BIN
+
+    cmd = [
+        "g++",
+        "-std=c++17",
+        "-O2",
+        "-pthread",
+        str(_HCCL_BENCH_CPP),
+    ]
+    for include_dir in include_dirs:
+        cmd.extend(["-I", str(include_dir)])
+    for library_dir in library_dirs:
+        cmd.extend(["-L", str(library_dir)])
+        cmd.append(f"-Wl,-rpath,{library_dir}")
+    cmd.extend([
+        "-lhccl",
+        "-lascendcl",
+        "-o",
+        str(_HCCL_BENCH_BIN),
+    ])
+    proc = subprocess.run(
+        cmd,
+        cwd=_HERE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        check=False,
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(f"failed to build HCCL bench helper:\n{proc.stdout[-2000:]}")
+    return _HCCL_BENCH_BIN
 
 
 def _cmd_validate_case(path: str) -> int:
@@ -30,6 +127,26 @@ def _cmd_validate_case(path: str) -> int:
     print(f"equivalence_hash={case.equivalence_hash()}")
     print(f"n_bytes={case.n_bytes} window_nbytes={case.window_nbytes}")
     return 0
+
+
+def _apply_case_overrides(case: EquivalenceCase, args: argparse.Namespace) -> EquivalenceCase:
+    """Apply CLI overrides to a loaded case file."""
+    if getattr(args, "count", None) is not None:
+        case.count = args.count
+    if getattr(args, "warmup_rounds", None) is not None:
+        case.warmup_rounds = args.warmup_rounds
+    if getattr(args, "timed_rounds", None) is not None:
+        case.timed_rounds = args.timed_rounds
+
+    if case.count <= 0:
+        raise ValueError(f"count must be positive, got {case.count}")
+    if case.warmup_rounds < 0:
+        raise ValueError(f"warmup_rounds must be >= 0, got {case.warmup_rounds}")
+    if case.timed_rounds <= 0:
+        raise ValueError(f"timed_rounds must be >= 1, got {case.timed_rounds}")
+
+    case.validate()
+    return case
 
 
 def _devices_dash(device_ids: list[int]) -> str:
@@ -148,29 +265,42 @@ def _run_simpler_once(case: EquivalenceCase, extra_flags: list[str] | None = Non
 
 
 _PYPTO_MARKERS = [
+    ("startup", "PYPTO_COMPILE_BEGIN"),
+    ("compile", "PYPTO_RUNTIME_INIT_BEGIN"),
+    ("init", "PYPTO_RUNTIME_EXECUTE_BEGIN"),
+    ("execute", "PYPTO_ALLREDUCE_OK"),
     ("test_result", "PASSED"),
     ("test_result", "FAILED"),
     ("test_result", "ERROR"),
 ]
 
 _HCCL_MARKERS = [
+    ("init", "HCCL_COMM_SETUP_OK"),
     ("execute", "HCCL_ALLREDUCE_OK"),
 ]
 
 
 def _run_hccl_once(case: EquivalenceCase, extra_flags: list[str] | None = None) -> tuple[bool, str, list[str], float, dict[str, float]]:
     """Single HCCL HcclAllReduce invocation. Returns (ok, error, lines, total_s, phases)."""
-    if not _HCCL_BENCH.is_file():
-        return False, f"HCCL bench script not found: {_HCCL_BENCH}", [], 0.0, {}
+    try:
+        bench_bin = _ensure_hccl_bench_binary()
+    except (FileNotFoundError, RuntimeError) as exc:
+        return False, str(exc), [], 0.0, {}
+    visible_devices = _devices_comma(case.device_ids)
     cmd = [
-        sys.executable, str(_HCCL_BENCH),
+        str(bench_bin),
         "--count", str(case.count),
         "--dtype", case.dtype,
         "--devices", _devices_comma(case.device_ids),
     ] + (extra_flags or [])
     return _run_with_phases(
         cmd, str(_HERE),
-        {**os.environ, "PYTHONUNBUFFERED": "1"},
+        {
+            **os.environ,
+            "PYTHONUNBUFFERED": "1",
+            "ASCEND_RT_VISIBLE_DEVICES": visible_devices,
+            "HCCL_OP_EXPANSION_MODE": "AI_CPU",
+        },
         timeout=300, markers=_HCCL_MARKERS,
     )
 
@@ -253,6 +383,27 @@ def _run_stack_multi(
                     except Exception:
                         pass
                     break
+        if stack == "pypto":
+            for line in lines:
+                if line.startswith("PYPTO_COMPILE_PROFILE "):
+                    parts = line.strip().split()
+                    compile_fields: dict[str, float | str] = {}
+                    for part in parts[1:]:
+                        if "=" not in part:
+                            continue
+                        key, value = part.split("=", 1)
+                        if key == "path":
+                            compile_fields[key] = value
+                        else:
+                            try:
+                                compile_fields[key] = float(value)
+                            except ValueError:
+                                compile_fields[key] = value
+                    if "passes" in compile_fields:
+                        details.append(f"passes={float(compile_fields['passes']):.2f}s")
+                    if "codegen" in compile_fields:
+                        details.append(f"codegen={float(compile_fields['codegen']):.2f}s")
+                    break
 
         detail_str = ", ".join(details)
         print(f"{wall:.3f}s {status}  [{detail_str}]")
@@ -264,6 +415,24 @@ def _run_stack_multi(
         sample = {"round": r, "phase": label, "wall_s": round(wall, 6), "ok": ok}
         if phases:
             sample["phases"] = {k: round(v, 6) for k, v in phases.items()}
+        if stack == "pypto":
+            for line in lines:
+                if line.startswith("PYPTO_COMPILE_PROFILE "):
+                    parts = line.strip().split()
+                    compile_fields: dict[str, Any] = {}
+                    for part in parts[1:]:
+                        if "=" not in part:
+                            continue
+                        key, value = part.split("=", 1)
+                        if key == "path":
+                            compile_fields[key] = value
+                        else:
+                            try:
+                                compile_fields[key] = round(float(value), 6)
+                            except ValueError:
+                                compile_fields[key] = value
+                    sample["compile_profile"] = compile_fields
+                    break
         sample["bw_mb_s"] = round(bw / 1e6, 6)
         samples.append(sample)
         if not ok:
@@ -288,6 +457,47 @@ def _run_stack_multi(
         mean, stdev = 0.0, 0.0
 
     return all_ok, last_error, samples, mean, stdev
+
+
+def _aggregate_timed_phase_means(samples: list[dict[str, Any]]) -> dict[str, float]:
+    timed = [sample for sample in samples if str(sample.get("phase", "")).startswith("timed")]
+    if not timed:
+        return {}
+
+    phase_totals: dict[str, float] = {}
+    phase_counts: dict[str, int] = {}
+    for sample in timed:
+        phases = sample.get("phases", {})
+        for name, value in phases.items():
+            phase_totals[name] = phase_totals.get(name, 0.0) + float(value)
+            phase_counts[name] = phase_counts.get(name, 0) + 1
+
+    return {
+        name: round(phase_totals[name] / phase_counts[name], 6)
+        for name in sorted(phase_totals)
+        if phase_counts[name] > 0
+    }
+
+
+def _aggregate_timed_compile_profile_means(samples: list[dict[str, Any]]) -> dict[str, float]:
+    timed = [sample for sample in samples if str(sample.get("phase", "")).startswith("timed")]
+    if not timed:
+        return {}
+
+    numeric_totals: dict[str, float] = {}
+    numeric_counts: dict[str, int] = {}
+    for sample in timed:
+        compile_profile = sample.get("compile_profile", {})
+        for name, value in compile_profile.items():
+            if isinstance(value, (int, float)):
+                numeric_totals[name] = numeric_totals.get(name, 0.0) + float(value)
+                numeric_counts[name] = numeric_counts.get(name, 0) + 1
+
+    return {
+        name: round(numeric_totals[name] / numeric_counts[name], 6)
+        for name in sorted(numeric_totals)
+        if numeric_counts[name] > 0
+    }
 
 
 def _print_diagnostics(case: EquivalenceCase, args) -> None:
@@ -351,7 +561,7 @@ def _run_golden_only(case: EquivalenceCase) -> tuple[bool, str]:
 
 def _cmd_pair_mesh(args: argparse.Namespace) -> int:
     case = EquivalenceCase.from_json_file(args.case_file)
-    case.validate()
+    case = _apply_case_overrides(case, args)
 
     # ── pre-flight diagnostics ──
     _print_diagnostics(case, args)
@@ -411,6 +621,8 @@ def _cmd_pair_mesh(args: argparse.Namespace) -> int:
             "correctness": "pass" if all_ok else "fail",
             "wall_s_mean": round(mean, 6),
             "wall_s_stdev": round(stdev, 6),
+            "phase_means": _aggregate_timed_phase_means(samples),
+            "compile_profile_means": _aggregate_timed_compile_profile_means(samples),
             "n_warmup": case.warmup_rounds,
             "n_timed": case.timed_rounds,
             "artifact_bundle": str(bundle.bundle_dir),
@@ -472,6 +684,9 @@ def main(argv: list[str] | None = None) -> int:
     p_pair.add_argument("--stacks", default="hccl,simpler,pypto")
     p_pair.add_argument("--campaign", default="default")
     p_pair.add_argument("--profile", default="", help="Comma: l2,pmu,dep")
+    p_pair.add_argument("--count", type=int, default=None, help="Override case payload element count")
+    p_pair.add_argument("--warmup-rounds", type=int, default=None, help="Override case warmup rounds")
+    p_pair.add_argument("--timed-rounds", type=int, default=None, help="Override case timed rounds")
     p_pair.add_argument("--out", required=True, help="results.json path under results/campaigns/")
 
     args = parser.parse_args(argv)
