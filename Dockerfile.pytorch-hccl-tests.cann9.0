@@ -1,0 +1,127 @@
+# Standalone pytorch-hccl-tests image for Ascend 910B
+#
+# Minimal benchmark image: clones only the pytorch-hccl-tests fork and installs
+# just enough system packages to run torchrun-based HCCL benchmarks.
+#
+# All paths are driven by build args:
+#   CANN_VERSION            (default: 9.0.0) — selects the base image tag and cann-* paths
+#   INSTALL_PREFIX          (default: /opt)  — root for the benchmark checkout and venv
+#   PT_HCCL_REPO_URL        (default: georgebisbas fork URL)
+#   PT_HCCL_COMMIT          (default: master) — benchmark repo ref to checkout
+#   PT_HCCL_INSTALL_TARGET  (default: install-npu-arm) — Makefile target to install deps into the venv
+#
+# REQUIREMENTS:
+#   - Internet access during build (GitHub and pip indexes)
+#   - Ascend 910B NPUs + host driver at runtime
+#   - CANN >= 9.0.0
+#
+# BUILD (defaults):
+#   docker build -t pytorch-hccl-tests:cann9 - < Dockerfile.pytorch-hccl-tests.cann9.0
+#
+# BUILD (custom fork ref / install target):
+#   docker build \
+#     --build-arg PT_HCCL_COMMIT=<your-branch-or-sha> \
+#     --build-arg PT_HCCL_INSTALL_TARGET=install-npu-x86 \
+#     -t pytorch-hccl-tests:cann9 \
+#     - < Dockerfile.pytorch-hccl-tests.cann9.0
+#
+# RUN (single-device, NO HCCL collectives):
+#   docker run --rm -it --privileged --ipc=host \
+#     -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi:ro \
+#     -v /usr/local/Ascend/driver:/usr/local/Ascend/driver:ro \
+#     -v /dev:/dev \
+#     pytorch-hccl-tests:cann9
+#
+# RUN (multi-device, HCCL collectives — MUST use --pid=host):
+#   docker run --rm -it --privileged --ipc=host --pid=host \
+#     --cap-add=SYS_PTRACE --security-opt seccomp=unconfined \
+#     -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi:ro \
+#     -v /usr/local/Ascend/driver:/usr/local/Ascend/driver:ro \
+#     -v /dev:/dev \
+#     pytorch-hccl-tests:cann9
+#
+# NOTE:
+#   - Do NOT mount /usr/local/Ascend from host. The image already contains CANN.
+#   - The benchmark Makefile controls the torch / torch-npu install contract.
+#
+# COMMANDS INSIDE CONTAINER:
+#   The benchmark venv is auto-activated for interactive shells via /etc/bash.bashrc.
+#
+#   cd /opt/pytorch-hccl-tests
+#   npu-smi info
+#   python -c "import torch, pytorch_hccl_tests; print('torch', torch.__version__)"
+#   python -c "import torch_npu; import torch.distributed as dist; print('torch_npu', torch_npu.__version__); print('hccl', getattr(dist, 'is_hccl_available', lambda: 'n/a')())"
+#
+#   # CPU sanity checks:
+#   pytest tests/test_pytorch_hccl_tests.py tests/test_commons.py -q
+#   torchrun --nnodes 1 --nproc_per_node 2 pytorch_hccl_tests/cli.py --benchmark latency --device cpu
+#
+#   # Single-node NPU smoke tests (two ranks):
+#   torchrun --nnodes 1 --nproc_per_node 2 pytorch_hccl_tests/cli.py --benchmark latency --device npu
+#   torchrun --nnodes 1 --nproc_per_node 2 pytorch_hccl_tests/cli.py --benchmark allreduce --device npu
+#
+#   # Larger collective example (requires enough devices and --pid=host at docker run time):
+#   WORLD_SIZE=4 make allreduce DEVICE=npu
+
+ARG CANN_VERSION=9.0.0
+FROM quay.io/ascend/cann:${CANN_VERSION}-910b-ubuntu22.04-py3.12
+
+ARG CANN_VERSION=9.0.0
+ARG INSTALL_PREFIX=/opt
+ARG PT_HCCL_REPO_URL=https://github.com/georgebisbas/pytorch-hccl-tests.git
+ARG PT_HCCL_COMMIT=master
+ARG PT_HCCL_INSTALL_TARGET=install-npu-arm
+
+ENV CANN_VERSION=${CANN_VERSION} \
+    INSTALL_PREFIX=${INSTALL_PREFIX}
+
+ENV CANN_HOME=/usr/local/Ascend/cann-${CANN_VERSION}
+ENV PT_HCCL_DIR=${INSTALL_PREFIX}/pytorch-hccl-tests \
+    PT_HCCL_VENV=${INSTALL_PREFIX}/venvs/pytorch-hccl-tests
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_CACHE_DIR=/tmp/pip-cache
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+      git ca-certificates make python3.10 python3.10-venv && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN git clone --filter=blob:none "${PT_HCCL_REPO_URL}" "${PT_HCCL_DIR}" && \
+    if ! git -C "${PT_HCCL_DIR}" cat-file -e "${PT_HCCL_COMMIT}^{commit}" 2>/dev/null; then \
+      git -C "${PT_HCCL_DIR}" fetch origin "${PT_HCCL_COMMIT}"; \
+    fi && \
+    git -C "${PT_HCCL_DIR}" checkout "${PT_HCCL_COMMIT}"
+
+WORKDIR ${PT_HCCL_DIR}
+
+RUN python3.10 -m venv "${PT_HCCL_VENV}" && \
+    . "${PT_HCCL_VENV}/bin/activate" && \
+    python -m pip install --upgrade pip && \
+    pip install -r requirements_dev.txt && \
+    make "${PT_HCCL_INSTALL_TARGET}" && \
+    python -c "import pytorch_hccl_tests; print('pytorch_hccl_tests ok')"
+
+RUN echo "[ -f ${CANN_HOME}/set_env.sh ] && { source ${CANN_HOME}/set_env.sh 2>/dev/null || true; }" >> /etc/bash.bashrc && \
+    echo "[ -d ${PT_HCCL_VENV} ] && source ${PT_HCCL_VENV}/bin/activate" >> /etc/bash.bashrc && \
+    echo "export OMP_NUM_THREADS=1" >> /etc/bash.bashrc
+
+ENV PATH=${PT_HCCL_VENV}/bin:${PATH}
+ENV ASCEND_HOME_PATH=${CANN_HOME} \
+    ASCEND_OPP_PATH=/usr/local/Ascend/ascend-toolkit/latest/opp \
+    MPI_HOME=/usr
+ENV LD_LIBRARY_PATH=/usr/local/Ascend/driver/lib64/driver:${CANN_HOME}/aarch64-linux/lib64:/usr/local/Ascend/ascend-toolkit/latest/lib64:${LD_LIBRARY_PATH:-}
+
+RUN test -f "${CANN_HOME}/aarch64-linux/lib64/libhccl.so" \
+    || (echo "ERROR: libhccl.so missing at ${CANN_HOME}/aarch64-linux/lib64/libhccl.so" \
+        && ls -la "${CANN_HOME}/aarch64-linux/lib64/" | grep -i hccl \
+        && exit 1)
+
+ENV LD_PRELOAD=${CANN_HOME}/aarch64-linux/lib64/libhccl.so
+ENV PYTHONPATH=${CANN_HOME}/python/site-packages:${CANN_HOME}/opp/built-in/op_impl/ai_core/tbe
+ENV PYTHONPATH=${PYTHONPATH}:/usr/local/Ascend/ascend-toolkit/latest/python/site-packages:/usr/local/Ascend/ascend-toolkit/latest/opp/built-in/op_impl/ai_core/tbe
+
+WORKDIR ${PT_HCCL_DIR}
+CMD ["bash"]
