@@ -61,8 +61,13 @@ python -m collectives.run_sweep validate-case \
 python -m collectives.run_sweep pair-mesh \
   --case-file collectives/cases/mesh_p2_n256_fp32.json \
   --stacks simpler,pypto \
+  --timed-rounds 2 \
+  --warmup-rounds 0 \
   --campaign demo \
   --out results/campaigns/demo/run_001/results.json
+
+# Fast smoke test: only P=2, minimal repetitions
+bash run_campaign.sh --p-values 2 --warmup-rounds 0 --timed-rounds 2
 ```
 
 Manual (for debugging a single stack):

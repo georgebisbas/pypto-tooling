@@ -129,6 +129,26 @@ def _cmd_validate_case(path: str) -> int:
     return 0
 
 
+def _apply_case_overrides(case: EquivalenceCase, args: argparse.Namespace) -> EquivalenceCase:
+    """Apply CLI overrides to a loaded case file."""
+    if getattr(args, "count", None) is not None:
+        case.count = args.count
+    if getattr(args, "warmup_rounds", None) is not None:
+        case.warmup_rounds = args.warmup_rounds
+    if getattr(args, "timed_rounds", None) is not None:
+        case.timed_rounds = args.timed_rounds
+
+    if case.count <= 0:
+        raise ValueError(f"count must be positive, got {case.count}")
+    if case.warmup_rounds < 0:
+        raise ValueError(f"warmup_rounds must be >= 0, got {case.warmup_rounds}")
+    if case.timed_rounds <= 0:
+        raise ValueError(f"timed_rounds must be >= 1, got {case.timed_rounds}")
+
+    case.validate()
+    return case
+
+
 def _devices_dash(device_ids: list[int]) -> str:
     """Convert [0,1,2,3] to '0-3' for simpler CLI (contiguous ranges only)."""
     if len(device_ids) > 2 and device_ids == list(range(device_ids[0], device_ids[-1] + 1)):
@@ -541,7 +561,7 @@ def _run_golden_only(case: EquivalenceCase) -> tuple[bool, str]:
 
 def _cmd_pair_mesh(args: argparse.Namespace) -> int:
     case = EquivalenceCase.from_json_file(args.case_file)
-    case.validate()
+    case = _apply_case_overrides(case, args)
 
     # ── pre-flight diagnostics ──
     _print_diagnostics(case, args)
@@ -664,6 +684,9 @@ def main(argv: list[str] | None = None) -> int:
     p_pair.add_argument("--stacks", default="hccl,simpler,pypto")
     p_pair.add_argument("--campaign", default="default")
     p_pair.add_argument("--profile", default="", help="Comma: l2,pmu,dep")
+    p_pair.add_argument("--count", type=int, default=None, help="Override case payload element count")
+    p_pair.add_argument("--warmup-rounds", type=int, default=None, help="Override case warmup rounds")
+    p_pair.add_argument("--timed-rounds", type=int, default=None, help="Override case timed rounds")
     p_pair.add_argument("--out", required=True, help="results.json path under results/campaigns/")
 
     args = parser.parse_args(argv)
