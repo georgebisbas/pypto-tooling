@@ -18,7 +18,7 @@
 # WHAT GETS COPIED / CLONED DURING BUILD:
 #   /workspace/hw-native-sys/pypto   — copied from build context (required)
 #   /workspace/hw-native-sys/pypto/runtime — simpler submodule (required)
-#   /opt/pto-isa                     — from github.com/PTO-ISA/pto-isa.git (pinned commit)
+#   /opt/pto-isa                     — from github.com/hw-native-sys/pto-isa.git (pinned commit)
 #   /opt/ptoas-bin                   — PTOAS binary (downloaded release tarball)
 #   ./3rdparty/*                     — libbacktrace/msgpack-c fallbacks if submodules missing
 #
@@ -79,10 +79,10 @@
 #   pytest tests/ut -v
 #
 #   # System tests (single-device, all 4 NPUs available to test runner):
-#   pytest tests/st -v --device="0,1,2,3" --precompile-workers=128 --pto-isa-commit=2c607938 --ignore=tests/st/distributed
+#   pytest tests/st -v --device="0,1,2,3" --precompile-workers=128 --pto-isa-commit=016396b57e2c17093f1194e6acd89bb112b0ab24 --ignore=tests/st/distributed
 #
 #   # Distributed system tests (all 4 NPUs):
-#   pytest tests/st/distributed -v --device="0,1,2,3" --pto-isa-commit=2c607938
+#   pytest tests/st/distributed -v --device="0,1,2,3" --pto-isa-commit=016396b57e2c17093f1194e6acd89bb112b0ab24
 #
 # NOTES:
 # - CANN 9.0.0 is baked into the image. Do NOT mount /usr/local/Ascend from the host
@@ -125,16 +125,17 @@ WORKDIR /workspace/hw-native-sys/pypto
 
 # Install PTO-ISA (required by system tests that call code_runner).
 # Keep this pinned to the commit used in ci.yml --pto-isa-commit.
-ARG PTO_ISA_COMMIT=2c607938
-RUN git clone https://github.com/PTO-ISA/pto-isa.git /opt/pto-isa && \
+ARG PTO_ISA_COMMIT=016396b57e2c17093f1194e6acd89bb112b0ab24
+RUN timeout 60 git clone https://github.com/hw-native-sys/pto-isa.git /opt/pto-isa \
+      || { rm -rf /opt/pto-isa; timeout 300 git clone https://gitcode.com/luohuan40/pto-isa.git /opt/pto-isa; } && \
   git -C /opt/pto-isa checkout "${PTO_ISA_COMMIT}" && \
   git -C /opt/pto-isa rev-parse --short HEAD
 
 ENV PTO_ISA_ROOT=/opt/pto-isa
 
 # Install PTOAS (required by PTOAS strategy tests in tests/st/codegen).
-ARG PTOAS_VERSION=v0.36
-ARG PTOAS_SHA256=698f753b67ca4387e2e4ef96dfdbb35d71295e94f9f5b20a545b34647f548efc
+ARG PTOAS_VERSION=v0.43
+ARG PTOAS_SHA256=a7f4e2e67808a36c1491b24a46505105a50aee1d202c0bba25621132b70d806a
 RUN curl --fail --location --retry 3 --retry-all-errors \
       "https://github.com/hw-native-sys/PTOAS/releases/download/${PTOAS_VERSION}/ptoas-bin-aarch64.tar.gz" \
       -o /tmp/ptoas-bin-aarch64.tar.gz && \

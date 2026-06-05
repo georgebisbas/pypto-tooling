@@ -13,7 +13,7 @@
 #   docker build -t pypto3-hw-native-sys:sim -f Dockerfile.hw-native-sys.sim.ubuntu22.04 .
 #
 # BUILD (pinned commits):
-#   docker build --build-arg PYPTO_COMMIT=896985317ed910221aaea9e0cc5bec340068fec3 --build-arg PTO_ISA_COMMIT=016396b57e2c17093f1194e6acd89bb112b0ab24 -t pypto3-hw-native-sys:sim -f Dockerfile.hw-native-sys.sim.ubuntu22.04 .
+#   docker build --build-arg PYPTO_COMMIT=3f421313f02777267cdd48ba1e134e51ecf03b9e --build-arg PTO_ISA_COMMIT=016396b57e2c17093f1194e6acd89bb112b0ab24 -t pypto3-hw-native-sys:sim -f Dockerfile.hw-native-sys.sim.ubuntu22.04 .
 #
 # RUN:
 #   docker run --rm -it pypto3-hw-native-sys:sim
@@ -59,7 +59,7 @@ ARG UBUNTU_VERSION=22.04
 FROM ubuntu:${UBUNTU_VERSION}
 
 ARG INSTALL_PREFIX=/opt
-ARG PYPTO_COMMIT=896985317ed910221aaea9e0cc5bec340068fec3
+ARG PYPTO_COMMIT=3f421313f02777267cdd48ba1e134e51ecf03b9e
 ARG PTO_ISA_COMMIT=016396b57e2c17093f1194e6acd89bb112b0ab24
 ARG PTOAS_VERSION=v0.43
 ARG PTOAS_SHA256=4fe979dc9759a68c3a19ed16d581249efa3133eeb4045cf42408109fb453ca90

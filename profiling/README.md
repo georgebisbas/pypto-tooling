@@ -36,29 +36,36 @@ profiling/
 
 | Component | Status |
 |-----------|--------|
-| `equivalence.py`, `golden.py`, `artifacts.py` | Stub / schema |
-| `run_sweep.py` | Planned (E1) |
+| `equivalence.py`, `golden.py`, `artifacts.py` | ✅ Working |
+| `run_sweep.py` (validate-case, pair-mesh) | ✅ Implemented (E1) |
 | `summarize.py`, `plot_figures.py` | Planned (E2–E4) |
 
-## Quick start (manual, until E1)
+## Quick start
+
+```bash
+cd pypto-tooling/profiling
+
+# Validate a case file
+python -m collectives.run_sweep validate-case \
+  --case-file collectives/cases/mesh_p2_n256_fp32.json
+
+# Run a paired comparison (simpler + pypto, on hardware)
+python -m collectives.run_sweep pair-mesh \
+  --case-file collectives/cases/mesh_p2_n256_fp32.json \
+  --stacks simpler,pypto \
+  --campaign demo \
+  --out results/campaigns/demo/run_001/results.json
+```
+
+Manual (for debugging a single stack):
 
 ```bash
 export PYPTO_ROOT=../pypto
 export SIMPLER_ROOT=../simpler
 
 cd "$PYPTO_ROOT"
-pytest tests/st/distributed/test_l3_allreduce.py -v --platform a2a3 -d 0
+pytest tests/st/distributed/test_l3_allreduce.py -v --platform a2a3 -d 0-1
 
 cd "$SIMPLER_ROOT"
 python examples/workers/l3/allreduce_distributed/main.py -p a2a3 -d 0-1
-```
-
-Future:
-
-```bash
-cd pypto-tooling/profiling
-python -m collectives.run_sweep pair-mesh \
-  --case-file collectives/cases/mesh_p2_n256_fp32.json \
-  --stacks simpler,pypto \
-  --out results/campaigns/demo/run_001/results.json
 ```
