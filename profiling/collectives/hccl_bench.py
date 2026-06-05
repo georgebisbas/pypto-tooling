@@ -23,7 +23,11 @@ import numpy as np
 HCCL_ROOT_INFO_BYTES = 4104
 HCCL_REDUCE_SUM = 0
 HCCL_SUCCESS = 0
-_DTYPE_MAP = {"fp32": 0, "fp16": 1}
+# HCCL source order in hccl_common.h implies the public enum ordering:
+# INT8=0, INT16=1, INT32=2, INT64=3, UINT64=4, FP16=5, FP32=6, ...
+# Passing 0 for fp32 makes HcclAllReduce interpret the float buffer as int8,
+# which matches the observed byte-wise corruption pattern.
+_DTYPE_MAP = {"fp16": 5, "fp32": 6}
 
 _lib = ctypes.CDLL("libhccl.so", mode=ctypes.RTLD_GLOBAL)
 _lib.HcclGetRootInfo.argtypes = [ctypes.c_void_p]
@@ -176,9 +180,9 @@ def _rank_thread(rank: int, world_size: int, device_id: int, count: int,
 
         # Init HCCL comm
         comm = ctypes.c_void_p()
-        ret = _lib.HcclCommInitRootInfo(world_size, root_info, rank, ctypes.byref(comm))
+        ret = _lib.HcclCommInitRootInfo(world_size, root_info, device_id, ctypes.byref(comm))
         print(
-            f"[diag] rank {rank} HcclCommInitRootInfo(world_size={world_size}, rank={rank}, "
+            f"[diag] rank {rank} HcclCommInitRootInfo(world_size={world_size}, device_id={device_id}, "
             f"root_info={_ptr_hex(root_info)}) comm={_ptr_hex(comm)} → {ret}",
             flush=True,
         )
