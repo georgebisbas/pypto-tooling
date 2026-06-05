@@ -92,20 +92,32 @@ def _rank_thread(rank: int, world_size: int, device_id: int, count: int,
         _acl.aclrtMalloc(ctypes.byref(send_buf), nbytes, 0)  # ACL_MEM_MALLOC_HUGE_ONLY
         _acl.aclrtMalloc(ctypes.byref(recv_buf), nbytes, 0)
 
-        # Host input: rank_linear_v1
+        # Host input: rank_linear_v1 — allocate pinned host memory
         host_buf = ctypes.c_void_p()
-        _acl.aclrtMallocHost(ctypes.byref(host_buf), nbytes)
-        host_arr = np.ctypeslib.as_array(ctypes.cast(host_buf, ctypes.POINTER(ctypes.c_float)), (count,))
+        ret = _acl.aclrtMallocHost(ctypes.byref(host_buf), nbytes)
+        print(f"[diag] rank {rank} aclrtMallocHost(host_buf) → {ret}", flush=True)
+        
+        # Fill host buffer with test pattern
+        host_view = np.ctypeslib.as_array(ctypes.cast(host_buf, ctypes.POINTER(ctypes.c_float)), (count,))
         for i in range(count):
-            host_arr[i] = float(i + rank * 100)
-        _acl.aclrtMemcpy(send_buf, nbytes, host_buf, nbytes, 1)  # ACL_MEMCPY_HOST_TO_DEVICE = 1
+            host_view[i] = float(i + rank * 100)
+        
+        # Copy to device (synchronous)
+        ret = _acl.aclrtMemcpy(send_buf, nbytes, host_buf, nbytes, 1)  # ACL_MEMCPY_HOST_TO_DEVICE = 1
+        print(f"[diag] rank {rank} aclrtMemcpy H2D → {ret}", flush=True)
+        
         # Verify H2D: read back and check first few elements
         check_buf = ctypes.c_void_p()
         _acl.aclrtMallocHost(ctypes.byref(check_buf), nbytes)
-        _acl.aclrtMemcpy(check_buf, nbytes, send_buf, nbytes, 2)  # D2H
-        check_arr = np.ctypeslib.as_array(ctypes.cast(check_buf, ctypes.POINTER(ctypes.c_float)), (count,))
-        print(f"[diag] rank {rank} H2D verify output[0:4]={[float(check_arr[i]) for i in range(min(4,count))]} "
-              f"expected={[float(i+rank*100) for i in range(min(4,count))]}", flush=True)
+        ret = _acl.aclrtMemcpy(check_buf, nbytes, send_buf, nbytes, 2)  # D2H
+        print(f"[diag] rank {rank} aclrtMemcpy D2H verify → {ret}", flush=True)
+        
+        # Copy to numpy BEFORE printing (view becomes invalid after free)
+        check_view = np.ctypeslib.as_array(ctypes.cast(check_buf, ctypes.POINTER(ctypes.c_float)), (count,))
+        check_data = [float(check_view[i]) for i in range(min(4,count))]
+        expected_data = [float(i+rank*100) for i in range(min(4,count))]
+        print(f"[diag] rank {rank} H2D verify: got={check_data} expected={expected_data}", flush=True)
+        
         _acl.aclrtFreeHost(check_buf)
         _acl.aclrtFreeHost(host_buf)
 
@@ -133,10 +145,17 @@ def _rank_thread(rank: int, world_size: int, device_id: int, count: int,
             return
 
         # Verify golden: allreduce_sum_v1
+        # Copy output from device to host
         out_buf = ctypes.c_void_p()
-        _acl.aclrtMallocHost(ctypes.byref(out_buf), nbytes)
-        _acl.aclrtMemcpy(out_buf, nbytes, recv_buf, nbytes, 2)  # ACL_MEMCPY_DEVICE_TO_HOST = 2
-        out_arr = np.ctypeslib.as_array(ctypes.cast(out_buf, ctypes.POINTER(ctypes.c_float)), (count,))
+        ret = _acl.aclrtMallocHost(ctypes.byref(out_buf), nbytes)
+        print(f"[diag] rank {rank} aclrtMallocHost(out_buf) → {ret}", flush=True)
+        ret = _acl.aclrtMemcpy(out_buf, nbytes, recv_buf, nbytes, 2)  # ACL_MEMCPY_DEVICE_TO_HOST = 2
+        print(f"[diag] rank {rank} aclrtMemcpy D2H → {ret}", flush=True)
+
+        # CRITICAL: Copy data to numpy array BEFORE comparing/freeing
+        # (np.ctypeslib.as_array is just a view into out_buf memory)
+        out_view = np.ctypeslib.as_array(ctypes.cast(out_buf, ctypes.POINTER(ctypes.c_float)), (count,))
+        out_arr = out_view.copy()  # Make a copy so we own the data
 
         expected_base = 100 * world_size * (world_size - 1) // 2
         max_err = 0.0
@@ -146,6 +165,15 @@ def _rank_thread(rank: int, world_size: int, device_id: int, count: int,
             if err > max_err:
                 max_err = err
 
+        # Capture diagnostic data BEFORE freeing
+        if max_err >= 1e-3:
+            raw = [float(out_arr[i]) for i in range(min(16, count))]
+            exp = [float(world_size * i + expected_base) for i in range(min(16, count))]
+            print(f"[diag] rank {rank} GOLDEN MISMATCH max_err={max_err:.6f}")
+            print(f"[diag]   output[0:16]={raw}")
+            print(f"[diag]   expected[0:16]={exp}", flush=True)
+
+        # Now safe to free
         _acl.aclrtFreeHost(out_buf)
         _lib.HcclCommDestroy(comm)
         _acl.aclrtDestroyStream(stream)
@@ -156,12 +184,6 @@ def _rank_thread(rank: int, world_size: int, device_id: int, count: int,
             "rank": rank, "ok": max_err < 1e-3, "wall_s": wall,
             "max_err": max_err if max_err >= 1e-3 else None,
         })
-        if max_err >= 1e-3:
-            raw = [float(out_arr[i]) for i in range(min(16, count))]
-            exp = [float(world_size * i + expected_base) for i in range(min(16, count))]
-            print(f"[diag] rank {rank} GOLDEN MISMATCH max_err={max_err:.6f}")
-            print(f"[diag]   output[0:16]={raw}")
-            print(f"[diag]   expected[0:16]={exp}", flush=True)
 
     except Exception as e:
         import traceback
