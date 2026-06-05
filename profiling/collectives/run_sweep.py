@@ -175,6 +175,7 @@ def _run_hccl_once(case: EquivalenceCase, extra_flags: list[str] | None = None) 
             **os.environ,
             "PYTHONUNBUFFERED": "1",
             "ASCEND_RT_VISIBLE_DEVICES": visible_devices,
+            "HCCL_OP_EXPANSION_MODE": "AI_CPU",
         },
         timeout=300, markers=_HCCL_MARKERS,
     )

@@ -11,6 +11,7 @@ runners — same input formula (rank_linear_v1), same golden (allreduce_sum_v1).
 import argparse
 import ctypes
 import json
+import os
 import sys
 import threading
 import time
@@ -215,7 +216,16 @@ def _rank_thread(rank: int, world_size: int, device_id: int, count: int,
         )
 
         if ret != HCCL_SUCCESS:
-            results.append({"rank": rank, "ok": False, "error": f"HcclAllReduce → {ret}"})
+            results.append({
+                "rank": rank,
+                "ok": False,
+                "error": (
+                    f"HcclAllReduce → {ret} "
+                    f"(data_type={data_type}, reduce_op={HCCL_REDUCE_SUM}, "
+                    f"visible_devices={os.environ.get('ASCEND_RT_VISIBLE_DEVICES', '<unset>')}, "
+                    f"expansion_mode={os.environ.get('HCCL_OP_EXPANSION_MODE', '<unset>')})"
+                ),
+            })
             return
         if sync_ret != 0:
             results.append({"rank": rank, "ok": False, "error": f"aclrtSynchronizeStream → {sync_ret}"})
@@ -281,13 +291,17 @@ def main() -> int:
 
     device_ids = [int(d) for d in args.devices.split(",")]
     world_size = len(device_ids)
+    visible_devices = os.environ.get("ASCEND_RT_VISIBLE_DEVICES", "<unset>")
+    expansion_mode = os.environ.get("HCCL_OP_EXPANSION_MODE", "<unset>")
 
     print(
         f"[diag] ABI constants: HCCL_ROOT_INFO_BYTES={HCCL_ROOT_INFO_BYTES} "
         f"HCCL_REDUCE_SUM={HCCL_REDUCE_SUM} "
         f"DTYPE_MAP={json.dumps(_DTYPE_MAP, sort_keys=True)} "
         f"ACL_MEMCPY_HOST_TO_DEVICE={ACL_MEMCPY_HOST_TO_DEVICE} "
-        f"ACL_MEMCPY_DEVICE_TO_HOST={ACL_MEMCPY_DEVICE_TO_HOST}",
+        f"ACL_MEMCPY_DEVICE_TO_HOST={ACL_MEMCPY_DEVICE_TO_HOST} "
+        f"ASCEND_RT_VISIBLE_DEVICES={visible_devices} "
+        f"HCCL_OP_EXPANSION_MODE={expansion_mode}",
         flush=True,
     )
 
