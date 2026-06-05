@@ -20,6 +20,7 @@ import numpy as np
 # ---------------------------------------------------------------------------
 # HCCL C API (libhccl.so)
 # ---------------------------------------------------------------------------
+HCCL_ROOT_INFO_BYTES = 4104
 HCCL_REDUCE_SUM = 0
 HCCL_SUCCESS = 0
 _DTYPE_MAP = {"fp32": 0, "fp16": 1}
@@ -69,6 +70,23 @@ _acl.aclrtDestroyStream.restype = ctypes.c_int
 _acl.aclrtSynchronizeStream.argtypes = [ctypes.c_void_p]
 _acl.aclrtSynchronizeStream.restype = ctypes.c_int
 
+ACL_MEMCPY_HOST_TO_DEVICE = 1
+ACL_MEMCPY_DEVICE_TO_HOST = 2
+
+
+def _ptr_hex(ptr: ctypes.c_void_p) -> str:
+    value = getattr(ptr, "value", ptr)
+    if value is None:
+        return "0x0"
+    return hex(int(value))
+
+
+def _hexdump(ptr: ctypes.c_void_p, nbytes: int) -> str:
+    if getattr(ptr, "value", None) is None or nbytes <= 0:
+        return ""
+    raw = ctypes.string_at(ptr, nbytes)
+    return " ".join(f"{byte:02x}" for byte in raw)
+
 
 def _rank_thread(rank: int, world_size: int, device_id: int, count: int,
                  dtype_str: str, root_info: ctypes.c_void_p,
@@ -85,17 +103,37 @@ def _rank_thread(rank: int, world_size: int, device_id: int, count: int,
         elem_size = 4 if dtype_str == "fp32" else 2
         nbytes = count * elem_size
         data_type = _DTYPE_MAP.get(dtype_str, 0)
+        print(
+            f"[diag] rank {rank} ABI: dtype={dtype_str} data_type={data_type} "
+            f"reduce_op={HCCL_REDUCE_SUM} elem_size={elem_size} nbytes={nbytes} "
+            f"root_info_ptr={_ptr_hex(root_info)}",
+            flush=True,
+        )
 
         # Device buffers
         send_buf = ctypes.c_void_p()
         recv_buf = ctypes.c_void_p()
-        _acl.aclrtMalloc(ctypes.byref(send_buf), nbytes, 0)  # ACL_MEM_MALLOC_HUGE_ONLY
-        _acl.aclrtMalloc(ctypes.byref(recv_buf), nbytes, 0)
+        ret = _acl.aclrtMalloc(ctypes.byref(send_buf), nbytes, 0)  # ACL_MEM_MALLOC_HUGE_ONLY
+        print(f"[diag] rank {rank} aclrtMalloc(send_buf={_ptr_hex(send_buf)}) → {ret}", flush=True)
+        if ret != 0:
+            results.append({"rank": rank, "ok": False, "error": f"aclrtMalloc(send_buf) → {ret}"})
+            return
+        ret = _acl.aclrtMalloc(ctypes.byref(recv_buf), nbytes, 0)
+        print(f"[diag] rank {rank} aclrtMalloc(recv_buf={_ptr_hex(recv_buf)}) → {ret}", flush=True)
+        if ret != 0:
+            _acl.aclrtFree(send_buf)
+            results.append({"rank": rank, "ok": False, "error": f"aclrtMalloc(recv_buf) → {ret}"})
+            return
 
         # Host input: rank_linear_v1 — allocate pinned host memory
         host_buf = ctypes.c_void_p()
         ret = _acl.aclrtMallocHost(ctypes.byref(host_buf), nbytes)
-        print(f"[diag] rank {rank} aclrtMallocHost(host_buf) → {ret}", flush=True)
+        print(f"[diag] rank {rank} aclrtMallocHost(host_buf={_ptr_hex(host_buf)}) → {ret}", flush=True)
+        if ret != 0:
+            _acl.aclrtFree(send_buf)
+            _acl.aclrtFree(recv_buf)
+            results.append({"rank": rank, "ok": False, "error": f"aclrtMallocHost(host_buf) → {ret}"})
+            return
         
         # Fill host buffer with test pattern
         host_view = np.ctypeslib.as_array(ctypes.cast(host_buf, ctypes.POINTER(ctypes.c_float)), (count,))
@@ -103,14 +141,29 @@ def _rank_thread(rank: int, world_size: int, device_id: int, count: int,
             host_view[i] = float(i + rank * 100)
         
         # Copy to device (synchronous)
-        ret = _acl.aclrtMemcpy(send_buf, nbytes, host_buf, nbytes, 1)  # ACL_MEMCPY_HOST_TO_DEVICE = 1
-        print(f"[diag] rank {rank} aclrtMemcpy H2D → {ret}", flush=True)
+        ret = _acl.aclrtMemcpy(send_buf, nbytes, host_buf, nbytes, ACL_MEMCPY_HOST_TO_DEVICE)
+        print(
+            f"[diag] rank {rank} aclrtMemcpy H2D kind={ACL_MEMCPY_HOST_TO_DEVICE} "
+            f"src={_ptr_hex(host_buf)} dst={_ptr_hex(send_buf)} → {ret}",
+            flush=True,
+        )
         
         # Verify H2D: read back and check first few elements
         check_buf = ctypes.c_void_p()
-        _acl.aclrtMallocHost(ctypes.byref(check_buf), nbytes)
-        ret = _acl.aclrtMemcpy(check_buf, nbytes, send_buf, nbytes, 2)  # D2H
-        print(f"[diag] rank {rank} aclrtMemcpy D2H verify → {ret}", flush=True)
+        ret = _acl.aclrtMallocHost(ctypes.byref(check_buf), nbytes)
+        print(f"[diag] rank {rank} aclrtMallocHost(check_buf={_ptr_hex(check_buf)}) → {ret}", flush=True)
+        if ret != 0:
+            _acl.aclrtFreeHost(host_buf)
+            _acl.aclrtFree(send_buf)
+            _acl.aclrtFree(recv_buf)
+            results.append({"rank": rank, "ok": False, "error": f"aclrtMallocHost(check_buf) → {ret}"})
+            return
+        ret = _acl.aclrtMemcpy(check_buf, nbytes, send_buf, nbytes, ACL_MEMCPY_DEVICE_TO_HOST)
+        print(
+            f"[diag] rank {rank} aclrtMemcpy D2H verify kind={ACL_MEMCPY_DEVICE_TO_HOST} "
+            f"src={_ptr_hex(send_buf)} dst={_ptr_hex(check_buf)} → {ret}",
+            flush=True,
+        )
         
         # Copy to numpy BEFORE printing (view becomes invalid after free)
         check_view = np.ctypeslib.as_array(ctypes.cast(check_buf, ctypes.POINTER(ctypes.c_float)), (count,))
@@ -124,33 +177,57 @@ def _rank_thread(rank: int, world_size: int, device_id: int, count: int,
         # Init HCCL comm
         comm = ctypes.c_void_p()
         ret = _lib.HcclCommInitRootInfo(world_size, root_info, rank, ctypes.byref(comm))
-        print(f"[diag] rank {rank} HcclCommInitRootInfo → {ret}", flush=True)
+        print(
+            f"[diag] rank {rank} HcclCommInitRootInfo(world_size={world_size}, rank={rank}, "
+            f"root_info={_ptr_hex(root_info)}) comm={_ptr_hex(comm)} → {ret}",
+            flush=True,
+        )
         if ret != HCCL_SUCCESS:
             results.append({"rank": rank, "ok": False, "error": f"HcclCommInitRootInfo → {ret}"})
             return
 
         stream = ctypes.c_void_p()
-        _acl.aclrtCreateStream(ctypes.byref(stream))
+        ret = _acl.aclrtCreateStream(ctypes.byref(stream))
+        print(f"[diag] rank {rank} aclrtCreateStream(stream={_ptr_hex(stream)}) → {ret}", flush=True)
+        if ret != 0:
+            _lib.HcclCommDestroy(comm)
+            _acl.aclrtFree(send_buf)
+            _acl.aclrtFree(recv_buf)
+            results.append({"rank": rank, "ok": False, "error": f"aclrtCreateStream → {ret}"})
+            return
 
         # Timed AllReduce
         t0 = time.perf_counter()
         ret = _lib.HcclAllReduce(send_buf, recv_buf, count, data_type,
                                   HCCL_REDUCE_SUM, comm, stream)
-        _acl.aclrtSynchronizeStream(stream)
+        sync_ret = _acl.aclrtSynchronizeStream(stream)
         wall = time.perf_counter() - t0
-        print(f"[diag] rank {rank} HcclAllReduce → {ret} wall={wall:.6f}s", flush=True)
+        print(
+            f"[diag] rank {rank} HcclAllReduce(send={_ptr_hex(send_buf)}, recv={_ptr_hex(recv_buf)}, "
+            f"count={count}, data_type={data_type}, reduce_op={HCCL_REDUCE_SUM}, "
+            f"comm={_ptr_hex(comm)}, stream={_ptr_hex(stream)}) → {ret}; "
+            f"aclrtSynchronizeStream → {sync_ret}; wall={wall:.6f}s",
+            flush=True,
+        )
 
         if ret != HCCL_SUCCESS:
             results.append({"rank": rank, "ok": False, "error": f"HcclAllReduce → {ret}"})
+            return
+        if sync_ret != 0:
+            results.append({"rank": rank, "ok": False, "error": f"aclrtSynchronizeStream → {sync_ret}"})
             return
 
         # Verify golden: allreduce_sum_v1
         # Copy output from device to host
         out_buf = ctypes.c_void_p()
         ret = _acl.aclrtMallocHost(ctypes.byref(out_buf), nbytes)
-        print(f"[diag] rank {rank} aclrtMallocHost(out_buf) → {ret}", flush=True)
-        ret = _acl.aclrtMemcpy(out_buf, nbytes, recv_buf, nbytes, 2)  # ACL_MEMCPY_DEVICE_TO_HOST = 2
-        print(f"[diag] rank {rank} aclrtMemcpy D2H → {ret}", flush=True)
+        print(f"[diag] rank {rank} aclrtMallocHost(out_buf={_ptr_hex(out_buf)}) → {ret}", flush=True)
+        ret = _acl.aclrtMemcpy(out_buf, nbytes, recv_buf, nbytes, ACL_MEMCPY_DEVICE_TO_HOST)
+        print(
+            f"[diag] rank {rank} aclrtMemcpy D2H kind={ACL_MEMCPY_DEVICE_TO_HOST} "
+            f"src={_ptr_hex(recv_buf)} dst={_ptr_hex(out_buf)} → {ret}",
+            flush=True,
+        )
 
         # CRITICAL: Copy data to numpy array BEFORE comparing/freeing
         # (np.ctypeslib.as_array is just a view into out_buf memory)
@@ -201,6 +278,15 @@ def main() -> int:
     device_ids = [int(d) for d in args.devices.split(",")]
     world_size = len(device_ids)
 
+    print(
+        f"[diag] ABI constants: HCCL_ROOT_INFO_BYTES={HCCL_ROOT_INFO_BYTES} "
+        f"HCCL_REDUCE_SUM={HCCL_REDUCE_SUM} "
+        f"DTYPE_MAP={json.dumps(_DTYPE_MAP, sort_keys=True)} "
+        f"ACL_MEMCPY_HOST_TO_DEVICE={ACL_MEMCPY_HOST_TO_DEVICE} "
+        f"ACL_MEMCPY_DEVICE_TO_HOST={ACL_MEMCPY_DEVICE_TO_HOST}",
+        flush=True,
+    )
+
     # Init ACL, generate root info on device 0 (matches HCCL example pattern)
     ret = _acl.aclInit(None)
     print(f"[diag] aclInit → {ret}")
@@ -214,18 +300,28 @@ def main() -> int:
         print(f"ERROR: aclrtSetDevice(0) failed: {ret}")
         return 1
 
+    device_count = ctypes.c_uint32()
+    if hasattr(_acl, "aclrtGetDeviceCount"):
+        _acl.aclrtGetDeviceCount.argtypes = [ctypes.POINTER(ctypes.c_uint32)]
+        ret = _acl.aclrtGetDeviceCount(ctypes.byref(device_count))
+        print(f"[diag] aclrtGetDeviceCount → {ret}; count={device_count.value}")
+
     root_info_buf = ctypes.c_void_p()
-    ret = _acl.aclrtMallocHost(ctypes.byref(root_info_buf), 4104)
-    print(f"[diag] aclrtMallocHost(4104) → {ret}")
+    ret = _acl.aclrtMallocHost(ctypes.byref(root_info_buf), HCCL_ROOT_INFO_BYTES)
+    print(f"[diag] aclrtMallocHost(root_info_buf={_ptr_hex(root_info_buf)}, {HCCL_ROOT_INFO_BYTES}) → {ret}")
     if ret != 0:
         print(f"ERROR: aclrtMallocHost failed: {ret}")
         return 1
+
+    ctypes.memset(root_info_buf, 0, HCCL_ROOT_INFO_BYTES)
+    print(f"[diag] root_info pre-HcclGetRootInfo hex[0:32]={_hexdump(root_info_buf, 32)}")
 
     ret = _lib.HcclGetRootInfo(root_info_buf)
     print(f"[diag] HcclGetRootInfo → {ret}")
     if ret != HCCL_SUCCESS:
         print(f"HcclGetRootInfo failed: {ret}")
         return 1
+    print(f"[diag] root_info post-HcclGetRootInfo hex[0:32]={_hexdump(root_info_buf, 32)}")
 
     # One thread per device
     print(f"[diag] spawning {world_size} thread(s) for devices {device_ids}")
