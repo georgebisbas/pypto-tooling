@@ -1,18 +1,55 @@
-# PyPTO Dockerfile construction and debugging
+---
+name: pypto-dockerfile-construction
+description: >-
+  Build and debug standalone/server Ascend NPU Docker images for PyPTO,
+  simpler, and pytorch-hccl-tests. Covers ARG-driven paths, git-clone
+  patterns, HCCL runtime flags, build order, and common failures.
+triggers:
+  - "create a Dockerfile"
+  - "add to Dockerfile"
+  - "Dockerfile build fails"
+  - "Dockerfile error"
+  - "docker build fails"
+  - "container fails"
+  - "import error in container"
+  - "HCCL fails in container"
+  - "simpler_init failed"
+  - "ChipBufferSpec"
+  - "aclInit failed"
+---
 
-## Anatomy of a correct standalone Dockerfile (zero host deps)
+# PyPTO Dockerfile construction
 
-A standalone image requires nothing from the host except the Ascend kernel
-driver. Everything else — CANN, source repos, toolchains — is cloned and
-built inside the image. No build context; use stdin:
+## When to use this skill
 
-```bash
-docker build -t <tag> - < Dockerfile.name
+```text
+Task starts
+├─ Creating a NEW Dockerfile?  → "Dockerfile inventory" + "Build-time patterns"
+├─ Existing Dockerfile won't BUILD? → "Common failures" symptom table
+├─ Container RUNS but tests FAIL? → debugging_skills/SKILL.md first, then return
+├─ Need to understand a PATTERN? → Jump to named h3 below
+└─ Debugging interactively?        → "Interactive debugging" checklist
 ```
 
-### Mandatory patterns
+## Dockerfile inventory
 
-#### 1. ARG-driven paths — every path derives from two ARGs
+| Dockerfile | What it builds | Build command | Needs NPU? |
+|-----------|---------------|---------------|------------|
+| `Dockerfile.hw-native-sys.cann9.0` | pypto + simpler + pto-isa + ptoas | `docker build -t img - < Dockerfile...` | Yes (a2a3) |
+| `Dockerfile.simpler.cann9.0` | simpler + pto-isa only | `docker build -t img - < Dockerfile...` | Yes (a2a3) |
+| `Dockerfile.hw-native-sys.sim.ubuntu22.04` | pypto + pto-isa (sim mode) | `docker build -t img -f Dockerfile... .` | No |
+| `Dockerfile.pytorch-hccl-tests.cann9.0` | HCCL benchmarks | `docker build -t img - < Dockerfile...` | Yes (a2a3) |
+| `Dockerfile.server.cann:9.0` | pypto dev workspace | `docker build -t img -f Dockerfile... .` | Yes (a2a3) |
+
+All use `quay.io/ascend/cann:9.0.0-910b-ubuntu22.04-py3.12` as base image.
+
+---
+
+## Build-time patterns
+
+### 1. ARG-driven paths
+
+Every path derives from two ARGs — never hardcoded:
 
 ```dockerfile
 ARG CANN_VERSION=9.0.0
@@ -20,25 +57,22 @@ ARG INSTALL_PREFIX=/opt
 
 ENV CANN_HOME=/usr/local/Ascend/cann-${CANN_VERSION}
 ENV PYPTO_DIR=${INSTALL_PREFIX}/pypto \
-    PTO_ISA_DIR=${INSTALL_PREFIX}/pto-isa
+    PTO_ISA_DIR=${INSTALL_PREFIX}/pto-isa \
+    PTOAS_DIR=${INSTALL_PREFIX}/ptoas-bin
 ```
 
-Never hardcode a path that could vary across CANN versions or install
-prefixes. Use `${ENV_VAR}` in RUN instructions so they expand at build time.
-
-#### 2. ARG scope resets after FROM — re-declare after every FROM
+### 2. ARG scope resets after FROM
 
 ```dockerfile
 ARG CANN_VERSION=9.0.0
 FROM quay.io/ascend/cann:${CANN_VERSION}-910b-ubuntu22.04-py3.12
-ARG CANN_VERSION=9.0.0          # ← re-declare
+ARG CANN_VERSION=9.0.0          # ← re-declare after FROM
 ARG INSTALL_PREFIX=/opt
 ```
 
-#### 3. Self-referencing ENV — split across multiple ENV instructions
+### 3. Self-referencing ENV — split across multiple instructions
 
-Docker does NOT expand `${VAR}` references within a single ENV block if
-`VAR` is defined in that same block. Split into separate ENV instructions:
+Docker does NOT expand `${VAR}` within the same ENV block. Split:
 
 ```dockerfile
 ENV PYTHONPATH=/opt/pypto/runtime/python:/opt/pypto/runtime/examples/scripts
@@ -46,104 +80,38 @@ ENV PYTHONPATH=${PYTHONPATH}:/usr/local/Ascend/.../site-packages
 ENV PYTHONPATH=${PYTHONPATH}:/usr/local/Ascend/.../opp/...
 ```
 
-#### 4. CANN environment — source at runtime, never mount /usr/local/Ascend
+### 4. Build order (executable checklist)
+
+```
+[ ] 1. Clone source repos (pypto/simpler)
+[ ] 2. Clone pto-isa (needed by simpler kernel compilation)
+[ ] 3. Install PTOAS binary (needed by pypto tests; NOT needed by simpler-only)
+[ ] 4. pip install scikit-build-core nanobind cmake ninja
+[ ] 5. pip install numpy pytest torch (CPU)
+[ ] 6. pip install --no-build-isolation ./runtime   ← simpler MUST be built before pypto
+[ ] 7. pip install --no-build-isolation .[dev]       ← depends on simpler.task_interface
+```
+
+### 5. Simpler submodule (pypto's `runtime/`)
+
+**Standalone image** — clone pypto, init submodules:
 
 ```dockerfile
-RUN echo "[ -f ${CANN_HOME}/set_env.sh ] && { source ${CANN_HOME}/set_env.sh 2>/dev/null || true; }" >> /etc/bash.bashrc
-```
-
-The image already has CANN baked in. At runtime, mount only the driver:
-
-```bash
-docker run ... -v /usr/local/Ascend/driver:/usr/local/Ascend/driver:ro
-```
-
-Never mount `/usr/local/Ascend` — it shadows the image's CANN with the
-host's (potentially older) version.
-
-#### 5. Python version — use the base image's Python
-
-The CANN base image ships its own Python. Install packages with `pip` (not
-`pip3` or `python3 -m pip` — both work, but be consistent). Do NOT install
-a different Python version.
-
----
-
-## Server/dev Dockerfile (host workspace mount)
-
-For live-editing workflows where source is on the host:
-
-```dockerfile
-COPY pypto /workspace/hw-native-sys/pypto
-```
-
-Runtime mounts the same path so edits are visible inside the container:
-
-```bash
-docker run ... -v $HOME/hw-native-sys:/workspace/hw-native-sys
-```
-
-### Key differences from standalone
-
-- Uses `docker build -f Dockerfile.name .` (needs build context)
-- `COPY`s repos from host instead of cloning
-- `SIMPLER_ROOT` points to workspace path, not `/opt`
-- Add `git config --system --add safe.directory` for mounted repos
-- Early fail-fast validation: `test -f .../pyproject.toml` before building
-
----
-
-## Simpler submodule handling
-
-### pypto's runtime submodule = simpler
-
-Pypto uses simpler as a git submodule at `runtime/`. Two approaches:
-
-**Standalone image:** Clone pypto, init submodules, then pull simpler's
-`origin/main` to bypass stale submodule pins:
-
-```dockerfile
-RUN git clone --depth 1 --branch main https://github.com/hw-native-sys/pypto.git "${PYPTO_DIR}" && \
+RUN git clone --filter=blob:none https://github.com/hw-native-sys/pypto.git "${PYPTO_DIR}" && \
+    git -C "${PYPTO_DIR}" checkout "${PYPTO_COMMIT}" && \
     for i in 1 2 3; do \
       git -C "${PYPTO_DIR}" submodule update --init --recursive && break || sleep 5; \
-    done && \
-    git -C "${PYPTO_DIR}/runtime" fetch origin main && \
-    git -C "${PYPTO_DIR}/runtime" checkout origin/main
+    done
 ```
 
-**Why pull origin/main?** The submodule pin recorded in pypto's tree may
-lag behind simpler's main. APIs like `ChipBufferSpec` may only exist in
-newer simpler commits. Pulling `origin/main` after submodule init ensures
-APIs pypto's `distributed_runner.py` expects are always available.
-
-**Server/dev image:** Require the submodule on host, validate with a
-fail-fast check:
+**Server/dev image** — validate submodule exists on host:
 
 ```dockerfile
 RUN test -f /workspace/hw-native-sys/pypto/runtime/pyproject.toml || \
   { echo 'BUILD ERROR: pypto/runtime/ missing. Run: git -C pypto submodule update --init --recursive'; exit 1; }
 ```
 
-### standalone simpler Dockerfile (no pypto)
-
-A simpler-only image clones only `hw-native-sys/simpler`, no pypto, no ptoas:
-
-```dockerfile
-RUN git clone --depth 1 --branch main https://github.com/hw-native-sys/simpler.git "${SIMPLER_DIR}"
-```
-
-It auto-derives its pto-isa commit from simpler's own CI config (different
-from pypto's!):
-
-```bash
-PTO_ISA_COMMIT=$(grep -oP 'PTO_ISA_COMMIT:\s*\K[a-f0-9]+' .github/workflows/ci.yml | head -1)
-```
-
----
-
-## PTO-ISA clone — correct URLs and fallback
-
-### Primary + fallback pattern (mirrors ci.yml)
+### 6. PTO-ISA clone (primary + fallback)
 
 ```dockerfile
 RUN timeout 60 git clone https://github.com/hw-native-sys/pto-isa.git "${PTO_ISA_DIR}" \
@@ -151,39 +119,16 @@ RUN timeout 60 git clone https://github.com/hw-native-sys/pto-isa.git "${PTO_ISA
     git -C "${PTO_ISA_DIR}" checkout "${PTO_ISA_COMMIT}"
 ```
 
-**Critical:** The primary is `hw-native-sys/pto-isa` (NOT `PTO-ISA/pto-isa`).
-The gitcode.com mirror is `luohuan40/pto-isa`. The `timeout` prevents
-network hangs during build.
-
-### Auto-deriving the pto-isa commit
-
-**For pypto** — extract from pypto's own CI config (all `--pto-isa-commit=` occurrences share the same value):
+Auto-derive commit from CI when not pinned via ARG:
 
 ```bash
+# For pypto Dockerfiles:
 PTO_ISA_COMMIT=$(grep -oP '(?<=--pto-isa-commit=)[a-f0-9]+' .github/workflows/ci.yml | head -1)
-```
-
-**For simpler** — extract from simpler's CI config (different commit!):
-
-```bash
+# For simpler Dockerfiles (different CI format!):
 PTO_ISA_COMMIT=$(grep -oP 'PTO_ISA_COMMIT:\s*\K[a-f0-9]+' .github/workflows/ci.yml | head -1)
 ```
 
-**Allow override via ARG:**
-
-```dockerfile
-ARG PTO_ISA_COMMIT=
-RUN if [ -z "${PTO_ISA_COMMIT}" ]; then \
-      PTO_ISA_COMMIT=$(grep -oP '...' .github/workflows/ci.yml | head -1); \
-    fi && \
-    git clone ... && git checkout "${PTO_ISA_COMMIT}"
-```
-
----
-
-## Third-party submodules (libbacktrace, msgpack-c)
-
-Fallback pattern when pypto's submodules may not be checked out:
+### 7. Third-party fallback (libbacktrace, msgpack-c)
 
 ```dockerfile
 RUN if [ ! -f 3rdparty/libbacktrace/configure.ac ]; then \
@@ -198,217 +143,133 @@ RUN if [ ! -f 3rdparty/libbacktrace/configure.ac ]; then \
     fi
 ```
 
-These are pypto's own submodules (separate from the runtime/simpler
-submodule). They rarely change and the fallback is safe.
+### 8. Python version
+
+Use the CANN base image's Python. Do NOT install a different version.
+
+### 9. Dockerfile types: standalone vs server/dev
+
+| | Standalone (stdin) | Server/dev (context) |
+|---|---|---|
+| Build | `docker build -t img - < Dockerfile` | `docker build -t img -f Dockerfile .` |
+| Source | `git clone` everything | `COPY` from host |
+| Use case | CI, reproducible builds | Live editing, workspace mounts |
 
 ---
 
-## Build order matters
+## Runtime patterns
 
-1. Clone source repos
-2. Clone pto-isa (needed by simpler's kernel compilation)
-3. Install PTOAS binary (needed by pypto tests, NOT by simpler-only)
-4. Install Python build toolchain (`scikit-build-core`, `nanobind`, `cmake`)
-5. Install test deps (`numpy`, `pytest`, `torch` CPU)
-6. Build simpler: `pip install --no-build-isolation ./runtime`
-7. Build pypto: `pip install --no-build-isolation .[dev]`
-
-Simpler MUST be built before pypto — pypto's `distributed_runner.py` imports
-from `simpler.task_interface`.
-
----
-
-## CI integration (docker-ci.yml)
-
-### Trigger only on Dockerfile changes
-
-```yaml
-on:
-  pull_request:
-    paths:
-      - 'Dockerfile.*'
-      - '.github/workflows/docker-ci.yml'
-```
-
-### Match the existing CI test order exactly
-
-For pypto, the `ci.yml` `system-tests` job runs 4 suites in this order:
-
-1. `pytest tests/st --ignore=tests/st/distributed` (non-distributed)
-2. `pytest tests/st/distributed/test_l2_multi_orch.py` (isolated — `Worker(level=2)` leaks state into `level=3` in the same process!)
-3. `pytest tests/st/distributed --ignore=test_l2_multi_orch.py`
-4. `pytest tests/st/runtime/test_perf_swimlane.py`
-
-Each suite runs in a separate `docker run` so state isolation is guaranteed.
-
-### Pass device range from runner environment
-
-```yaml
--e DEVICE_RANGE    # docker run passes through host env
-```
-
-Inside container: `--device="${DEVICE_RANGE}"`
-
-### Check NPU before building
-
-```yaml
-- name: Check NPU
-  run: npu-smi info
-```
-
-### Use the correct runner label
-
-- pypto: `[self-hosted, linux, arm64, npu]`
-- simpler: `[self-hosted, a2a3]`
-
----
-
-## Docker runtime flags (Ascend NPU)
-
-Mandatory for all Ascend containers:
+### Docker run flags (all Ascend containers)
 
 ```bash
---privileged --ipc=host
--v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi:ro
--v /usr/local/Ascend/driver:/usr/local/Ascend/driver:ro
--v /dev:/dev
+docker run --rm -it --privileged --ipc=host \
+    -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi:ro \
+    -v /usr/local/Ascend/driver:/usr/local/Ascend/driver:ro \
+    -v /dev:/dev \
+    <image>
 ```
 
-Additional for multi-device / HCCL:
+Additional for HCCL / multi-device:
 
 ```bash
---cap-add=SYS_PTRACE --security-opt seccomp=unconfined
+--pid=host --cap-add=SYS_PTRACE --security-opt seccomp=unconfined
 ```
 
----
+### CANN mount rules
 
-## Common failures and fixes
+| Mount | OK? | Why |
+|-------|-----|-----|
+| `/usr/local/Ascend/driver` (ro) | ✅ | Kernel driver user-space libs |
+| `/dev` | ✅ | NPU device files |
+| `/usr/local/bin/npu-smi` (ro) | ✅ | Device management tool |
+| `/usr/local/Ascend` (entire tree) | ❌ | Shadows image's CANN with host's |
 
-### `WORKDIR: command not found` during build
+### HCCL requirements
 
-A trailing `&& \` before WORKDIR concatenates it into a shell command.
-Every RUN instruction must be a complete, terminated statement.
+`--pid=host` is required because Ascend IPC validates host PIDs, not container PIDs. `LD_PRELOAD=libhccl.so` is baked into the image so `host_runtime.so`'s WEAK HCCL symbols resolve at load time.
 
-### `ImportError: cannot import name 'ChipBufferSpec' from 'simpler.task_interface'`
+→ See `debugging_skills/SKILL.md` → "Docker runtime: HCCL, mounts, and --pid=host" for detailed diagnostics.
 
-The pinned simpler submodule is stale. Pull `origin/main` after init:
+### CANN environment
 
-```bash
-git -C runtime fetch origin main && git -C runtime checkout origin/main
-```
-
-### `fatal error: 'tensor.h' file not found`
-
-Incorrect `SIMPLER_ROOT` or include paths. The runtime resolver
-(`env_manager.py`) resolves `SIMPLER_ROOT` by checking local directories
-first. Ensure `SIMPLER_ROOT` points to the actual simpler source tree
-(`/opt/pypto/runtime` in standalone, `/workspace/hw-native-sys/pypto/runtime`
-in server/dev).
-
-### `HcclGetRootInfo` hangs / bootstrap timeout 120s
-
-The HCCL comm init blocks silently. Usually a network interface issue.
-HCCL picks the wrong NIC on some machines. The `HCCL_SOCKET_IFNAME` env
-var can override, but our CI and Dockerfiles intentionally don't set it
-(the runner's default interface is correct).
-
-### `comm_alloc_windows failed with code -1` + `ImportByKey(...) -> 507899`
-
-This is usually an Ascend driver/runtime ABI mismatch, not a pypto/simpler
-logic bug. Most common cause: container CANN runtime and host-mounted driver
-stack are not a validated pair.
-
-Fast checks:
-
-1. Host: `npu-smi info` (active driver/firmware version)
-2. Container: verify mounted `/usr/local/Ascend/driver` metadata matches host
-3. Confirm reboot/module reload actually activated the new driver
-
-If versions don't match expected compatibility, fix host driver state first.
-Changing Python/test code will not resolve this signature.
-
-### Segfault in `comm_init` after driver upgrade
-
-If `ImportByKey` mismatch disappears but tests now crash with a hard segfault
-during `comm_init`, treat this as runtime/process-model instability first.
-
-Strong signal from our incident: tests emitted fork warnings before crash
-(`process is multi-threaded, use of fork() may lead to deadlocks`). With
-ACL/HCCL loaded, `fork` in multi-threaded parents can crash child comm init.
-
-Triage order:
-
-1. Re-run only on non-busy NPUs (for example `2,3`), avoid contended device 0
-2. Reproduce with `spawn`/`forkserver` start method
-3. Capture core dump and ACL/HCCL debug logs for vendor escalation
-
-If `spawn` avoids the crash, classify as runtime + process-model issue, not
-simpler orchestration logic.
-
-### `aclInit failed` / `aclrtSetDevice failed`
-
-Device files missing. Verify `--privileged` and `-v /dev:/dev` are present.
-Also verify `npu-smi info` works on the host.
-
-### `COPY simpler ...` fails with "path not found"
-
-The standalone Dockerfile uses stdin — no build context. Use `git clone`
-instead of `COPY`. The `docker build - < Dockerfile` syntax has NO context;
-every file must be cloned at build time.
-
-### PTOAS SHA256 mismatch
-
-CI bumped the PTOAS version. Check `ci.yml` for `PTOAS_VERSION` and
-`PTOAS_SHA256` and update both ARGs in the Dockerfile.
-
-### `error: custom op 'pto.declare_local_array' is unknown`
-
-This is a PTOAS/toolchain mismatch: pypto emitted a newer op that the current
-ptoas binary does not support. Upgrade ptoas to the version pinned in CI.
-
-In our incident this was resolved by moving to PTOAS v0.40 (matching CI).
-
-### `echo` vs `printf` in /etc/bash.bashrc
-
-Use `echo` (not `printf` with single quotes) so `${CANN_HOME}` expands at
-build time:
+Source in `.bashrc` so it's available interactively:
 
 ```dockerfile
-RUN echo "[ -f ${CANN_HOME}/set_env.sh ] && { source ${CANN_HOME}/set_env.sh 2>/dev/null || true; }" >> /etc/bash.bashrc
+RUN echo "[ -f ${CANN_HOME}/set_env.sh ] && { source ${CANN_HOME}/set_env.sh 2>/dev/null || true; }" >> /etc/bash.bashrc && \
+    echo "unset PTO2_RING_HEAP PTO2_RING_TASK_WINDOW PTO2_RING_DEP_POOL 2>/dev/null || true" >> /etc/bash.bashrc
 ```
 
+---
 
-## Debugging a Dockerfile interactively
+## Common failures
 
-1. Build with a target stage or up to the failing line
-2. `docker run --rm -it <image> bash` and manually re-run the failing commands
-3. Check environments: `env | sort`, `pip list | grep -i simpler`
-4. Check paths: `ls /opt/pypto/runtime/python/simpler/task_interface.py`
-5. Verify imports: `python -c "from simpler.task_interface import ChipBootstrapConfig"`
-6. Verify pto-isa: `git -C /opt/pto-isa rev-parse --short HEAD`
-7. Verify simpler: `git -C /opt/pypto/runtime rev-parse --short HEAD`
+### Decision tree
+
+```text
+Error message contains...
+├─ "WORKDIR: command not found"    → Trailing &&\ before WORKDIR
+├─ "ChipBufferSpec"                → Stale simpler submodule
+├─ "aclInit failed" / "aclrtSetDevice" → Missing --privileged or -v /dev:/dev
+├─ "HcclGetRootInfo" / timeout 120s → HCCL network issue
+├─ "507899" / "comm_alloc_windows"  → CANN/driver mismatch → debugging_skills
+├─ "COPY ... path not found"        → Using COPY in stdin build → use git clone
+├─ "fatal error: 'tensor.h'"        → Wrong SIMPLER_ROOT
+├─ "PTOAS SHA256 mismatch"          → CI bumped version → update ARGs
+├─ "custom op ... unknown"          → PTOAS too old → update PTOAS_VERSION
+└─ Segfault in comm_init + fork warn → ACL/HCCL + fork → use spawn/forkserver
+```
+
+### Symptom → fix table
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| `WORKDIR: command not found` during build | Trailing `&& \` before WORKDIR | Terminate every RUN before WORKDIR |
+| `ImportError: ChipBufferSpec` | Stale simpler submodule pin | `git -C runtime fetch origin main && checkout origin/main` |
+| `aclInit` / `aclrtSetDevice` failed | Missing docker run flags | Add `--privileged -v /dev:/dev` |
+| `HcclGetRootInfo` hangs (120s) | Wrong NIC / HCCL network | Try different device, check `HCCL_SOCKET_IFNAME` |
+| `comm_alloc_windows` + **507899** | CANN 9.0 + driver < 26.0.rc1 | → debugging_skills → "NPU error code reference" |
+| segfault in `comm_init` + fork warning | ACL/HCCL loaded + multi-threaded fork | Use spawn/forkserver, avoid busy device 0 |
+| `COPY` fails: "path not found" | Stdin build has no build context | Use `git clone` instead of `COPY` |
+| `fatal error: 'tensor.h'` | Wrong `SIMPLER_ROOT` | Set to simpler source tree (`/opt/pypto/runtime`) |
+
+For device health issues (dead NPUs, 507033): run `diagnose_npu.py` inside the container, or see `debugging_skills/SKILL.md`.
 
 ---
 
-## Quick reference: correct CANN mount
+## Interactive debugging
 
-| Mount | Why |
-|-------|-----|
-| `/usr/local/Ascend/driver` (ro) | ✅ kernel driver user-space libs |
-| `/dev` | ✅ NPU device files |
-| `/usr/local/bin/npu-smi` (ro) | ✅ device management tool |
-| `/usr/local/Ascend` (entire tree) | ❌ shadows image's CANN with host's |
+```bash
+# 1. Enter the image at the failing stage
+docker run --rm -it <image> bash
 
----
+# 2. Verify environment
+env | sort
+pip list | grep -i simpler
+python -c "from simpler.task_interface import ChipBootstrapConfig"
+
+# 3. Verify git checkouts
+git -C /opt/pto-isa rev-parse --short HEAD
+git -C /opt/pypto/runtime rev-parse --short HEAD
+
+# 4. NPU health
+python3 /opt/pypto/diagnose_npu.py   # if copied in
+npu-smi info
+```
 
 ## Quick reference: repo URLs
 
 | Repo | URL | Notes |
 |------|-----|-------|
-| pypto | `https://github.com/hw-native-sys/pypto.git` | main repo |
-| simpler | `https://github.com/hw-native-sys/simpler.git` | pypto submodule at `runtime/` |
-| pto-isa | `https://github.com/hw-native-sys/pto-isa.git` | kernel ISA headers |
-| pto-isa mirror | `https://gitcode.com/luohuan40/pto-isa.git` | fallback when GitHub is down |
-| PTOAS | `https://github.com/hw-native-sys/PTOAS/releases/download/${VERSION}/ptoas-bin-aarch64.tar.gz` | binary tarball |
-| libbacktrace | `https://github.com/Hzfengsy/libbacktrace.git` | macho-bundle-support branch |
-| msgpack-c | `https://github.com/msgpack/msgpack-c.git` | cpp_master branch |
+| pypto | `github.com/hw-native-sys/pypto.git` | main repo |
+| simpler | `github.com/hw-native-sys/simpler.git` | pypto submodule at `runtime/` |
+| pto-isa | `github.com/hw-native-sys/pto-isa.git` | kernel ISA headers |
+| pto-isa mirror | `gitcode.com/luohuan40/pto-isa.git` | fallback |
+| PTOAS | `github.com/hw-native-sys/PTOAS/releases/download/${VER}/ptoas-bin-aarch64.tar.gz` | binary tarball |
+| libbacktrace | `github.com/Hzfengsy/libbacktrace.git` | `macho-bundle-support` branch |
+| msgpack-c | `github.com/msgpack/msgpack-c.git` | `cpp_master` branch |
+
+## See also
+
+- `debugging_skills/SKILL.md` — NPU error codes, dead device diagnosis, Docker runtime tips, distributed bug recipes
+- `diagnose_npu.py` — 10-point NPU health check (run inside container)
+- `build_skills/` — build system debugging
