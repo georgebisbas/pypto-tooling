@@ -7,6 +7,103 @@ description: >-
   window anchors, or messages about 32-byte row alignment on NPU.
 ---
 
+# PyPTO NPU Debugging Skills
+
+## Quick diagnostic script
+
+Run `diagnose_npu.py` (repo root) inside any container to get a 10-point
+hardware health check in <30 seconds:
+
+```bash
+docker cp ~/pypto-tooling/diagnose_npu.py <container>:/opt/pypto/
+# Inside container:
+python3 /opt/pypto/diagnose_npu.py
+```
+
+---
+
+# NPU Device Diagnostics
+
+## NPU error code reference
+
+| Code | Name | Meaning | Typical cause |
+|------|------|---------|---------------|
+| 507018 | `ACL_ERROR_RT_DEVICE_NOT_EXIST` | Device not found | Wrong `--device`, missing `/dev/davinci*` |
+| **507033** | `ACL_ERROR_RT_DEV_SETUP_ERROR` | Device visible but can't open context | Dead device (dmesg: `not working`), CANN/driver mismatch, permissions |
+| 507899 | `ACL_ERROR_RT_INTERNAL_ERROR` | Driver internal error (IPC) | CANN 9.0.0 IPC key format rejected by driver <26.0.rc1 |
+
+## Dead vs. busy device (507033)
+
+507033 can mean **dead hardware** or **contention**. Tell them apart:
+
+| Signal | Dead device | Busy device |
+|--------|-------------|-------------|
+| `dmesg` | `device(N) is not working`, `state=5`, `ret(-6)` | Usually silent |
+| `fuser /dev/davinci*` | Empty | Shows PID(s) |
+| Other devices | Work fine | Work fine |
+| `npu-smi info` | Hangs or shows `NA` for that chip | Shows process list |
+| Kernel ret | `-6` (ENXIO) | `-16` (EBUSY) |
+
+**Dead device dmesg signatures:**
+
+```text
+[devdrv] [ERROR] device(0) is not working.
+[devdrv] [ERROR] devdrv_manager_get_core failed, ret(-6), dev_id(0).
+[ascend_udis] [ERROR] udis_check_ucb 80] udis device state is not ready. (udevid=0; state=5)
+[ascend_udis] [ERROR] udis_get_device_info 302] Get udis info failed. (udevid=0; ...)
+```
+
+`state=5` = hardware management state "unavailable." Not software-fixable — needs
+physical reset or replacement.
+
+## Interpreting aclrtSetDevice failures systematically
+
+```python
+import ctypes
+lib = ctypes.cdll.LoadLibrary("libascendcl.so")
+lib.aclInit(None)
+cnt = ctypes.c_uint(0)
+lib.aclrtGetDeviceCount(ctypes.byref(cnt))  # → count
+for dev in range(cnt.value):
+    rc = lib.aclrtSetDevice(dev)
+    print(f"device {dev}: {rc}")
+```
+
+- All devices fail → driver/CANN mismatch or kernel module not loaded
+- Only some devices fail → dead hardware
+- Fails with LD_PRELOAD=libhccl.so but works without → HCCL preload interference
+- Fails with LD_PRELOAD but `fuser` shows PIDs → contention
+
+## Host env leakage into containers
+
+If `LD_LIBRARY_PATH` inside the container contains host paths
+(`/usr/local/Ascend/nnal/...`, `/usr/local/python3.12.13/...`), the host
+Docker daemon or a systemd environment is injecting them. The Dockerfile
+sets a clean `LD_LIBRARY_PATH`; the leakage happens at `docker run` time.
+
+**Impact:** usually harmless for this project (CANN libs take priority),
+but can cause silent symbol conflicts if host and container CANN versions
+differ.
+
+**Fix:** add `-e LD_LIBRARY_PATH=` to `docker run` to reset, or fix the
+host's Docker daemon environment.
+
+## Driver/CANN compatibility quick check
+
+```bash
+# On host:
+cat /usr/local/Ascend/driver/version.info 2>/dev/null || \
+  modinfo davinci 2>/dev/null | grep ^version
+
+# In container:
+cat /usr/local/Ascend/cann-9.0.0/version.cfg 2>/dev/null
+```
+
+Per `simpler/docs/install.md`: CANN 9.0.0 requires driver ≥ 26.0.rc1.
+Driver 25.5.1 with CANN 9.0.0 → 507033 (device setup) and 507899 (HCCL IPC).
+
+---
+
 # PyPTO Vec tile 32-byte row alignment
 
 ## Rule (hardware / PTO-ISA)
