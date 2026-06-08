@@ -32,19 +32,8 @@
 # RUN (multi-device, distributed / HCCL — MUST use --pid=host):
 #   docker run --rm -it --privileged --ipc=host --pid=host --cap-add=SYS_PTRACE --security-opt seccomp=unconfined -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi:ro -v /usr/local/Ascend/driver:/usr/local/Ascend/driver:ro -v /dev:/dev pypto3-hw-native-sys:cann9
 #
-# WHY --pid=host FOR HCCL:
-#   simpler's Path-D symmetric-pool setup calls aclrtIpcMemSetImportPid(myName,
-#   peerPids) with peerPids harvested via getpid() in each rank. Inside a child
-#   PID namespace getpid() returns the *container* PID, but the Ascend devmm
-#   kernel module verifies the *host* PID of the importer against the recorded
-#   whitelist. Mismatch -> aclrtIpcMemImportByKey returns 507899 and dmesg
-#   shows "[ascend] [devmm] [ERROR] _devmm_ipc_node_open: Wlist verify fail".
-#   --pid=host shares the host PID namespace so getpid() == kernel-visible PID
-#   and the whitelist matches. simpler's own CI (runs-on: [self-hosted, a2a3])
-#   sidesteps this by running directly on the hardware host, never in Docker.
-#
-# NOTE: Do NOT mount /usr/local/Ascend — the image contains CANN baked in.
-#   Only the host kernel-driver user-space (/usr/local/Ascend/driver) is needed.
+#   --pid=host is required: Ascend IPC validates host PIDs, not container PIDs.
+#   See pypto-tooling/debugging_skills/SKILL.md → "Docker runtime: HCCL".
 #
 # COMMANDS INSIDE CONTAINER — mirrors pypto .github/workflows/ci.yml job order.
 #   INSTALL_PREFIX=/opt, CANN_VERSION=9.0.0. CANN env is sourced from bash.bashrc.
@@ -240,19 +229,12 @@ ENV ASCEND_HOME_PATH=${CANN_HOME} \
     PTO_ISA_ROOT=${PTO_ISA_DIR}
 ENV LD_LIBRARY_PATH=/usr/local/Ascend/driver/lib64/driver:${CANN_HOME}/aarch64-linux/lib64:/usr/local/Ascend/ascend-toolkit/latest/lib64:${LD_LIBRARY_PATH:-}
 
-# HCCL fix #1 (image-side): preload libhccl.so with RTLD_GLOBAL so its symbols
-# are visible to libhost_runtime.so. simpler's host_runtime.so has WEAK
-# undefined references to HcclGetRootInfo / HcclCommInitRootInfo / HcclBarrier
-# / HcclCommDestroy and does NOT list libhccl.so in DT_NEEDED. Without a
-# global preload those relocations resolve to NULL -> SIGSEGV on comm_init.
-# LD_LIBRARY_PATH alone is not enough — the resolution decision happens at
-# host_runtime.so load time, before any HCCL call.
+# Preload libhccl.so so host_runtime.so's WEAK HCCL symbols resolve at load time.
+# Without this, HcclGetRootInfo et al. → NULL → SIGSEGV on comm_init.
+# See pypto-tooling/debugging_skills/SKILL.md → "Docker runtime: HCCL".
 #
-# HCCL fix #2 (run-side, NOT in this image): the container MUST be started
-# with --pid=host. Inside a child PID namespace, simpler's getpid()-based
-# IPC peer whitelist (aclrtIpcMemSetImportPid) stores container PIDs while
-# the kernel devmm module checks the importer's host PID -> aclrtIpcMemImportByKey
-# returns 507899. See the top-of-file RUN block for the full command.
+# run-side: the container MUST be started with --pid=host for HCCL.
+# See pypto-tooling/debugging_skills/SKILL.md → "Docker runtime: HCCL".
 RUN test -f "${CANN_HOME}/aarch64-linux/lib64/libhccl.so" \
     || (echo "ERROR: libhccl.so missing at ${CANN_HOME}/aarch64-linux/lib64/libhccl.so" \
         && ls -la "${CANN_HOME}/aarch64-linux/lib64/" | grep -i hccl \

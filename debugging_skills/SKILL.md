@@ -88,6 +88,47 @@ differ.
 **Fix:** add `-e LD_LIBRARY_PATH=` to `docker run` to reset, or fix the
 host's Docker daemon environment.
 
+## Docker runtime: HCCL, mounts, and `--pid=host`
+
+### Why `--pid=host` is required for distributed/HCCL
+
+simpler's Path-D symmetric-pool setup calls `aclrtIpcMemSetImportPid(myName,
+peerPids)` with peerPids harvested via `getpid()` in each rank. Inside a child
+PID namespace, `getpid()` returns the *container* PID, but the Ascend devmm
+kernel module verifies the *host* PID against the recorded whitelist. Mismatch
+→ `aclrtIpcMemImportByKey` returns **507899** and dmesg shows:
+
+```text
+[ascend] [devmm] [ERROR] _devmm_ipc_node_open: Wlist verify fail
+```
+
+`--pid=host` shares the host PID namespace so `getpid()` == kernel-visible PID.
+simpler's own CI runs directly on bare metal, never in Docker, so this is
+container-specific.
+
+### Why `LD_PRELOAD=libhccl.so` is baked in
+
+simpler's `host_runtime.so` has **WEAK** undefined references to `HcclGetRootInfo`,
+`HcclCommInitRootInfo`, `HcclBarrier`, and `HcclCommDestroy` — but does NOT list
+`libhccl.so` in `DT_NEEDED`. Without a global preload, those relocations resolve
+to NULL → **SIGSEGV** on `comm_init`. `LD_LIBRARY_PATH` alone is not enough; the
+resolution decision happens at `host_runtime.so` load time, before any HCCL call.
+
+**Impact on non-HCCL tests:** `LD_PRELOAD` is harmless for non-HCCL workloads
+but can be unset if desired. The `diagnose_npu.py` script checks whether
+`LD_PRELOAD` breaks device access (section 6).
+
+### Never mount `/usr/local/Ascend` into the container
+
+The image has CANN baked in at `/usr/local/Ascend/cann-9.0.0/`. Mounting the
+host's `/usr/local/Ascend` shadows the baked-in CANN with the host's (potentially
+older or incompatible) version. Only mount the driver:
+
+```bash
+-v /usr/local/Ascend/driver:/usr/local/Ascend/driver:ro   # ✅
+-v /usr/local/Ascend:/usr/local/Ascend:ro                  # ❌
+```
+
 ## Driver/CANN compatibility quick check
 
 ```bash
