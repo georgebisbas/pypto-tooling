@@ -7,6 +7,8 @@ description: >-
 triggers:
   - "create a Dockerfile"
   - "add to Dockerfile"
+  - "update Dockerfile"
+  - "Dockerfile is stale"
   - "Dockerfile build fails"
   - "Dockerfile error"
   - "docker build fails"
@@ -24,6 +26,7 @@ triggers:
 
 ```text
 Task starts
+├─ User says "update this Dockerfile"?  → "When to update" per-Dockerfile checklist
 ├─ Creating a NEW Dockerfile?  → "Dockerfile inventory" + "Build-time patterns"
 ├─ Existing Dockerfile won't BUILD? → "Common failures" symptom table
 ├─ Container RUNS but tests FAIL? → debugging_skills/SKILL.md first, then return
@@ -42,6 +45,73 @@ Task starts
 | `Dockerfile.server.cann:9.0` | pypto dev workspace | `docker build -t img -f Dockerfile... .` | Yes (a2a3) |
 
 All use `quay.io/ascend/cann:9.0.0-910b-ubuntu22.04-py3.12` as base image.
+
+## When to update Dockerfiles
+
+Each Dockerfile pins specific external versions. When asked to update one, run the corresponding checklist below. Each check produces a diff command — if it outputs anything, an update is needed.
+
+### `Dockerfile.hw-native-sys.cann9.0` — pypto + simpler + pto-isa + ptoas
+
+| # | Check | Command | What to update if drifted |
+|---|-------|---------|--------------------------|
+| 1 | pypto `origin/main` ahead of `PYPTO_COMMIT`? | `git -C /path/to/pypto rev-list --count ${PYPTO_COMMIT}..origin/main` | `ARG PYPTO_COMMIT` + header comment example |
+| 2 | pto-isa commit in pypto's `ci.yml` changed? | `grep -oP '(?<=--pto-isa-commit=)[a-f0-9]+' pypto/.github/workflows/ci.yml \| head -1` | Auto-derived at build time; update test comments only |
+| 3 | PTOAS version or SHA256 changed in pypto CI? | `grep -E 'PTOAS_VERSION\|PTOAS_SHA256' pypto/.github/workflows/ci.yml` | `ARG PTOAS_VERSION` + `ARG PTOAS_SHA256` |
+| 4 | pip deps changed in pypto CI Dockerfile? | `diff <(grep 'pip install' pypto/.github/docker/github_ci.Dockerfile) <(grep 'pip install' Dockerfile.hw-native-sys.cann9.0)` | Update pip install RUN lines |
+| 5 | Test commands in header comment match pypto CI? | Compare `ci.yml` jobs with Dockerfile comment header | Update test command cheatsheet in header comment |
+
+### `Dockerfile.simpler.cann9.0` — simpler + pto-isa only
+
+| # | Check | Command | What to update if drifted |
+|---|-------|---------|--------------------------|
+| 1 | simpler `origin/main` ahead of `SIMPLER_COMMIT`? | `git -C /path/to/simpler rev-list --count ${SIMPLER_COMMIT}..origin/main` | `ARG SIMPLER_COMMIT` + header comment |
+| 2 | pto-isa commit in simpler's CI changed? | `grep -oP 'PTO_ISA_COMMIT:\s*\K[a-f0-9]+' simpler/.github/workflows/ci.yml \| head -1` | `ARG PTO_ISA_COMMIT` (simpler CI format, not pypto!) |
+
+Note: No PTOAS or pypto dependencies — simpler-only image.
+
+### `Dockerfile.hw-native-sys.sim.ubuntu22.04` — pypto + pto-isa (x86_64 sim)
+
+| # | Check | Command | What to update if drifted |
+|---|-------|---------|--------------------------|
+| 1 | pypto `origin/main` ahead of `PYPTO_COMMIT`? | Same as hw-native-sys check #1 | `ARG PYPTO_COMMIT` |
+| 2 | pto-isa commit in pypto's `ci.yml` changed? | Same as hw-native-sys check #2 | `ARG PTO_ISA_COMMIT` |
+| 3 | PTOAS x86_64 version/SHA256 changed? | `grep -E 'PTOAS_VERSION\|PTOAS_SHA256' pypto/.github/workflows/ci.yml` — use the **x86_64** SHA256 from `system-tests-a5sim` job | `ARG PTOAS_VERSION` + `ARG PTOAS_SHA256` (x86_64 binary) |
+
+Note: Uses **x86_64** `ptoas-bin-x86_64.tar.gz` with a **different SHA256** than the aarch64 binary used in hw-native-sys.
+
+### `Dockerfile.pytorch-hccl-tests.cann9.0` — HCCL benchmarks only
+
+| # | Check | Command | What to update if drifted |
+|---|-------|---------|--------------------------|
+| 1 | Fork `origin/master` ahead of `PT_HCCL_COMMIT`? | `git -C /path/to/pytorch-hccl-tests rev-list --count ${PT_HCCL_COMMIT}..origin/master` | `ARG PT_HCCL_COMMIT` |
+
+### `Dockerfile.server.cann:9.0` — pypto dev workspace (host mount)
+
+| # | Check | Command | What to update if drifted |
+|---|-------|---------|--------------------------|
+| 1 | pto-isa commit in pypto's `ci.yml` changed? | Same as hw-native-sys check #2 | The clone command inside the Dockerfile |
+| 2 | PTOAS version/SHA256 changed? | Same as hw-native-sys check #3 | `ARG PTOAS_VERSION` + `ARG PTOAS_SHA256` |
+| 3 | pip deps changed in pypto CI Dockerfile? | Same as hw-native-sys check #4 | Update pip install RUN lines |
+
+Note: pypto + simpler are mounted from host at runtime, not pinned in the Dockerfile. Only pto-isa and PTOAS are cloned/downloaded at build time.
+
+### Quick bulk check (all Dockerfiles)
+
+```bash
+# Clone pypto and simpler if not already present
+cd /tmp
+git clone --depth 1 https://github.com/hw-native-sys/pypto.git 2>/dev/null || true
+git clone --depth 1 https://github.com/hw-native-sys/simpler.git 2>/dev/null || true
+
+# Run all checks at once
+cd ~/pypto-tooling
+echo "=== pypto origin/main ===" && git -C /tmp/pypto rev-parse --short HEAD
+echo "=== simpler origin/main ===" && git -C /tmp/simpler rev-parse --short HEAD
+echo "=== pto-isa (pypto CI) ===" && grep -oP '(?<=--pto-isa-commit=)[a-f0-9]+' /tmp/pypto/.github/workflows/ci.yml | head -1
+echo "=== pto-isa (simpler CI) ===" && grep -oP 'PTO_ISA_COMMIT:\s*\K[a-f0-9]+' /tmp/simpler/.github/workflows/ci.yml | head -1
+echo "=== PTOAS (pypto CI) ===" && grep -E 'PTOAS_VERSION|PTOAS_SHA256' /tmp/pypto/.github/workflows/ci.yml | head -2
+echo "=== pip deps (pypto CI Dockerfile) ===" && grep 'pip install' /tmp/pypto/.github/docker/github_ci.Dockerfile
+```
 
 ---
 
