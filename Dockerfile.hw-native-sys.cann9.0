@@ -245,8 +245,11 @@ ENV LD_LIBRARY_PATH=/usr/local/Ascend/driver/lib64/driver:${CANN_HOME}/aarch64-l
 # run-side: container MUST use --pid=host. See debugging_skills/SKILL.md → HCCL.
 RUN apt-get update && apt-get install -y --no-install-recommends patchelf \
     && rm -rf /var/lib/apt/lists/* \
-    && patchelf --add-needed libhccl.so "${CANN_HOME}/aarch64-linux/lib64/host_runtime.so" \
-    && patchelf --print-needed "${CANN_HOME}/aarch64-linux/lib64/host_runtime.so" | grep hccl
+    && HOST_RT=$(find /usr/local/Ascend -name host_runtime.so 2>/dev/null | head -1) \
+    && { [ -n "${HOST_RT}" ] || { echo "ERROR: host_runtime.so not found under /usr/local/Ascend"; exit 1; }; } \
+    && echo "Patching ${HOST_RT}" \
+    && patchelf --add-needed libhccl.so "${HOST_RT}" \
+    && patchelf --print-needed "${HOST_RT}" | grep hccl
 
 ENV PATH=${PTOAS_DIR}:${PTOAS_DIR}/bin:${PATH}
 ENV PYTHONPATH=${PYPTO_DIR}/runtime/python:${PYPTO_DIR}/runtime/examples/scripts
