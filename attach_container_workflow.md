@@ -43,9 +43,7 @@ docker images pypto3-hw-native-sys:cann9
 ```bash
 docker rm -f pypto-dev 2>/dev/null || true
 docker run --rm -it --name pypto-dev --privileged --ipc=host --pid=host \
-    -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi:ro \
     -v /usr/local/Ascend/driver:/usr/local/Ascend/driver:ro \
-    -v /dev:/dev \
     pypto3-hw-native-sys:cann9
 ```
 
@@ -212,9 +210,7 @@ docker build -t pypto3-hw-native-sys:cann9 - < Dockerfile.hw-native-sys.cann9.0
 # ─── START ───
 docker rm -f pypto-dev 2>/dev/null || true
 docker run --rm -it --name pypto-dev --privileged --ipc=host --pid=host \
-    -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi:ro \
     -v /usr/local/Ascend/driver:/usr/local/Ascend/driver:ro \
-    -v /dev:/dev \
     pypto3-hw-native-sys:cann9
 
 # ─── VS CODE ───

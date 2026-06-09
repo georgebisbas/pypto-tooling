@@ -27,12 +27,14 @@
 #   docker build --build-arg PYPTO_COMMIT=bda839de6be01e75852f57ef4118c42bd9ef408f -t pypto3-hw-native-sys:cann9 - < Dockerfile.hw-native-sys.cann9.0
 #
 # RUN (single-device, NO HCCL):
-#   docker run --rm -it --privileged --ipc=host -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi:ro -v /usr/local/Ascend/driver:/usr/local/Ascend/driver:ro -v /dev:/dev pypto3-hw-native-sys:cann9
+#   docker run --rm -it --privileged --ipc=host -v /usr/local/Ascend/driver:/usr/local/Ascend/driver:ro pypto3-hw-native-sys:cann9
 #
 # RUN (multi-device, distributed / HCCL — MUST use --pid=host):
-#   docker run --rm -it --privileged --ipc=host --pid=host -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi:ro -v /usr/local/Ascend/driver:/usr/local/Ascend/driver:ro -v /dev:/dev pypto3-hw-native-sys:cann9
+#   docker run --rm -it --privileged --ipc=host --pid=host -v /usr/local/Ascend/driver:/usr/local/Ascend/driver:ro pypto3-hw-native-sys:cann9
 #
 #   --pid=host is required: Ascend IPC validates host PIDs, not container PIDs.
+#   --privileged already grants full device access; -v /dev:/dev is redundant.
+#   npu-smi is in CANN_HOME/bin; the host mount is unnecessary.
 #   See pypto-tooling/debugging_skills/SKILL.md → "Docker runtime: HCCL".
 #
 # COMMANDS INSIDE CONTAINER — mirrors pypto .github/workflows/ci.yml job order.
