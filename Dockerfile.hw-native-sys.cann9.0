@@ -118,7 +118,9 @@ RUN apt-get update && \
       ccache \
       build-essential cmake ninja-build pkg-config \
       graphviz \
-      mpich libmpich-dev && \
+      mpich libmpich-dev \
+      ripgrep fd-find nano && \
+    ln -sf "$(command -v fdfind)" /usr/local/bin/fd && \
     add-apt-repository -y ppa:ubuntu-toolchain-r/test && \
     apt-get update && \
     (apt-get install -y --no-install-recommends gcc-15 g++-15 || true) && \
