@@ -13,6 +13,8 @@ triggers:
   - "Dockerfile error"
   - "docker build fails"
   - "container fails"
+  - "container attach"
+  - "VS Code attach"
   - "import error in container"
   - "HCCL fails in container"
   - "simpler_init failed"
@@ -30,6 +32,7 @@ Task starts
 ├─ Creating a NEW Dockerfile?  → "Dockerfile inventory" + "Build-time patterns"
 ├─ Existing Dockerfile won't BUILD? → "Common failures" symptom table
 ├─ Container RUNS but tests FAIL? → debugging_skills/SKILL.md first, then return
+├─ VS Code attach HANGS?           → attach_container_workflow.md (two-container pattern)
 ├─ Need to understand a PATTERN? → Jump to named h3 below
 └─ Debugging interactively?        → "Interactive debugging" checklist
 ```
@@ -262,11 +265,11 @@ Additional for HCCL / multi-device:
 
 ### CANN environment
 
-Source in `.bashrc` so it's available interactively:
+`set_env.sh` is NOT auto-sourced (takes >10s, breaks VS Code attach).
+All critical vars are set via Docker `ENV`. Source manually if needed:
 
-```dockerfile
-RUN echo "[ -f ${CANN_HOME}/set_env.sh ] && { source ${CANN_HOME}/set_env.sh 2>/dev/null || true; }" >> /etc/bash.bashrc && \
-    echo "unset PTO2_RING_HEAP PTO2_RING_TASK_WINDOW PTO2_RING_DEP_POOL 2>/dev/null || true" >> /etc/bash.bashrc
+```bash
+source $CANN_HOME/set_env.sh
 ```
 
 ---
@@ -286,7 +289,10 @@ Error message contains...
 ├─ "fatal error: 'tensor.h'"        → Wrong SIMPLER_ROOT
 ├─ "PTOAS SHA256 mismatch"          → CI bumped version → update ARGs
 ├─ "custom op ... unknown"          → PTOAS too old → update PTOAS_VERSION
-└─ Segfault in comm_init + fork warn → ACL/HCCL + fork → use spawn/forkserver
+├─ Segfault in comm_init + fork warn → ACL/HCCL + fork → use spawn/forkserver
+├─ VS Code attach hangs / "unable to resolve shell environment"
+│                                    → --pid=host + VS Code = bad → attach_container_workflow.md
+└─ "userEnvProbe is taking longer"   → set_env.sh auto-sourcing (fixed in latest Dockerfile)
 ```
 
 ### Symptom → fix table
@@ -301,6 +307,8 @@ Error message contains...
 | segfault in `comm_init` + fork warning | ACL/HCCL loaded + multi-threaded fork | Use spawn/forkserver, avoid busy device 0 |
 | `COPY` fails: "path not found" | Stdin build has no build context | Use `git clone` instead of `COPY` |
 | `fatal error: 'tensor.h'` | Wrong `SIMPLER_ROOT` | Set to simpler source tree (`/opt/pypto/runtime`) |
+| VS Code attach hangs / "unable to resolve shell environment" | `--pid=host` + VS Code probe scans all host PIDs | → `attach_container_workflow.md` (two containers) |
+| `userEnvProbe is taking longer than 10 seconds` | `set_env.sh` auto-sourcing in `.bashrc` | Fixed in latest Dockerfile; rebuild image |
 
 For device health issues (dead NPUs, 507033): run `diagnose_npu.py` inside the container, or see `debugging_skills/SKILL.md`.
 
@@ -342,4 +350,5 @@ npu-smi info
 
 - `debugging_skills/SKILL.md` — NPU error codes, dead device diagnosis, Docker runtime tips, distributed bug recipes
 - `diagnose_npu.py` — 10-point NPU health check (run inside container)
+- `attach_container_workflow.md` — VS Code + distributed HCCL workflow (two-container pattern)
 - `build_skills/` — build system debugging

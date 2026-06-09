@@ -10,6 +10,8 @@
 #                   Use 40-char SHA when pinning an older commit (GitHub fetch rejects short SHAs).
 #   PTO_ISA_COMMIT  (default: auto)     — pto-isa commit; auto-derives from ci.yml if not set
 #   PTOAS_VERSION   (default: v0.43)    — PTOAS release (must match pypto CI)
+#   VSCODE_COMMIT   (default: none)     — 40-char VS Code commit hash; preinstalls server
+#                                        (skips ~140MB download on first attach, saves ~30s)
 #
 # REQUIREMENTS:
 #   - Internet access during build (GitHub)
@@ -20,7 +22,7 @@
 #   a2a3sim needs real GCC 15+ (_Float16 in pto-isa CPU sim); the build installs
 #   gcc-15/g++-15 from ubuntu-toolchain-r/test when available.
 #
-# BUILD (defaults):
+# BUILD (defaults — includes VS Code Server 1.123.0):
 #   docker build -t pypto3-hw-native-sys:cann9 - < Dockerfile.hw-native-sys.cann9.0
 #
 # BUILD (custom prefix / pinned pto-isa / different commit):
@@ -30,13 +32,14 @@
 #   docker run --rm -it --privileged --ipc=host -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi:ro -v /usr/local/Ascend/driver:/usr/local/Ascend/driver:ro -v /dev:/dev pypto3-hw-native-sys:cann9
 #
 # RUN (multi-device, distributed / HCCL — MUST use --pid=host):
-#   docker run --rm -it --privileged --ipc=host --pid=host --cap-add=SYS_PTRACE --security-opt seccomp=unconfined -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi:ro -v /usr/local/Ascend/driver:/usr/local/Ascend/driver:ro -v /dev:/dev pypto3-hw-native-sys:cann9
+#   docker run --rm -it --privileged --ipc=host --pid=host -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi:ro -v /usr/local/Ascend/driver:/usr/local/Ascend/driver:ro -v /dev:/dev pypto3-hw-native-sys:cann9
 #
 #   --pid=host is required: Ascend IPC validates host PIDs, not container PIDs.
 #   See pypto-tooling/debugging_skills/SKILL.md → "Docker runtime: HCCL".
 #
 # COMMANDS INSIDE CONTAINER — mirrors pypto .github/workflows/ci.yml job order.
-#   INSTALL_PREFIX=/opt, CANN_VERSION=9.0.0. CANN env is sourced from bash.bashrc.
+#   INSTALL_PREFIX=/opt, CANN_VERSION=9.0.0. CANN env set via ENV (set_env.sh not auto-sourced;
+#   source manually if needed: source $CANN_HOME/set_env.sh).
 #   Device lists are inlined below (change 0,1,2,3 / 0 to match your host).
 #   PTO-ISA: image installs 016396b5… (from ci.yml) unless PTO_ISA_COMMIT was overridden at build.
 #
@@ -190,6 +193,22 @@ RUN curl --fail --location --retry 3 --retry-all-errors \
     chmod +x "${PTOAS_DIR}/ptoas" "${PTOAS_DIR}/bin/ptoas" && \
     rm -f /tmp/ptoas-bin-aarch64.tar.gz
 
+# Optional: preinstall VS Code Server in the image.
+# Set --build-arg VSCODE_COMMIT=6a44c352... (from Help → About) to skip
+# the ~140MB download on first "Attach to Running Container" (~30s saved).
+# Omit to let VS Code install the server on first attach (always up to date).
+ARG VSCODE_COMMIT=6a44c352bd24569c417e530095901b649960f9f8
+RUN if [ -n "${VSCODE_COMMIT}" ]; then \
+      mkdir -p "/root/.vscode-server/bin/${VSCODE_COMMIT}" && \
+      curl -fsSL --retry 3 \
+        "https://update.code.visualstudio.com/commit:${VSCODE_COMMIT}/server-linux-arm64/stable" \
+        -o /tmp/vscode-server.tar.gz && \
+      tar -xzf /tmp/vscode-server.tar.gz \
+        -C "/root/.vscode-server/bin/${VSCODE_COMMIT}" --strip-components=1 && \
+      rm /tmp/vscode-server.tar.gz && \
+      echo "VS Code Server ${VSCODE_COMMIT} preinstalled"; \
+    fi
+
 # Python build toolchain.
 RUN python3 -m pip install --upgrade pip setuptools wheel && \
     pip install \
@@ -215,9 +234,18 @@ RUN rm -rf ./runtime/build && \
 # Build and install pypto.
 RUN pip install --no-build-isolation -v ".[dev]"
 
-# Source CANN environment for every interactive shell.
 # Unset PTO2_RING_* if the host leaked them in — CI does the same before HCCL pytest.
-RUN echo "[ -f ${CANN_HOME}/set_env.sh ] && { source ${CANN_HOME}/set_env.sh 2>/dev/null || true; }" >> /etc/bash.bashrc && \
+# set_env.sh is NOT auto-sourced (takes >10s, breaks VS Code attach).
+# The Ascend base image hooks it into /etc/profile and profile.d/ — strip those.
+# All critical env vars (ASCEND_HOME_PATH, LD_LIBRARY_PATH, PATH) are set
+# via ENV above. To load the full CANN environment: source $CANN_HOME/set_env.sh
+RUN for f in /etc/profile /root/.profile /root/.bashrc /root/.bash_profile; do \
+      [ -f "$f" ] && sed -i '/set_env\.sh/d' "$f" || true; \
+    done && \
+    for f in /etc/profile.d/*.sh; do \
+      [ -f "$f" ] && sed -i '/set_env\.sh/d' "$f" || true; \
+    done && \
+    echo 'case $- in *i*) ;; *) return;; esac' >> /etc/bash.bashrc && \
     echo "unset PTO2_RING_HEAP PTO2_RING_TASK_WINDOW PTO2_RING_DEP_POOL 2>/dev/null || true" >> /etc/bash.bashrc
 
 ENV ASCEND_HOME_PATH=${CANN_HOME} \

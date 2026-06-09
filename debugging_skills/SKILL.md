@@ -129,6 +129,22 @@ older or incompatible) version. Only mount the driver:
 -v /usr/local/Ascend:/usr/local/Ascend:ro                  # ❌
 ```
 
+### VS Code attach hangs with `--pid=host`
+
+`--pid=host` shares the host PID namespace, so VS Code's `userEnvProbe` iterates
+over **every** host process in `/proc` (hundreds on a busy server). The probe hits
+its 10s timeout, then `ptyHost` reports:
+
+```text
+ptyHost was unable to resolve your shell environment in a reasonable time.
+Please review your shell configuration and restart.
+```
+
+**Fix:** use a **two-container pattern** — one for VS Code (no `--pid=host`),
+one for HCCL tests (`--pid=host`, `docker exec` only, never attach VS Code).
+
+→ See `pypto-tooling/attach_container_workflow.md` for the full workflow.
+
 ## Driver/CANN compatibility quick check
 
 ```bash
