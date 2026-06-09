@@ -106,7 +106,7 @@ kernel module verifies the *host* PID against the recorded whitelist. Mismatch
 simpler's own CI runs directly on bare metal, never in Docker, so this is
 container-specific.
 
-### Why `LD_PRELOAD=libhccl.so` is baked in
+### `LD_PRELOAD=libhccl.so` — required for HCCL, must NOT be set image-wide
 
 simpler's `host_runtime.so` has **WEAK** undefined references to `HcclGetRootInfo`,
 `HcclCommInitRootInfo`, `HcclBarrier`, and `HcclCommDestroy` — but does NOT list
@@ -114,9 +114,47 @@ simpler's `host_runtime.so` has **WEAK** undefined references to `HcclGetRootInf
 to NULL → **SIGSEGV** on `comm_init`. `LD_LIBRARY_PATH` alone is not enough; the
 resolution decision happens at `host_runtime.so` load time, before any HCCL call.
 
-**Impact on non-HCCL tests:** `LD_PRELOAD` is harmless for non-HCCL workloads
-but can be unset if desired. The `diagnose_npu.py` script checks whether
-`LD_PRELOAD` breaks device access (section 6).
+**Why it is NOT set image-wide (Docker ENV or bashrc):** setting it globally
+injects `libhccl.so` into every process in the container, including VS Code
+server's node process → **hang on attach** (see "VS Code attach hang" below).
+
+Set it manually in the shell before running HCCL tests:
+
+```bash
+export LD_PRELOAD=${CANN_HOME}/aarch64-linux/lib64/libhccl.so
+```
+
+### VS Code "Attach to Running Container" hangs
+
+**Symptom:** attach hangs indefinitely; Dev Containers log shows
+`userEnvProbe: loginInteractiveShell` stalled or `taking longer than 10 seconds`.
+
+**Root causes:**
+
+| Cause | Effect |
+|-------|--------|
+| Ascend base image injects `set_env.sh` into `/etc/profile`, `/etc/bash.bashrc`, `/etc/profile.d/*.sh`, `/root/.bashrc`, etc. | `set_env.sh` takes 10–30s; `userEnvProbe` shell probe times out |
+| `LD_PRELOAD=libhccl.so` set as Docker `ENV` or in `bashrc` | VS Code probe captures it and injects into server node process → loads libhccl.so → hang |
+
+**Fix in Dockerfile (both required):**
+
+1. Strip `set_env.sh` from ALL base-image startup files:
+
+```dockerfile
+RUN for f in /etc/profile /etc/bash.bashrc /root/.profile /root/.bashrc /root/.bash_profile; do \
+      [ -f "$f" ] && sed -i '/set_env\.sh/d' "$f" || true; \
+    done && \
+    for f in /etc/profile.d/*.sh; do \
+      [ -f "$f" ] && sed -i '/set_env\.sh/d' "$f" || true; \
+    done
+```
+
+2. Do NOT set `LD_PRELOAD` as `ENV` or in `bashrc`. All CANN env vars VS Code
+   needs are set via `ENV` instructions; `LD_PRELOAD` is set manually before HCCL
+   tests only.
+
+**Verification:** after rebuild, attach completes in <5 seconds with no
+`userEnvProbe` warning in the Dev Containers log.
 
 ### Never mount `/usr/local/Ascend` into the container
 

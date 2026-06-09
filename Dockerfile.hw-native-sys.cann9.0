@@ -66,6 +66,8 @@
 #
 #   # --- dist-system-tests (job: dist-system-tests; HCCL, bare-metal in CI) ---
 #   # CI runs without a GHA container; in Docker use --pid=host (see RUN block).
+#   # Set LD_PRELOAD before running (not set image-wide — would break VS Code attach):
+#   export LD_PRELOAD=${CANN_HOME}/aarch64-linux/lib64/libhccl.so
 #   pytest tests/st/distributed -v --device="0,1,2,3" --pto-isa-commit=016396b57e2c17093f1194e6acd89bb112b0ab24 --ignore=tests/st/distributed/test_l2_multi_orch.py
 #
 #   # --- Not covered by this image / CI job mapping ---
@@ -79,7 +81,9 @@
 #   pytest tests/ut -m "not requires_hardware" -v --clone-protocol https
 #   pytest tests -m requires_hardware --platform a2a3 --device 0,1,2,3 -v --ignore=tests/ut/py/test_worker/test_dynamic_alloc_hw.py --ignore=tests/ut/py/test_worker/test_platform_comm.py
 #   pytest tests/st/a2a3/ -v --platform a2a3 --device 0,1,2,3 --pto-session-timeout 600 --clone-protocol https --require-pto-isa --pto-isa-commit 016396b57e2c17093f1194e6acd89bb112b0ab24
-#   # HCCL UT + L3 examples — container MUST use --pid=host; LD_PRELOAD=libhccl.so is set in image.
+#   # HCCL UT + L3 examples — container MUST use --pid=host.
+#   # LD_PRELOAD is NOT set image-wide (would break VS Code attach). Set it in your shell first:
+#   export LD_PRELOAD=${CANN_HOME}/aarch64-linux/lib64/libhccl.so
 #   pytest tests/ut/py/test_worker/test_dynamic_alloc_hw.py tests/ut/py/test_worker/test_platform_comm.py -m requires_hardware --platform a2a3 --device 0,1,2,3 -v
 #   pytest examples/workers/l3/ examples/a2a3/tensormap_and_ringbuffer/deferred_notify_demo examples/a2a3/tensormap_and_ringbuffer/async_notify_demo examples/a2a3/tensormap_and_ringbuffer/sdma_async_completion_demo -v --platform a2a3 --device 0,1,2,3 --pto-session-timeout 600 --clone-protocol https --require-pto-isa --pto-isa-commit 016396b57e2c17093f1194e6acd89bb112b0ab24
 
@@ -215,10 +219,18 @@ RUN rm -rf ./runtime/build && \
 # Build and install pypto.
 RUN pip install --no-build-isolation -v ".[dev]"
 
-# Source CANN environment for every interactive shell.
+# Remove set_env.sh auto-sourcing from ALL system/user startup files.
+# The Ascend base image injects these hooks; they take 10–30s and break VS Code attach.
+# All required env vars are set via ENV below; source manually when needed.
+RUN for f in /etc/profile /etc/bash.bashrc /root/.profile /root/.bashrc /root/.bash_profile; do \
+      [ -f "$f" ] && sed -i '/set_env\.sh/d' "$f" || true; \
+    done && \
+    for f in /etc/profile.d/*.sh; do \
+      [ -f "$f" ] && sed -i '/set_env\.sh/d' "$f" || true; \
+    done
+
 # Unset PTO2_RING_* if the host leaked them in — CI does the same before HCCL pytest.
-RUN echo "[ -f ${CANN_HOME}/set_env.sh ] && { source ${CANN_HOME}/set_env.sh 2>/dev/null || true; }" >> /etc/bash.bashrc && \
-    echo "unset PTO2_RING_HEAP PTO2_RING_TASK_WINDOW PTO2_RING_DEP_POOL 2>/dev/null || true" >> /etc/bash.bashrc
+RUN echo "unset PTO2_RING_HEAP PTO2_RING_TASK_WINDOW PTO2_RING_DEP_POOL 2>/dev/null || true" >> /etc/bash.bashrc
 
 ENV ASCEND_HOME_PATH=${CANN_HOME} \
     PTO_TILE_LIB_CODE_PATH=${CANN_HOME} \
@@ -239,7 +251,15 @@ RUN test -f "${CANN_HOME}/aarch64-linux/lib64/libhccl.so" \
     || (echo "ERROR: libhccl.so missing at ${CANN_HOME}/aarch64-linux/lib64/libhccl.so" \
         && ls -la "${CANN_HOME}/aarch64-linux/lib64/" | grep -i hccl \
         && exit 1)
-ENV LD_PRELOAD=${CANN_HOME}/aarch64-linux/lib64/libhccl.so
+# LD_PRELOAD is NOT set automatically — setting it image-wide (ENV or bashrc) injects
+# libhccl.so into every process including VS Code server → hang on attach.
+# Before running HCCL tests, set it in your shell:
+#   export LD_PRELOAD=${CANN_HOME}/aarch64-linux/lib64/libhccl.so
+# Without it, weak HCCL symbols in host_runtime.so stay NULL → SIGSEGV on comm_init.
+
+# VS Code's userEnvProbe: if it ever captures LD_PRELOAD and injects it into the server,
+# override per-container via ~/.devcontainer/devcontainer.json: {"userEnvProbe": "none"}
+
 ENV PATH=${PTOAS_DIR}:${PTOAS_DIR}/bin:${PATH}
 ENV PYTHONPATH=${PYPTO_DIR}/runtime/python:${PYPTO_DIR}/runtime/examples/scripts
 ENV PYTHONPATH=${PYTHONPATH}:${CANN_HOME}/python/site-packages:${CANN_HOME}/opp/built-in/op_impl/ai_core/tbe

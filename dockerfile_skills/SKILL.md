@@ -256,17 +256,40 @@ Additional for HCCL / multi-device:
 
 ### HCCL requirements
 
-`--pid=host` is required because Ascend IPC validates host PIDs, not container PIDs. `LD_PRELOAD=libhccl.so` is baked into the image so `host_runtime.so`'s WEAK HCCL symbols resolve at load time.
+`--pid=host` is required because Ascend IPC validates host PIDs, not container PIDs.
 
-→ See `debugging_skills/SKILL.md` → "Docker runtime: HCCL, mounts, and --pid=host" for detailed diagnostics.
+`LD_PRELOAD=libhccl.so` is **NOT** set image-wide. Setting it as `ENV` or in `bashrc`
+injects libhccl.so into every process including VS Code's server node → hang on attach.
+Set it manually in the shell before running HCCL tests:
+
+```bash
+export LD_PRELOAD=${CANN_HOME}/aarch64-linux/lib64/libhccl.so
+```
+
+→ See `debugging_skills/SKILL.md` → "`LD_PRELOAD=libhccl.so`" and "VS Code attach hang" for details.
 
 ### CANN environment
 
-Source in `.bashrc` so it's available interactively:
+**Do NOT source `set_env.sh` from bashrc or any startup file.** The Ascend base
+image already injects it into multiple startup files; if it runs during VS Code's
+`userEnvProbe` it takes 10–30s → attach hangs. Strip it at build time:
 
 ```dockerfile
-RUN echo "[ -f ${CANN_HOME}/set_env.sh ] && { source ${CANN_HOME}/set_env.sh 2>/dev/null || true; }" >> /etc/bash.bashrc && \
-    echo "unset PTO2_RING_HEAP PTO2_RING_TASK_WINDOW PTO2_RING_DEP_POOL 2>/dev/null || true" >> /etc/bash.bashrc
+RUN for f in /etc/profile /etc/bash.bashrc /root/.profile /root/.bashrc /root/.bash_profile; do \
+      [ -f "$f" ] && sed -i '/set_env\.sh/d' "$f" || true; \
+    done && \
+    for f in /etc/profile.d/*.sh; do \
+      [ -f "$f" ] && sed -i '/set_env\.sh/d' "$f" || true; \
+    done
+```
+
+All required CANN env vars (`ASCEND_HOME_PATH`, `LD_LIBRARY_PATH`, `PYTHONPATH`, etc.)
+are set via `ENV` instructions — `set_env.sh` is not needed at runtime.
+
+Unset stale `PTO2_RING_*` vars the host may leak in:
+
+```dockerfile
+RUN echo "unset PTO2_RING_HEAP PTO2_RING_TASK_WINDOW PTO2_RING_DEP_POOL 2>/dev/null || true" >> /etc/bash.bashrc
 ```
 
 ---
