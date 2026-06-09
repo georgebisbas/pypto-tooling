@@ -52,11 +52,10 @@
 #   # test_torch_codegen_paged_attention excluded here (unstable CPU golden); runs in system-tests on NPU.
 #   pytest tests/st/codegen -v --codegen-only --ignore=tests/st/codegen/torch/test_torch_codegen_paged_attention.py
 #
-#   # --- clang-tidy (job: clang-tidy; arm64 CPU in CI) ---
-#   python tests/lint/clang_tidy.py --jobs=$(nproc)
 #
 #   # --- system-tests (job: system-tests; NPU container in CI) ---
 #   pytest tests/st tests/st/codegen/torch/test_torch_codegen_paged_attention.py -v --device="0,1,2,3" --precompile-workers=128 --pto-isa-commit=016396b57e2c17093f1194e6acd89bb112b0ab24 --ignore=tests/st/distributed --ignore=tests/st/codegen
+#
 #   # L2 multi-orch — separate pytest process (Worker level=2 poisons level=3 in the same process).
 #   pytest tests/st/distributed/test_l2_multi_orch.py -v --device="0,1,2,3" --pto-isa-commit=016396b57e2c17093f1194e6acd89bb112b0ab24
 #   # Swimlane — single device, forked.
@@ -80,7 +79,7 @@
 #   pytest tests -m requires_hardware --platform a2a3 --device 0,1,2,3 -v --ignore=tests/ut/py/test_worker/test_dynamic_alloc_hw.py --ignore=tests/ut/py/test_worker/test_platform_comm.py
 #   pytest tests/st/a2a3/ -v --platform a2a3 --device 0,1,2,3 --pto-session-timeout 600 --clone-protocol https --require-pto-isa --pto-isa-commit 016396b57e2c17093f1194e6acd89bb112b0ab24
 #   # HCCL UT + L3 examples — container MUST use --pid=host.
-#   # libhccl.so is registered via ldconfig at build time — no LD_PRELOAD needed.
+#   # libhccl.so is linked into host_runtime.so via patchelf (DT_NEEDED) — no LD_PRELOAD needed.
 #   pytest tests/ut/py/test_worker/test_dynamic_alloc_hw.py tests/ut/py/test_worker/test_platform_comm.py -m requires_hardware --platform a2a3 --device 0,1,2,3 -v
 #   pytest examples/workers/l3/ examples/a2a3/tensormap_and_ringbuffer/deferred_notify_demo examples/a2a3/tensormap_and_ringbuffer/async_notify_demo examples/a2a3/tensormap_and_ringbuffer/sdma_async_completion_demo -v --platform a2a3 --device 0,1,2,3 --pto-session-timeout 600 --clone-protocol https --require-pto-isa --pto-isa-commit 016396b57e2c17093f1194e6acd89bb112b0ab24
 
@@ -238,26 +237,16 @@ ENV ASCEND_HOME_PATH=${CANN_HOME} \
     PTO_ISA_ROOT=${PTO_ISA_DIR}
 ENV LD_LIBRARY_PATH=/usr/local/Ascend/driver/lib64/driver:${CANN_HOME}/aarch64-linux/lib64:/usr/local/Ascend/ascend-toolkit/latest/lib64:${LD_LIBRARY_PATH:-}
 
-# Register libhccl.so in the system linker cache so host_runtime.so's WEAK HCCL
-# symbols (HcclGetRootInfo, HcclCommInitRootInfo, etc.) resolve at load time.
-#
-# Why ldconfig instead of LD_PRELOAD:
-#   - LD_PRELOAD injects libhccl.so into EVERY process unconditionally, including
-#     VS Code server node → HCCL hardware init on startup → hang on attach.
-#   - ldconfig registers the library in /etc/ld.so.cache. The linker uses it only
-#     when resolving actual references from a loading binary; unrelated processes
-#     (node, python, sh) are completely unaffected.
-#   - This mirrors what the bare-metal Ascend installer does on CI hosts, which is
-#     why pypto CI never needed LD_PRELOAD.
-#
-# run-side: the container MUST be started with --pid=host for HCCL.
-# See pypto-tooling/debugging_skills/SKILL.md → "Docker runtime: HCCL".
-RUN test -f "${CANN_HOME}/aarch64-linux/lib64/libhccl.so" \
-    || (echo "ERROR: libhccl.so missing at ${CANN_HOME}/aarch64-linux/lib64/libhccl.so" \
-        && ls -la "${CANN_HOME}/aarch64-linux/lib64/" | grep -i hccl \
-        && exit 1) && \
-    echo "${CANN_HOME}/aarch64-linux/lib64" > /etc/ld.so.conf.d/cann-hccl.conf && \
-    ldconfig
+# Inject DT_NEEDED: libhccl.so into host_runtime.so using patchelf.
+# host_runtime.so has WEAK undefined refs to HcclGetRootInfo et al. with no
+# DT_NEEDED entry — ldconfig/LD_LIBRARY_PATH alone can't resolve them. patchelf
+# adds the missing entry so the linker loads libhccl.so when host_runtime.so is
+# mapped (Python import), not at process start — VS Code node is unaffected.
+# run-side: container MUST use --pid=host. See debugging_skills/SKILL.md → HCCL.
+RUN apt-get update && apt-get install -y --no-install-recommends patchelf \
+    && rm -rf /var/lib/apt/lists/* \
+    && patchelf --add-needed libhccl.so "${CANN_HOME}/aarch64-linux/lib64/host_runtime.so" \
+    && patchelf --print-needed "${CANN_HOME}/aarch64-linux/lib64/host_runtime.so" | grep hccl
 
 ENV PATH=${PTOAS_DIR}:${PTOAS_DIR}/bin:${PATH}
 ENV PYTHONPATH=${PYPTO_DIR}/runtime/python:${PYPTO_DIR}/runtime/examples/scripts
