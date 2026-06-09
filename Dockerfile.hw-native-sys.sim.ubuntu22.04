@@ -13,7 +13,7 @@
 #   docker build -t pypto3-hw-native-sys:sim -f Dockerfile.hw-native-sys.sim.ubuntu22.04 .
 #
 # BUILD (pinned commits):
-#   docker build --build-arg PYPTO_COMMIT=bda839de6be01e75852f57ef4118c42bd9ef408f --build-arg PTO_ISA_COMMIT=016396b57e2c17093f1194e6acd89bb112b0ab24 -t pypto3-hw-native-sys:sim -f Dockerfile.hw-native-sys.sim.ubuntu22.04 .
+#   docker build --build-arg PYPTO_COMMIT=a1b066df02fc938f76b3d38b85fc9fbd0e036d07 --build-arg PTO_ISA_COMMIT=016396b57e2c17093f1194e6acd89bb112b0ab24 -t pypto3-hw-native-sys:sim -f Dockerfile.hw-native-sys.sim.ubuntu22.04 .
 #
 # RUN:
 #   docker run --rm -it pypto3-hw-native-sys:sim
@@ -59,10 +59,12 @@ ARG UBUNTU_VERSION=22.04
 FROM ubuntu:${UBUNTU_VERSION}
 
 ARG INSTALL_PREFIX=/opt
-ARG PYPTO_COMMIT=bda839de6be01e75852f57ef4118c42bd9ef408f
-ARG PTO_ISA_COMMIT=016396b57e2c17093f1194e6acd89bb112b0ab24
-ARG PTOAS_VERSION=v0.43
-ARG PTOAS_SHA256=4fe979dc9759a68c3a19ed16d581249efa3133eeb4045cf42408109fb453ca90
+ARG PYPTO_COMMIT=a1b066df02fc938f76b3d38b85fc9fbd0e036d07
+# PTO_ISA_COMMIT defaults to empty — auto-derived from pypto ci.yml at build time.
+# Set via --build-arg to pin a specific commit.
+ARG PTO_ISA_COMMIT=
+ARG PTOAS_VERSION=v0.44
+ARG PTOAS_SHA256=e77c0fe5a5db26bf8f96406cc22a9da346dbe9f86017d87932c8988dd7ce5969
 
 ENV INSTALL_PREFIX=${INSTALL_PREFIX}
 ENV PYPTO_DIR=${INSTALL_PREFIX}/pypto \
@@ -122,7 +124,15 @@ RUN git clone --filter=blob:none https://github.com/hw-native-sys/pypto.git "${P
     done
 
 # Pre-clone pto-isa to avoid first-run cloning during tests.
-RUN timeout 60 git clone https://github.com/hw-native-sys/pto-isa.git "${PTO_ISA_DIR}" \
+# If PTO_ISA_COMMIT was not set via --build-arg, derive it from pypto's ci.yml.
+RUN if [ -z "${PTO_ISA_COMMIT}" ]; then \
+      PTO_ISA_COMMIT=$(grep -oP '(?<=--pto-isa-commit=)[a-f0-9]+' "${PYPTO_DIR}/.github/workflows/ci.yml" | head -1); \
+      if [ -z "${PTO_ISA_COMMIT}" ]; then \
+        echo "ERROR: could not extract --pto-isa-commit from ${PYPTO_DIR}/.github/workflows/ci.yml"; exit 1; \
+      fi; \
+      echo "Auto-derived PTO_ISA_COMMIT=${PTO_ISA_COMMIT} from ci.yml"; \
+    fi && \
+    timeout 60 git clone https://github.com/hw-native-sys/pto-isa.git "${PTO_ISA_DIR}" \
       || { rm -rf "${PTO_ISA_DIR}"; timeout 300 git clone https://gitcode.com/luohuan40/pto-isa.git "${PTO_ISA_DIR}"; } && \
     git -C "${PTO_ISA_DIR}" checkout "${PTO_ISA_COMMIT}" && \
     git -C "${PTO_ISA_DIR}" rev-parse --short HEAD

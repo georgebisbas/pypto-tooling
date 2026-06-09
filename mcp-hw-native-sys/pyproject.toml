@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hw-native-sys-mcp"
+version = "0.1.0"
+description = "MCP server for multi-repo workflows in hw-native-sys"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+  { name = "hw-native-sys" }
+]
+dependencies = [
+  "mcp>=1.8.0"
+]
+
+[project.scripts]
+hw-native-sys-mcp = "mcp_hwnative_sys.server:main"
+
+[tool.setuptools]
+packages = ["mcp_hwnative_sys"]

@@ -1,0 +1,354 @@
+{
+  "workspace_root": "../..",
+  "repositories": {
+    "PTOAS": "PTOAS",
+    "pto-isa": "pto-isa",
+    "pypto": "pypto",
+    "pypto-3.0-notes": "pypto-3.0-notes",
+    "pypto-lib": "pypto-lib",
+    "pypto-tooling": "pypto-tooling",
+    "simpler": "simpler"
+  },
+  "tasks": {
+    "default": {
+      "git_status": {
+        "command": "git status -sb",
+        "category": "git",
+        "risk": "safe-read-only",
+        "duration_hint": "<10s"
+      },
+      "last_commit": {
+        "command": "git log -1 --oneline",
+        "category": "git",
+        "risk": "safe-read-only",
+        "duration_hint": "<10s"
+      },
+      "changed_files": {
+        "command": "git --no-pager diff --name-only",
+        "category": "git",
+        "risk": "safe-read-only",
+        "duration_hint": "<10s"
+      },
+      "branch_name": {
+        "command": "git rev-parse --abbrev-ref HEAD",
+        "category": "git",
+        "risk": "safe-read-only",
+        "duration_hint": "<10s"
+      },
+      "upstream_status": {
+        "command": "git rev-list --left-right --count HEAD...@{upstream}",
+        "category": "git",
+        "risk": "safe-read-only",
+        "duration_hint": "<10s",
+        "warning": "Fails if upstream is not configured for the current branch."
+      },
+      "health_summary": {
+        "command": "echo 'Branch:' && git rev-parse --abbrev-ref HEAD && echo 'Dirty entries:' && git status --porcelain | wc -l && echo 'Last commit:' && git log -1 --pretty='%h %cr %s'",
+        "category": "diagnostics",
+        "risk": "safe-read-only",
+        "duration_hint": "<15s"
+      }
+    },
+    "PTOAS": {
+      "build_ninja": {
+        "command": "ninja -C build && ninja -C build install",
+        "category": "build",
+        "risk": "writes-build-artifacts",
+        "long_running": true,
+        "duration_hint": "2-15m",
+        "prerequisites": [
+          "Configured CMake build directory at ./build",
+          "ninja installed",
+          "LLVM/MLIR toolchain configured"
+        ]
+      },
+      "quick_install": {
+        "command": "bash ./quick_install.sh",
+        "category": "build",
+        "risk": "writes-build-artifacts",
+        "long_running": true,
+        "environment_sensitive": true,
+        "duration_hint": "5-30m",
+        "warning": "Script expects specific LLVM/MLIR and Python dependency versions."
+      },
+      "sample_matmul_codegen": {
+        "command": "cd test/samples/MatMul && python3 tmatmulk.py > tmatmulk.pto && ptoas ./tmatmulk.pto -o ./tmatmulk.cpp",
+        "category": "test",
+        "risk": "safe-read-only",
+        "duration_hint": "<2m",
+        "prerequisites": [
+          "ptoas available in PATH"
+        ]
+      },
+      "ir_smoke": {
+        "command": "ptoas test/lit/pto/empty_func.pto",
+        "category": "test",
+        "risk": "safe-read-only",
+        "duration_hint": "<1m",
+        "prerequisites": [
+          "ptoas available in PATH"
+        ]
+      },
+      "npu_validation_casegen": {
+        "command": "python3 test/npu_validation/scripts/generate_testcase.py --input test/samples/MatMul/tmatmulk.cpp --run-mode npu --soc-version Ascend910B1",
+        "category": "test",
+        "risk": "environment-sensitive",
+        "long_running": true,
+        "environment_sensitive": true,
+        "duration_hint": "3-20m",
+        "warning": "Requires Ascend toolkit and compatible hardware/runtime setup."
+      }
+    },
+    "pto-isa": {
+      "cpu_smoke": {
+        "command": "python3 tests/run_cpu.py --clean --verbose",
+        "category": "test",
+        "risk": "long-running",
+        "long_running": true,
+        "duration_hint": "3-12m",
+        "prerequisites": [
+          "Python test dependencies installed"
+        ]
+      },
+      "demo_gemm": {
+        "command": "python3 tests/run_cpu.py --demo gemm --verbose",
+        "category": "test",
+        "risk": "long-running",
+        "long_running": true,
+        "duration_hint": "2-8m"
+      },
+      "st_single_tadd": {
+        "command": "python3 tests/script/run_st.py -r sim -v a3 -t tadd -g TADDTest.case_float_64x64_64x64",
+        "category": "test",
+        "risk": "long-running",
+        "long_running": true,
+        "duration_hint": "2-10m"
+      },
+      "build_all_sim": {
+        "command": "./build.sh --run_all --a3 --sim",
+        "category": "build",
+        "risk": "writes-build-artifacts",
+        "long_running": true,
+        "duration_hint": "10-40m"
+      },
+      "build_wheel": {
+        "command": "python3 -m build --wheel",
+        "category": "package",
+        "risk": "writes-build-artifacts",
+        "duration_hint": "2-10m",
+        "prerequisites": [
+          "python build package installed"
+        ]
+      }
+    },
+    "pypto": {
+      "unit_tests_fast": {
+        "command": "pytest tests/ut -q --tb=short",
+        "category": "test",
+        "risk": "long-running",
+        "long_running": true,
+        "duration_hint": "1-5m",
+        "prerequisites": [
+          "pytest and test dependencies installed"
+        ]
+      },
+      "codegen_tests": {
+        "command": "pytest tests/st/codegen -v --codegen-only",
+        "category": "test",
+        "risk": "long-running",
+        "long_running": true,
+        "duration_hint": "2-8m"
+      },
+      "ruff_fix": {
+        "command": "ruff check --fix pypto/",
+        "category": "lint",
+        "risk": "writes-build-artifacts",
+        "duration_hint": "<2m",
+        "warning": "This updates source files when lint fixes are available."
+      },
+      "clang_tidy": {
+        "command": "python tests/lint/clang_tidy.py --jobs=$(nproc)",
+        "category": "lint",
+        "risk": "writes-build-artifacts",
+        "long_running": true,
+        "duration_hint": "3-20m",
+        "prerequisites": [
+          "clang-tidy installed"
+        ]
+      },
+      "system_tests_sim": {
+        "command": "pytest tests/st -v --platform=a2a3sim,a5sim --forked",
+        "category": "test",
+        "risk": "environment-sensitive",
+        "long_running": true,
+        "environment_sensitive": true,
+        "duration_hint": "10-45m",
+        "warning": "Large simulator suite; use targeted paths for faster feedback when possible."
+      }
+    },
+    "pypto-3.0-notes": {
+      "list_distributed_docs": {
+        "command": "find distributed -name '*.md' | sort",
+        "category": "docs",
+        "risk": "safe-read-only",
+        "duration_hint": "<30s"
+      },
+      "list_pr_plans": {
+        "command": "find pr_plans -maxdepth 1 -name '*.md' | sort",
+        "category": "docs",
+        "risk": "safe-read-only",
+        "duration_hint": "<30s"
+      },
+      "list_profiling_docs": {
+        "command": "find performance_tuning.md -name '*.md' | sort",
+        "category": "docs",
+        "risk": "safe-read-only",
+        "duration_hint": "<30s"
+      },
+      "freshness_markers": {
+        "command": "rg -n 'last_verified|NOTES_FRESHNESS' . || true",
+        "category": "docs",
+        "risk": "safe-read-only",
+        "duration_hint": "<30s"
+      },
+      "search_reduction_notes": {
+        "command": "rg -n 'treduce|allreduce|reduce' treduce.md distributed || true",
+        "category": "docs",
+        "risk": "safe-read-only",
+        "duration_hint": "<30s"
+      }
+    },
+    "pypto-lib": {
+      "tests_golden": {
+        "command": "pytest tests/golden -v",
+        "category": "test",
+        "risk": "long-running",
+        "long_running": true,
+        "duration_hint": "1-6m"
+      },
+      "example_hello_sim": {
+        "command": "python examples/beginner/hello_world.py -p a2a3sim",
+        "category": "test",
+        "risk": "long-running",
+        "long_running": true,
+        "duration_hint": "1-5m"
+      },
+      "example_softmax_sim": {
+        "command": "python examples/intermediate/softmax.py -p a5sim",
+        "category": "test",
+        "risk": "long-running",
+        "long_running": true,
+        "duration_hint": "1-6m"
+      },
+      "ruff_fix": {
+        "command": "ruff check --fix examples/ models/",
+        "category": "lint",
+        "risk": "writes-build-artifacts",
+        "duration_hint": "<2m",
+        "warning": "This updates source files when lint fixes are available."
+      },
+      "qwen_decode_hardware": {
+        "command": "python models/qwen3/14b/qwen3_14b_decode.py -p a2a3 -d 0",
+        "category": "test",
+        "risk": "environment-sensitive",
+        "long_running": true,
+        "environment_sensitive": true,
+        "duration_hint": "5-30m",
+        "warning": "Requires accessible Ascend device and matching runtime/toolchain setup."
+      }
+    },
+    "pypto-tooling": {
+      "docker_build_pypto_standalone": {
+        "command": "docker build -t pypto3-hw-native-sys:cann9 - < Dockerfile.hw-native-sys.cann9.0",
+        "category": "build",
+        "risk": "writes-build-artifacts",
+        "long_running": true,
+        "environment_sensitive": true,
+        "duration_hint": "10-40m",
+        "prerequisites": [
+          "Docker daemon available"
+        ],
+        "warning": "Large image build that can consume significant disk and network resources."
+      },
+      "docker_build_sim": {
+        "command": "docker build -t pypto3-hw-native-sys:sim -f Dockerfile.hw-native-sys.sim.ubuntu22.04 .",
+        "category": "build",
+        "risk": "writes-build-artifacts",
+        "long_running": true,
+        "environment_sensitive": true,
+        "duration_hint": "10-35m",
+        "prerequisites": [
+          "Docker daemon available"
+        ]
+      },
+      "docker_build_simpler": {
+        "command": "docker build -t simpler-cann9 - < Dockerfile.simpler.cann9.0",
+        "category": "build",
+        "risk": "writes-build-artifacts",
+        "long_running": true,
+        "environment_sensitive": true,
+        "duration_hint": "10-35m",
+        "prerequisites": [
+          "Docker daemon available"
+        ]
+      },
+      "profiling_smoke": {
+        "command": "cd profiling && bash run_campaign.sh --p-values 2 --timed-rounds 1 --warmup-rounds 0",
+        "category": "profiling",
+        "risk": "environment-sensitive",
+        "long_running": true,
+        "environment_sensitive": true,
+        "duration_hint": "2-10m",
+        "warning": "Profiling runs consume compute resources and may require hardware/runtime dependencies."
+      },
+      "profiling_full": {
+        "command": "cd profiling && bash run_campaign.sh --p-values 2,4,8 --timed-rounds 5 --warmup-rounds 1",
+        "category": "profiling",
+        "risk": "environment-sensitive",
+        "long_running": true,
+        "environment_sensitive": true,
+        "duration_hint": "10-45m",
+        "warning": "Full profiling campaign is intentionally heavy and best run off the critical development path."
+      }
+    },
+    "simpler": {
+      "test_ut_python": {
+        "command": "pytest tests/ut -m 'not requires_hardware' -v",
+        "category": "test",
+        "risk": "long-running",
+        "long_running": true,
+        "duration_hint": "1-6m"
+      },
+      "test_sim": {
+        "command": "pytest examples tests/st --platform a2a3sim",
+        "category": "test",
+        "risk": "long-running",
+        "long_running": true,
+        "duration_hint": "3-20m"
+      },
+      "build_runtimes_sim": {
+        "command": "python simpler_setup/build_runtimes.py --platforms a2a3sim a5sim",
+        "category": "build",
+        "risk": "writes-build-artifacts",
+        "long_running": true,
+        "duration_hint": "5-20m"
+      },
+      "ruff_fix": {
+        "command": "ruff check --fix simpler_setup/ python/ tests/",
+        "category": "lint",
+        "risk": "writes-build-artifacts",
+        "duration_hint": "<2m",
+        "warning": "This updates source files when lint fixes are available."
+      },
+      "test_hardware": {
+        "command": "pytest examples tests/st --platform a2a3 --device 4-7",
+        "category": "test",
+        "risk": "environment-sensitive",
+        "long_running": true,
+        "environment_sensitive": true,
+        "duration_hint": "10-45m",
+        "warning": "Requires Ascend hardware access and compatible runtime setup."
+      }
+    }
+  }
+}

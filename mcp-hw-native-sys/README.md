@@ -1,0 +1,142 @@
+# hw-native-sys MCP server
+
+A local Model Context Protocol (MCP) server for improving multi-repo workflows in this workspace.
+
+It is designed for your current layout:
+
+- `PTOAS`
+- `pto-isa`
+- `pypto`
+- `pypto-3.0-notes`
+- `pypto-lib`
+- `pypto-tooling`
+- `simpler`
+
+## What you get
+
+Tools exposed by the server:
+
+- `list_repositories`: confirm all configured repos and paths.
+- `repository_health`: branch, dirty state, ahead/behind, last commit for each repo.
+- `search_code`: ripgrep search in one repo or across all repos.
+- `list_tasks`: list named tasks for a repo.
+- `run_task`: run named tasks from config.
+- `run_command`: run ad-hoc commands in a selected repo.
+- `explain_task`: show exact command behind a named task.
+
+## Task profile
+
+This server ships with a **balanced** profile:
+
+- Includes fast daily tasks (git health, focused tests, lint checks).
+- Includes heavier tasks (docker builds, profiling, hardware-dependent tests).
+- Marks heavy tasks with warning metadata so you can decide before running.
+
+Warnings are surfaced by `list_tasks`, `explain_task`, and `run_task`.
+
+## Setup
+
+```bash
+cd /home/gb4018/workspace/hw-native-sys/pypto-tooling/mcp-hw-native-sys
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e .
+```
+
+## Quick local run
+
+```bash
+source .venv/bin/activate
+hw-native-sys-mcp
+```
+
+## VS Code MCP integration
+
+Use the Command Palette and add a new MCP server with stdio command:
+
+- command: `/home/gb4018/workspace/hw-native-sys/pypto-tooling/mcp-hw-native-sys/.venv/bin/hw-native-sys-mcp`
+- env var: `HW_NATIVE_SYS_ROOT=/home/gb4018/workspace/hw-native-sys`
+
+If you prefer config files, use equivalent command/env values in your MCP server settings.
+
+## Configure repos and tasks
+
+Edit `config/repos.json`.
+
+- `workspace_root`: base path that contains all repos.
+- `repositories`: repo name to relative path.
+- `tasks.default`: tasks available to all repos.
+- `tasks.<repo_name>`: repo-specific tasks.
+
+Task values support both formats:
+
+- Legacy string command:
+  - `"git_status": "git status -sb"`
+- Structured task object:
+  - `"git_status": {"command": "git status -sb", "category": "git", "risk": "safe-read-only"}`
+
+Supported structured fields:
+
+- `command` (required)
+- `category` (optional)
+- `risk` (optional): `safe-read-only`, `writes-build-artifacts`, `long-running`, `environment-sensitive`
+- `long_running` (optional bool)
+- `environment_sensitive` (optional bool)
+- `duration_hint` (optional)
+- `warning` (optional)
+- `prerequisites` (optional list)
+
+Destructive task patterns such as `git reset --hard` are blocked from config normalization.
+
+Example:
+
+```json
+{
+  "tasks": {
+    "default": {
+      "git_status": {
+        "command": "git status -sb",
+        "category": "git",
+        "risk": "safe-read-only"
+      }
+    },
+    "pypto": {
+      "unit_tests_fast": {
+        "command": "pytest tests/ut -q --tb=short",
+        "category": "test",
+        "risk": "long-running",
+        "long_running": true,
+        "duration_hint": "1-5m"
+      }
+    }
+  }
+}
+```
+
+## Under-5-minute quick start
+
+After registering the MCP server in VS Code, run these in Copilot Chat:
+
+1. `list_repositories`
+2. `repository_health` (set `include_clean=false` to focus on active repos)
+3. `list_tasks` for one repo you touch frequently (for example `pypto`)
+4. `run_task` with repo=`pypto` and task=`unit_tests_fast`
+5. `explain_task` for one heavy task before running it (for example `profiling_full` in `pypto-tooling`)
+
+This sequence gives a fast health snapshot, a task catalog view, and one real execution path in a few minutes.
+
+## Prerequisite notes
+
+- Simulator and CPU tests generally require Python dependencies and build toolchain only.
+- Hardware-sensitive tasks require the correct Ascend runtime/device environment.
+- Docker tasks require an available Docker daemon and can consume significant disk/network resources.
+- Profiling tasks are intentionally heavy; start with smoke variants first.
+
+## Example prompts to use in Copilot Chat
+
+- "Run `repository_health` and show only dirty repos."
+- "Search for `AllReduce` across all repos."
+- "Run `list_tasks` for `pypto-tooling` and highlight long-running tasks."
+- "Run `run_task` with repo=`pypto` and task=`unit_tests_fast`."
+- "Run `run_command` on `pto-isa`: `git --no-pager log -5 --oneline`."
+- "Explain task `profiling_full` for `pypto-tooling` and show warnings/prerequisites."
