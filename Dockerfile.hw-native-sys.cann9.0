@@ -10,8 +10,6 @@
 #                   Use 40-char SHA when pinning an older commit (GitHub fetch rejects short SHAs).
 #   PTO_ISA_COMMIT  (default: auto)     — pto-isa commit; auto-derives from ci.yml if not set
 #   PTOAS_VERSION   (default: v0.43)    — PTOAS release (must match pypto CI)
-#   VSCODE_COMMIT   (default: none)     — 40-char VS Code commit hash; preinstalls server
-#                                        (skips ~140MB download on first attach, saves ~30s)
 #
 # REQUIREMENTS:
 #   - Internet access during build (GitHub)
@@ -22,7 +20,7 @@
 #   a2a3sim needs real GCC 15+ (_Float16 in pto-isa CPU sim); the build installs
 #   gcc-15/g++-15 from ubuntu-toolchain-r/test when available.
 #
-# BUILD (defaults — includes VS Code Server 1.123.0):
+# BUILD (defaults):
 #   docker build -t pypto3-hw-native-sys:cann9 - < Dockerfile.hw-native-sys.cann9.0
 #
 # BUILD (custom prefix / pinned pto-isa / different commit):
@@ -194,22 +192,6 @@ RUN curl --fail --location --retry 3 --retry-all-errors \
     tar -xzf /tmp/ptoas-bin-aarch64.tar.gz -C "${PTOAS_DIR}" && \
     chmod +x "${PTOAS_DIR}/ptoas" "${PTOAS_DIR}/bin/ptoas" && \
     rm -f /tmp/ptoas-bin-aarch64.tar.gz
-
-# Optional: preinstall VS Code Server in the image.
-# Set --build-arg VSCODE_COMMIT=6a44c352... (from Help → About) to skip
-# the ~140MB download on first "Attach to Running Container" (~30s saved).
-# Omit to let VS Code install the server on first attach (always up to date).
-ARG VSCODE_COMMIT=6a44c352bd24569c417e530095901b649960f9f8
-RUN if [ -n "${VSCODE_COMMIT}" ]; then \
-      mkdir -p "/root/.vscode-server/bin/${VSCODE_COMMIT}" && \
-      curl -fsSL --retry 3 \
-        "https://update.code.visualstudio.com/commit:${VSCODE_COMMIT}/server-linux-arm64/stable" \
-        -o /tmp/vscode-server.tar.gz && \
-      tar -xzf /tmp/vscode-server.tar.gz \
-        -C "/root/.vscode-server/bin/${VSCODE_COMMIT}" --strip-components=1 && \
-      rm /tmp/vscode-server.tar.gz && \
-      echo "VS Code Server ${VSCODE_COMMIT} preinstalled"; \
-    fi
 
 # Python build toolchain.
 RUN python3 -m pip install --upgrade pip setuptools wheel && \
