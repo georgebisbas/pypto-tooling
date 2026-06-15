@@ -9,7 +9,7 @@
 #   PYPTO_COMMIT    (default: full SHA of github main) — must exist on github.com/hw-native-sys/pypto
 #                   Use 40-char SHA when pinning an older commit (GitHub fetch rejects short SHAs).
 #   PTO_ISA_COMMIT  (default: auto)     — pto-isa commit; auto-derives from ci.yml if not set
-#   PTOAS_VERSION   (default: v0.44)    — PTOAS release (must match pypto CI)
+#   PTOAS_VERSION   (default: v0.45)    — PTOAS release (must match pypto CI)
 #
 # REQUIREMENTS:
 #   - Internet access during build (GitHub)
