@@ -54,8 +54,9 @@ def build_chip_callable(
     pto_isa_commit: str | None = None,
 ) -> Any:
     """Compile the AIV kernel + orchestration shim via simpler's KernelCompiler."""
-    from simpler_setup.kernel_compiler import KernelCompiler, CoreCallable, ChipCallable, ArgDirection
-    from simpler_setup.runtime_compiler import ensure_pto_isa_root
+    from simpler.task_interface import ArgDirection, ChipCallable, CoreCallable
+    from simpler_setup.kernel_compiler import KernelCompiler
+    from simpler_setup.pto_isa import ensure_pto_isa_root
 
     kc = KernelCompiler(platform=platform)
     runtime = "tensormap_and_ringbuffer"
@@ -77,7 +78,7 @@ def build_chip_callable(
     )
 
     if not platform.endswith("sim"):
-        from simpler_setup.runtime_compiler import extract_text_section
+        from simpler_setup.elf_parser import extract_text_section
         kernel_bytes = extract_text_section(kernel_bytes)
 
     orch_source = str(_KERNEL_DIR / "orchestration" / "allreduce_mesh_orch.cpp")
@@ -107,12 +108,10 @@ def run_mesh_allreduce(
     devices: list[int],
     platform: str = "a2a3",
     pto_isa_commit: str | None = None,
-    timed: bool = True,
-    warmup: bool = False,
 ) -> tuple[bool, float, str]:
     """Run mesh allreduce with arbitrary count. Returns (ok, wall_s, error)."""
-    from simpler_setup.orchestrator import Worker, CallConfig
-    from simpler_setup.orchestrator import CommBufferSpec
+    from simpler.task_interface import CallConfig, CommBufferSpec
+    from simpler.worker import Worker
 
     nranks = len(devices)
     if nranks < 2 or nranks > K_MAX_SUPPORTED_RANKS:
@@ -124,10 +123,6 @@ def run_mesh_allreduce(
     signal_tail_nbytes = nranks * 4  # one int32 slot per rank
     scratch_nbytes = count * dtype_nbytes + signal_tail_nbytes
     window_size = max(scratch_nbytes, 4096)
-
-    label = "warmup" if warmup else "bench"
-    if not warmup:
-        pass  # suppress output during timed runs
 
     host_inputs = [
         torch.tensor([i + rank * 100 for i in range(count)], dtype=torch.float32).share_memory_()
@@ -149,6 +144,10 @@ def run_mesh_allreduce(
         worker.init(devices)
 
         def orch_fn(orch: Any) -> None:
+            from simpler.task_interface import TaskArgs, TensorArgType
+            from simpler_setup.torch_interop import make_tensor_arg
+
+            cfg = CallConfig()
             with orch.allocate_domain(
                 name="default",
                 workers=list(range(nranks)),
@@ -161,30 +160,39 @@ def run_mesh_allreduce(
                         nbytes=scratch_nbytes,
                     ),
                 ],
-            ) as domain:
-                scratch = domain.buffers["scratch"]
+            ) as handle:
                 for i in range(nranks):
-                    config = CallConfig()
                     chip_handle = orch.get_chip_handle(i)
-                    chip_args = chip_handle.create_task_args()
-                    chip_args.add_input(host_inputs[i])
-                    chip_args.add_output_existing(host_outputs[i])
-                    chip_args.add_inout_buffer(scratch, i)
+                    domain = handle[i]
+                    chip_args = TaskArgs()
+                    chip_args.add_tensor(make_tensor_arg(host_inputs[i]), TensorArgType.INPUT)
+                    chip_args.add_tensor(make_tensor_arg(host_outputs[i]), TensorArgType.OUTPUT_EXISTING)
+                    # Scratch is a device pointer into the HCCL window.
+                    from simpler.task_interface import ContinuousTensor, DataType
+                    chip_args.add_tensor(
+                        ContinuousTensor.make(
+                            data=domain.buffer_ptrs["scratch"],
+                            shapes=(count,),
+                            dtype=DataType.FLOAT32,
+                            child_memory=True,
+                        ),
+                        TensorArgType.INOUT,
+                    )
                     chip_args.add_scalar(count)
-                    chip_args.add_scalar(nranks)
-                    chip_args.add_scalar(chip_handle.comm_context_ptr(i))
-                    orch.submit_next_level(chip_handle, chip_args, config, worker=i)
+                    chip_args.add_scalar(domain.domain_size)
+                    chip_args.add_scalar(domain.device_ctx)
+                    orch.submit_next_level(chip_handle, chip_args, cfg, worker=i)
 
         t0 = time.perf_counter()
         worker.run(orch_fn, args=None, config=CallConfig())
         wall_s = time.perf_counter() - t0
 
-        if not timed:
-            expected = torch.tensor(expected_output(nranks, count), dtype=torch.float32)
-            for i in range(nranks):
-                max_diff = float(torch.max(torch.abs(host_outputs[i] - expected)))
-                if max_diff > 1e-3:
-                    return False, wall_s, f"chip {i}: max diff = {max_diff:.3e}"
+        # Always verify golden — correctness check is fast
+        expected = torch.tensor(expected_output(nranks, count), dtype=torch.float32)
+        for i in range(nranks):
+            max_diff = float(torch.max(torch.abs(host_outputs[i] - expected)))
+            if max_diff > 1e-3:
+                return False, wall_s, f"chip {i}: max diff = {max_diff:.3e}"
 
         return True, wall_s, ""
     finally:
@@ -205,7 +213,7 @@ def main() -> int:
 
     # Warmup
     for r in range(args.warmup_rounds):
-        ok, wall, err = run_mesh_allreduce(args.count, devices, args.platform, args.pto_isa_commit, warmup=True)
+        ok, wall, err = run_mesh_allreduce(args.count, devices, args.platform, args.pto_isa_commit)
         if not ok:
             print(f"WARMUP FAILED round {r}: {err}", file=sys.stderr)
             return 1
@@ -214,7 +222,7 @@ def main() -> int:
     # Timed
     walls: list[float] = []
     for r in range(args.timed_rounds):
-        ok, wall, err = run_mesh_allreduce(args.count, devices, args.platform, args.pto_isa_commit, timed=True)
+        ok, wall, err = run_mesh_allreduce(args.count, devices, args.platform, args.pto_isa_commit)
         if not ok:
             print(f"TIMED FAILED round {r}: {err}", file=sys.stderr)
             return 1

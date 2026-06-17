@@ -293,8 +293,9 @@ def _run_simpler_own_once(case: EquivalenceCase, extra_flags: list[str] | None =
         "--count", str(case.count),
         "--devices", _devices_dash(case.device_ids),
         "--platform", case.platform,
-        "--warmup-rounds", str(case.warmup_rounds),
-        "--timed-rounds", str(case.timed_rounds),
+        # Harness handles warmup/timed; runner does 1 invocation per call.
+        "--warmup-rounds", "0",
+        "--timed-rounds", "1",
     ] + (extra_flags or [])
     return _run_with_phases(
         cmd, str(profiling_root()),
