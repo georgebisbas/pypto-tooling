@@ -25,6 +25,12 @@ import torch
 
 from collectives.config import simpler_root
 
+# simpler's Python packages (simpler_setup, simpler) live under the simpler root.
+# simpler's own examples run from that directory; we need to add it to sys.path.
+_simpler_root_str = str(simpler_root())
+if _simpler_root_str not in sys.path:
+    sys.path.insert(0, _simpler_root_str)
+
 _HERE = Path(__file__).resolve().parent
 _KERNEL_DIR = _HERE.parent / "kernels"
 
