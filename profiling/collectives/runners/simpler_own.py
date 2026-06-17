@@ -195,7 +195,7 @@ def main() -> int:
     parser.add_argument("--timed-rounds", type=int, default=5)
     args = parser.parse_args()
 
-    devices = _parse_device_range(args.device)
+    devices = _parse_device_range(args.devices)
 
     # Warmup
     for r in range(args.warmup_rounds):
