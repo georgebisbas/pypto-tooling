@@ -56,6 +56,31 @@ class EquivalenceCase:
         return max(self.n_bytes, 4096)
 
     @property
+    def size_tier(self) -> str:
+        """Classify problem size for figure grouping and report labels."""
+        if self.count <= 256:
+            return "1 KiB (overhead)"
+        if self.count <= 4096:
+            return "16 KiB (L1)"
+        if self.count <= 65536:
+            return "64-256 KiB (UB/GM)"
+        if self.count <= 262144:
+            return "1 MiB (small tensor)"
+        return "4 MiB+ (medium tensor)"
+
+    @property
+    def bytes_per_rank_per_round(self) -> int:
+        """Bytes moved per rank per communication round.
+
+        Mesh: every rank reads the full vector from every peer → full n_bytes per round.
+        Ring: each round moves one chunk of size n_bytes / P.
+        """
+        if self.variant == "mesh":
+            return self.n_bytes
+        # ring: one chunk per round (RS and AG each do P-1 rounds)
+        return self.n_bytes // self.p
+
+    @property
     def case_id(self) -> str:
         dev = "-".join(str(d) for d in self.device_ids)
         return f"{self.variant}_p{self.p}_count{self.count}_{self.dtype}_{self.platform}_d{dev}"
@@ -64,6 +89,8 @@ class EquivalenceCase:
         d = asdict(self)
         d["n_bytes"] = self.n_bytes
         d["window_nbytes"] = self.window_nbytes
+        d["size_tier"] = self.size_tier
+        d["bytes_per_rank_per_round"] = self.bytes_per_rank_per_round
         return d
 
     def equivalence_hash(self) -> str:

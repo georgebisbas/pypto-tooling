@@ -26,20 +26,27 @@ profiling/
 
 ## Environment
 
-| Variable | Default (sibling checkout) |
-|----------|----------------------------|
-| `PYPTO_ROOT` | `../pypto` |
-| `SIMPLER_ROOT` | `../simpler` |
-| `PYPTO_NOTES_ROOT` | `../pypto-3.0-notes` |
+| Variable | Dev workspace default | Docker (cann9.0) default |
+|----------|----------------------|---------------------------|
+| `PYPTO_ROOT` | `../pypto` | `/opt/pypto` (auto-detected) |
+| `SIMPLER_ROOT` | `../simpler` | `/opt/pypto/runtime` (auto-detected) |
+| `PYPTO_NOTES_ROOT` | `../pypto-3.0-notes` | must be set or mounted |
+| `PTO_ISA_ROOT` | `../pto-isa` | `/opt/pto-isa` |
+
+Auto-detection checks sibling directories first, then falls back to Docker-standard
+paths (`/opt/pypto`, `/opt/pypto/runtime`). Set the env var to override.
 
 ## Status
 
 | Component | Status |
 |-----------|--------|
 | `equivalence.py`, `golden.py`, `artifacts.py` | ✅ Working |
-| `run_sweep.py` (validate-case, pair-mesh) | ✅ Implemented (E1) |
+| `run_sweep.py` (validate-case, pair-mesh, cross-variant) | ✅ Implemented (E1) |
+| `run_campaign.sh` (strong-scaling, cross-variant, full-sweep modes) | ✅ Implemented |
+| `cases/generate.py` (case generator for sweeps) | ✅ Implemented (72 cases generated) |
 | `summarize.py` (aggregation, paired comparison, reports) | ✅ Implemented (E2) |
 | `plot_figures.py` (total-time + phase/compile breakdown figures) | 🟡 Basic (E3) |
+| `hccl_bench.py` / `hccl_bench.cc` (HCCL baseline microbenchmark) | ✅ Implemented |
 
 Current figure outputs from a full campaign include:
 
@@ -50,35 +57,77 @@ Current figure outputs from a full campaign include:
 
 ## Quick start
 
+### Dev workspace (sibling directories)
+
 ```bash
 cd pypto-tooling/profiling
 
 # Validate a case file
-python -m collectives.run_sweep validate-case \
+PYTHONPATH=. python -m collectives.run_sweep validate-case \
   --case-file collectives/cases/mesh_p2_n256_fp32.json
 
 # Run a paired comparison (simpler + pypto, on hardware)
-python -m collectives.run_sweep pair-mesh \
+PYTHONPATH=. python -m collectives.run_sweep pair-mesh \
   --case-file collectives/cases/mesh_p2_n256_fp32.json \
-  --stacks simpler,pypto \
-  --timed-rounds 2 \
-  --warmup-rounds 0 \
+  --stacks hccl,simpler,pypto \
+  --timed-rounds 5 --warmup-rounds 2 \
   --campaign demo \
   --out results/campaigns/demo/run_001/results.json
 
-# Fast smoke test: only P=2, minimal repetitions
-bash run_campaign.sh --p-values 2 --warmup-rounds 0 --timed-rounds 2
+# Strong scaling campaign: mesh P=2,4,8
+bash run_campaign.sh --variant mesh --p-values 2,4,8 --count 65536
+
+# Cross-variant: mesh vs ring at P=4
+bash run_campaign.sh --mode cross-variant --variants mesh,ring \
+  --p-values 4 --count 65536 --stacks hccl,simpler
+
+# Generate cases (after adding new variants/sizes)
+PYTHONPATH=. python collectives/cases/generate.py --dry-run
+PYTHONPATH=. python collectives/cases/generate.py
+```
+
+### Docker (hw-native-sys.cann9.0 image)
+
+The Docker image has pypto at `/opt/pypto` and simpler at `/opt/pypto/runtime`.
+Paths are auto-detected — no env vars needed. Mount the profiling directory:
+
+```bash
+# Build the image (from pypto-tooling/)
+docker build -t pypto3-hw-native-sys:cann9 \
+  -f Dockerfile.hw-native-sys.cann9.0 .
+
+# Run with HCCL support (multi-device)
+docker run --rm -it --privileged --ipc=host --pid=host \
+  --cap-add=SYS_PTRACE --security-opt seccomp=unconfined \
+  -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi:ro \
+  -v /usr/local/Ascend/driver:/usr/local/Ascend/driver:ro \
+  -v /dev:/dev \
+  -v $(pwd):/pypto-tooling \
+  pypto3-hw-native-sys:cann9
+
+# Inside the container
+cd /pypto-tooling/profiling
+export LD_PRELOAD=${CANN_HOME}/aarch64-linux/lib64/libhccl.so
+
+# Validate paths (should auto-detect /opt/pypto and /opt/pypto/runtime)
+PYTHONPATH=. python -c "from collectives.config import pypto_root, simpler_root; print(pypto_root(), simpler_root())"
+
+# Run a campaign
+bash run_campaign.sh --variant mesh --p-values 2,4 --count 65536
 ```
 
 Manual (for debugging a single stack):
 
 ```bash
-export PYPTO_ROOT=../pypto
-export SIMPLER_ROOT=../simpler
+# Dev workspace
+export PYPTO_ROOT=../pypto SIMPLER_ROOT=../simpler
+# Docker
+export PYPTO_ROOT=/opt/pypto SIMPLER_ROOT=/opt/pypto/runtime
 
 cd "$PYPTO_ROOT"
 pytest tests/st/distributed/test_l3_allreduce.py -v --platform a2a3 -d 0-1
 
 cd "$SIMPLER_ROOT"
 python examples/workers/l3/allreduce_distributed/main.py -p a2a3 -d 0-1
+python examples/workers/l3/allreduce_ring_distributed/main.py -p a2a3 -d 0-3
 ```

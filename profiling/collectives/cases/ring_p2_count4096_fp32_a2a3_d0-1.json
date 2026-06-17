@@ -1,0 +1,25 @@
+{
+  "variant": "ring",
+  "p": 2,
+  "count": 4096,
+  "dtype": "fp32",
+  "device_ids": [
+    0,
+    1
+  ],
+  "platform": "a2a3",
+  "runtime": "tensormap_and_ringbuffer",
+  "input_formula": "rank_linear_v1",
+  "golden": "allreduce_sum_v1",
+  "orch_profile": "mesh_l3_host_domain_v1",
+  "orch_tier": "logical",
+  "block_dim": null,
+  "aicpu_thread_num": null,
+  "warmup_rounds": 3,
+  "timed_rounds": 20,
+  "measure": "execute_only",
+  "n_bytes": 16384,
+  "window_nbytes": 16384,
+  "size_tier": "16 KiB (L1)",
+  "bytes_per_rank_per_round": 8192
+}

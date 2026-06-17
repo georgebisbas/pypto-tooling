@@ -560,14 +560,61 @@ def _run_golden_only(case: EquivalenceCase) -> tuple[bool, str]:
 
 
 def _cmd_pair_mesh(args: argparse.Namespace) -> int:
-    case = EquivalenceCase.from_json_file(args.case_file)
+    return _cmd_pair_impl(args)
+
+
+def _cmd_cross_variant(args: argparse.Namespace) -> int:
+    """Run same (P, count, dtype, devices) with two different algorithms."""
+    case_a = EquivalenceCase.from_json_file(args.case_file_a)
+    case_b = EquivalenceCase.from_json_file(args.case_file_b)
+    case_a = _apply_case_overrides(case_a, args)
+    case_b = _apply_case_overrides(case_b, args)
+
+    # Assert same contract
+    mismatches: list[str] = []
+    if case_a.p != case_b.p:
+        mismatches.append(f"P: {case_a.p} vs {case_b.p}")
+    if case_a.count != case_b.count:
+        mismatches.append(f"count: {case_a.count} vs {case_b.count}")
+    if case_a.dtype != case_b.dtype:
+        mismatches.append(f"dtype: {case_a.dtype} vs {case_b.dtype}")
+    if case_a.device_ids != case_b.device_ids:
+        mismatches.append(f"device_ids: {case_a.device_ids} vs {case_b.device_ids}")
+    if mismatches:
+        print(f"ERROR: cross-variant cases must match on P/count/dtype/devices. Mismatches: {mismatches}",
+              file=sys.stderr)
+        return 1
+
+    print(f"\n{'═'*70}")
+    print(f"  CROSS-VARIANT: {case_a.variant} vs {case_b.variant}")
+    print(f"  P={case_a.p}  count={case_a.count}  dtype={case_a.dtype}  devices={case_a.device_ids}")
+    print(f"{'═'*70}")
+
+    results_a = _cmd_pair_impl(args, override_case=case_a, label_prefix=case_a.variant)
+    if results_a != 0:
+        return results_a
+
+    results_b = _cmd_pair_impl(args, override_case=case_b, label_prefix=case_b.variant)
+    return results_b
+
+
+def _cmd_pair_impl(
+    args: argparse.Namespace,
+    override_case: EquivalenceCase | None = None,
+    label_prefix: str | None = None,
+) -> int:
+    if override_case is not None:
+        case = override_case
+    else:
+        case = EquivalenceCase.from_json_file(args.case_file)
     case = _apply_case_overrides(case, args)
 
     # ── pre-flight diagnostics ──
     _print_diagnostics(case, args)
 
-    print(f"case_id={case.case_id}  eq_hash={case.equivalence_hash()}")
-    print(f"warmup={case.warmup_rounds}  timed={case.timed_rounds}  "
+    prefix = f"[{label_prefix}] " if label_prefix else ""
+    print(f"{prefix}case_id={case.case_id}  eq_hash={case.equivalence_hash()}")
+    print(f"{prefix}warmup={case.warmup_rounds}  timed={case.timed_rounds}  "
           f"profile={args.profile or 'none'}")
 
     stacks = [s.strip() for s in args.stacks.split(",")]
@@ -577,6 +624,9 @@ def _cmd_pair_mesh(args: argparse.Namespace) -> int:
         return 1
 
     out_path = Path(args.out)
+    if label_prefix:
+        # cross-variant: write per-variant results files, e.g. results_mesh.json
+        out_path = out_path.parent / f"{out_path.stem}_{label_prefix}{out_path.suffix}"
     run_dir = out_path.parent
 
     bundles: dict[str, RunArtifactBundle] = {}
@@ -679,7 +729,7 @@ def main(argv: list[str] | None = None) -> int:
     p_val = sub.add_parser("validate-case", help="Validate EquivalenceCase JSON")
     p_val.add_argument("--case-file", required=True)
 
-    p_pair = sub.add_parser("pair-mesh", help="Run same case on simpler and pypto")
+    p_pair = sub.add_parser("pair-mesh", help="Run same case on simpler, pypto, and/or hccl")
     p_pair.add_argument("--case-file", required=True)
     p_pair.add_argument("--stacks", default="hccl,simpler,pypto")
     p_pair.add_argument("--campaign", default="default")
@@ -689,11 +739,24 @@ def main(argv: list[str] | None = None) -> int:
     p_pair.add_argument("--timed-rounds", type=int, default=None, help="Override case timed rounds")
     p_pair.add_argument("--out", required=True, help="results.json path under results/campaigns/")
 
+    p_cross = sub.add_parser("cross-variant", help="Compare two algorithm variants at same (P,count,dtype,devices)")
+    p_cross.add_argument("--case-file-a", required=True, help="First variant EquivalenceCase JSON")
+    p_cross.add_argument("--case-file-b", required=True, help="Second variant EquivalenceCase JSON")
+    p_cross.add_argument("--stacks", default="hccl,simpler")
+    p_cross.add_argument("--campaign", default="cross_variant")
+    p_cross.add_argument("--profile", default="", help="Comma: l2,pmu,dep")
+    p_cross.add_argument("--count", type=int, default=None, help="Override case payload element count")
+    p_cross.add_argument("--warmup-rounds", type=int, default=None, help="Override case warmup rounds")
+    p_cross.add_argument("--timed-rounds", type=int, default=None, help="Override case timed rounds")
+    p_cross.add_argument("--out", required=True, help="results.json path under results/campaigns/")
+
     args = parser.parse_args(argv)
     if args.command == "validate-case":
         return _cmd_validate_case(args.case_file)
     if args.command == "pair-mesh":
         return _cmd_pair_mesh(args)
+    if args.command == "cross-variant":
+        return _cmd_cross_variant(args)
     return 1
 
 

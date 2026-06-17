@@ -1,0 +1,31 @@
+{
+  "variant": "mesh",
+  "p": 8,
+  "count": 65536,
+  "dtype": "fp32",
+  "device_ids": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+  ],
+  "platform": "a2a3",
+  "runtime": "tensormap_and_ringbuffer",
+  "input_formula": "rank_linear_v1",
+  "golden": "allreduce_sum_v1",
+  "orch_profile": "mesh_l3_host_domain_v1",
+  "orch_tier": "logical",
+  "block_dim": null,
+  "aicpu_thread_num": null,
+  "warmup_rounds": 2,
+  "timed_rounds": 10,
+  "measure": "execute_only",
+  "n_bytes": 262144,
+  "window_nbytes": 262144,
+  "size_tier": "64-256 KiB (UB/GM)",
+  "bytes_per_rank_per_round": 262144
+}
