@@ -238,6 +238,8 @@ def _compute_setup_s(
             setup += float(phases["compile"])
         if "init" in phases:
             setup += float(phases["init"])
+        if "domain_alloc" in phases:
+            setup += float(phases["domain_alloc"])
         return setup if setup > 0 else None
     if phases and "init" in phases:
         return float(phases["init"])

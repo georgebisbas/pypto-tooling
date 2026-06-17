@@ -33,9 +33,11 @@ import torch
 from collectives.config import simpler_root
 
 # simpler's Python packages (simpler_setup, simpler) live under the simpler root.
-_simpler_root_str = str(simpler_root())
-if _simpler_root_str not in sys.path:
-    sys.path.insert(0, _simpler_root_str)
+_simpler_root = simpler_root()
+for _path in (_simpler_root / "python", _simpler_root):
+    _path_str = str(_path)
+    if _path.is_dir() and _path_str not in sys.path:
+        sys.path.insert(0, _path_str)
 
 _HERE = Path(__file__).resolve().parent
 _KERNEL_DIR = _HERE.parent / "kernels"
@@ -143,7 +145,7 @@ class MeshAllreduceSession:
         platform: str = "a2a3",
         pto_isa_commit: str | None = None,
     ) -> None:
-        from simpler.task_interface import CallConfig
+        from simpler.task_interface import CallConfig, CommBufferSpec
         from simpler.worker import Worker
 
         self.count = count
@@ -186,6 +188,22 @@ class MeshAllreduceSession:
         self.worker.init()
         self.init_s = time.perf_counter() - t1
 
+        t2 = time.perf_counter()
+        self._domain_handle = self.worker.allocate_persistent_domain(
+            name="default",
+            workers=list(range(self.nranks)),
+            window_size=self.window_size,
+            buffers=[
+                CommBufferSpec(
+                    name="scratch",
+                    dtype="float32",
+                    count=self.count,
+                    nbytes=self.scratch_nbytes,
+                ),
+            ],
+        )
+        self.domain_alloc_s = time.perf_counter() - t2
+
         self._execute_count = 0
         self._CallConfig = CallConfig
 
@@ -214,47 +232,41 @@ class MeshAllreduceSession:
             return {
                 "compile": self.compile_s,
                 "init": self.init_s,
+                "domain_alloc": self.domain_alloc_s,
                 "execute": max(execute_s, 0.0),
             }
         return {"execute": execute_s}
 
     def _orch_fn(self, orch: Any, _args: Any, cfg: Any) -> None:
-        from simpler.task_interface import CommBufferSpec, ContinuousTensor, DataType, TaskArgs, TensorArgType
+        from simpler.task_interface import ContinuousTensor, DataType, TaskArgs, TensorArgType
         from simpler_setup.torch_interop import make_tensor_arg
 
-        with orch.allocate_domain(
-            name="default",
-            workers=list(range(self.nranks)),
-            window_size=self.window_size,
-            buffers=[
-                CommBufferSpec(
-                    name="scratch",
-                    dtype="float32",
-                    count=self.count,
-                    nbytes=self.scratch_nbytes,
+        handle = self._domain_handle
+        for i in range(self.nranks):
+            domain = handle[i]
+            chip_args = TaskArgs()
+            chip_args.add_tensor(make_tensor_arg(self.host_inputs[i]), TensorArgType.INPUT)
+            chip_args.add_tensor(make_tensor_arg(self.host_outputs[i]), TensorArgType.OUTPUT_EXISTING)
+            chip_args.add_tensor(
+                ContinuousTensor.make(
+                    data=domain.buffer_ptrs["scratch"],
+                    shapes=(self.count,),
+                    dtype=DataType.FLOAT32,
+                    child_memory=True,
                 ),
-            ],
-        ) as handle:
-            for i in range(self.nranks):
-                domain = handle[i]
-                chip_args = TaskArgs()
-                chip_args.add_tensor(make_tensor_arg(self.host_inputs[i]), TensorArgType.INPUT)
-                chip_args.add_tensor(make_tensor_arg(self.host_outputs[i]), TensorArgType.OUTPUT_EXISTING)
-                chip_args.add_tensor(
-                    ContinuousTensor.make(
-                        data=domain.buffer_ptrs["scratch"],
-                        shapes=(self.count,),
-                        dtype=DataType.FLOAT32,
-                        child_memory=True,
-                    ),
-                    TensorArgType.INOUT,
-                )
-                chip_args.add_scalar(self.count)
-                chip_args.add_scalar(domain.domain_size)
-                chip_args.add_scalar(domain.device_ctx)
-                orch.submit_next_level(self.chip_handle, chip_args, cfg, worker=i)
+                TensorArgType.INOUT,
+            )
+            chip_args.add_scalar(self.count)
+            chip_args.add_scalar(domain.domain_size)
+            chip_args.add_scalar(domain.device_ctx)
+            orch.submit_next_level(self.chip_handle, chip_args, cfg, worker=i)
 
     def close(self) -> None:
+        if getattr(self, "_domain_handle", None) is not None:
+            handle = self._domain_handle
+            self._domain_handle = None
+            if not handle.freed:
+                self.worker.release_persistent_domain(handle)
         self.worker.close()
 
 
@@ -315,7 +327,8 @@ def main() -> int:
 
     print("compiling kernels...", flush=True)
     session = MeshAllreduceSession(args.count, devices, args.platform, args.pto_isa_commit)
-    print(f"init worker (compile={session.compile_s:.2f}s init={session.init_s:.2f}s)...", flush=True)
+    print(f"init worker (compile={session.compile_s:.2f}s init={session.init_s:.2f}s "
+          f"domain={session.domain_alloc_s:.2f}s)...", flush=True)
 
     try:
         for r in range(args.warmup_rounds):
