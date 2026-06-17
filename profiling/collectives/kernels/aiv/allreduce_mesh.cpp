@@ -14,6 +14,9 @@
  * Identical algorithm to simpler allreduce_distributed/kernels/aiv/allreduce_kernel.cpp
  * but count is a runtime scalar instead of a compile-time constant.
  *
+ * Large payloads are processed in UB-sized chunks (kChunkCols). Tile buffers are
+ * assigned at 0x0 / 0x10000 / 0x20000 so each slot holds at most kChunkCols floats.
+ *
  * Phase 1 (stage-in):   input → my scratch slot (in window)
  * Phase 2 (barrier):    signal matrix + TWAIT cross-rank sync
  * Phase 3 (compute):    for peer in nranks: TLOAD(peer_scratch), TADD(acc)
@@ -44,6 +47,8 @@
 #endif
 
 static constexpr int kMaxSupportedRanks = 16;
+// UB tile slot size: TASSIGN spacing is 0x10000 bytes → 16384 float32 columns per tile.
+static constexpr int kChunkCols = 16384;
 
 template <typename T>
 AICORE inline __gm__ T *CommRemotePtr(__gm__ CommContext *ctx, __gm__ T *localPtr, int pe) {
@@ -69,8 +74,7 @@ extern "C" __aicore__ __attribute__((always_inline)) void kernel_entry(__gm__ in
     using ShapeDyn = pto::Shape<pto::DYNAMIC, pto::DYNAMIC, pto::DYNAMIC, pto::DYNAMIC, pto::DYNAMIC>;
     using StrideDyn = pto::Stride<pto::DYNAMIC, pto::DYNAMIC, pto::DYNAMIC, pto::DYNAMIC, pto::DYNAMIC>;
     using Global = pto::GlobalTensor<float, ShapeDyn, StrideDyn, pto::Layout::ND>;
-    // Dynamic tile: rows=1, cols=count (set via ColMaskInternal at runtime)
-    using TileData = pto::Tile<pto::TileType::Vec, float, 1, pto::DYNAMIC, pto::BLayout::RowMajor, -1, -1>;
+    using TileData = pto::Tile<pto::TileType::Vec, float, 1, kChunkCols, pto::BLayout::RowMajor, -1, -1>;
 
     int my_rank = static_cast<int>(commCtx->rankId);
 
@@ -79,35 +83,35 @@ extern "C" __aicore__ __attribute__((always_inline)) void kernel_entry(__gm__ in
         return;
     }
 
-    ShapeDyn shape(1, 1, 1, 1, count);
-    StrideDyn stride(count, count, count, count, 1);
-
-    TileData stageTile(1, count);
-    TileData accTile(1, count);
-    TileData recvTile(1, count);
-
-    // Set dynamic column masks so TLOAD/TSTORE use the right count
-    stageTile.ColMaskInternal = count;
-    accTile.ColMaskInternal = count;
-    recvTile.ColMaskInternal = count;
+    TileData stageTile(1, kChunkCols);
+    TileData accTile(1, kChunkCols);
+    TileData recvTile(1, kChunkCols);
 
     TASSIGN(stageTile, 0x0);
     TASSIGN(accTile, 0x10000);
     TASSIGN(recvTile, 0x20000);
 
-    Global inputG(input, shape, stride);
-    Global scratchG(scratch, shape, stride);
-    Global outputG(output, shape, stride);
+    StrideDyn fullStride(count, count, count, count, 1);
 
     // ------------------------------------------------------------------
-    // Phase 1: stage-in — copy local input into my scratch slot.
+    // Phase 1: stage-in — copy local input into my scratch slot (chunked).
     // ------------------------------------------------------------------
-    TLOAD(stageTile, inputG);
-    set_flag(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
-    wait_flag(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
-    TSTORE(scratchG, stageTile);
-    set_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
-    wait_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
+    for (int offset = 0; offset < count; offset += kChunkCols) {
+        int chunkCount = (offset + kChunkCols <= count) ? kChunkCols : (count - offset);
+
+        stageTile.ColMaskInternal = chunkCount;
+
+        ShapeDyn shape(1, 1, 1, 1, chunkCount);
+        Global inputG(input + offset, shape, fullStride);
+        Global scratchG(scratch + offset, shape, fullStride);
+
+        TLOAD(stageTile, inputG);
+        set_flag(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
+        wait_flag(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
+        TSTORE(scratchG, stageTile);
+        set_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
+        wait_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
+    }
     pipe_barrier(PIPE_ALL);
 
     // ------------------------------------------------------------------
@@ -127,31 +131,39 @@ extern "C" __aicore__ __attribute__((always_inline)) void kernel_entry(__gm__ in
     pipe_barrier(PIPE_ALL);
 
     // ------------------------------------------------------------------
-    // Phase 3: compute — sum every rank's scratch slot into accTile.
+    // Phase 3 + 4: compute and stage-out (chunked).
     // ------------------------------------------------------------------
-    TLOAD(accTile, scratchG);
-    set_flag(PIPE_MTE2, PIPE_V, EVENT_ID0);
-    wait_flag(PIPE_MTE2, PIPE_V, EVENT_ID0);
+    for (int offset = 0; offset < count; offset += kChunkCols) {
+        int chunkCount = (offset + kChunkCols <= count) ? kChunkCols : (count - offset);
 
-    for (int peer = 0; peer < nranks; ++peer) {
-        if (peer == my_rank) continue;
-        __gm__ float *remote_scratch = CommRemotePtr(commCtx, scratch, peer);
-        Global remoteG(remote_scratch, shape, stride);
-        TLOAD(recvTile, remoteG);
-        set_flag(PIPE_MTE2, PIPE_V, EVENT_ID1);
-        wait_flag(PIPE_MTE2, PIPE_V, EVENT_ID1);
-        TADD(accTile, accTile, recvTile);
-        set_flag(PIPE_V, PIPE_MTE2, EVENT_ID0);
-        wait_flag(PIPE_V, PIPE_MTE2, EVENT_ID0);
+        accTile.ColMaskInternal = chunkCount;
+        recvTile.ColMaskInternal = chunkCount;
+
+        ShapeDyn shape(1, 1, 1, 1, chunkCount);
+        Global scratchG(scratch + offset, shape, fullStride);
+        Global outputG(output + offset, shape, fullStride);
+
+        TLOAD(accTile, scratchG);
+        set_flag(PIPE_MTE2, PIPE_V, EVENT_ID0);
+        wait_flag(PIPE_MTE2, PIPE_V, EVENT_ID0);
+
+        for (int peer = 0; peer < nranks; ++peer) {
+            if (peer == my_rank) continue;
+            __gm__ float *remote_scratch = CommRemotePtr(commCtx, scratch, peer);
+            Global remoteG(remote_scratch + offset, shape, fullStride);
+            TLOAD(recvTile, remoteG);
+            set_flag(PIPE_MTE2, PIPE_V, EVENT_ID1);
+            wait_flag(PIPE_MTE2, PIPE_V, EVENT_ID1);
+            TADD(accTile, accTile, recvTile);
+            set_flag(PIPE_V, PIPE_MTE2, EVENT_ID0);
+            wait_flag(PIPE_V, PIPE_MTE2, EVENT_ID0);
+        }
+
+        set_flag(PIPE_V, PIPE_MTE3, EVENT_ID0);
+        wait_flag(PIPE_V, PIPE_MTE3, EVENT_ID0);
+        TSTORE(outputG, accTile);
+        set_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
+        wait_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
     }
-
-    // ------------------------------------------------------------------
-    // Phase 4: stage-out — reduced accumulator → local output.
-    // ------------------------------------------------------------------
-    set_flag(PIPE_V, PIPE_MTE3, EVENT_ID0);
-    wait_flag(PIPE_V, PIPE_MTE3, EVENT_ID0);
-    TSTORE(outputG, accTile);
-    set_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
-    wait_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
     pipe_barrier(PIPE_ALL);
 }

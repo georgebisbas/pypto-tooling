@@ -8,8 +8,12 @@ Usage (direct):
         --count 65536 --devices 0-3 --platform a2a3
 
 Usage (from harness):
-    from collectives.runners.simpler_own import run_mesh_allreduce
-    ok, wall_s = run_mesh_allreduce(count=65536, devices=[0,1,2,3], platform="a2a3")
+    from collectives.runners.simpler_own import MeshAllreduceSession
+    session = MeshAllreduceSession(count=65536, devices=[0,1,2,3], platform="a2a3")
+    try:
+        ok, wall_s, err = session.execute()
+    finally:
+        session.close()
 """
 
 from __future__ import annotations
@@ -26,7 +30,6 @@ import torch
 from collectives.config import simpler_root
 
 # simpler's Python packages (simpler_setup, simpler) live under the simpler root.
-# simpler's own examples run from that directory; we need to add it to sys.path.
 _simpler_root_str = str(simpler_root())
 if _simpler_root_str not in sys.path:
     sys.path.insert(0, _simpler_root_str)
@@ -35,6 +38,10 @@ _HERE = Path(__file__).resolve().parent
 _KERNEL_DIR = _HERE.parent / "kernels"
 
 K_MAX_SUPPORTED_RANKS = 16
+
+_CHIP_CALLABLE_CACHE: dict[tuple[Any, ...], Any] = {}
+_ACTIVE_SESSION: Any = None
+_ACTIVE_SESSION_KEY: tuple[Any, ...] | None = None
 
 
 def _parse_device_range(spec: str) -> list[int]:
@@ -49,7 +56,18 @@ def expected_output(nranks: int, count: int) -> list[float]:
     return [float(nranks * i + 100 * nranks * (nranks - 1) // 2) for i in range(count)]
 
 
-def build_chip_callable(
+def _kernel_cache_key(platform: str, pto_isa_commit: str | None) -> tuple[Any, ...]:
+    kernel_source = _KERNEL_DIR / "aiv" / "allreduce_mesh.cpp"
+    orch_source = _KERNEL_DIR / "orchestration" / "allreduce_mesh_orch.cpp"
+    return (
+        platform,
+        pto_isa_commit or "",
+        kernel_source.stat().st_mtime,
+        orch_source.stat().st_mtime,
+    )
+
+
+def _build_chip_callable_uncached(
     platform: str,
     pto_isa_commit: str | None = None,
 ) -> Any:
@@ -62,8 +80,6 @@ def build_chip_callable(
     runtime = "tensormap_and_ringbuffer"
     pto_isa_root = ensure_pto_isa_root(commit=pto_isa_commit, clone_protocol="https")
     include_dirs = kc.get_orchestration_include_dirs(runtime)
-
-    # Kernel needs access to platform_comm/comm_context.h under src/common/
     kernel_include_dirs = list(include_dirs) + [str(kc.project_root / "src" / "common")]
 
     kernel_source = str(_KERNEL_DIR / "aiv" / "allreduce_mesh.cpp")
@@ -103,100 +119,180 @@ def build_chip_callable(
     )
 
 
+def build_chip_callable(
+    platform: str,
+    pto_isa_commit: str | None = None,
+) -> Any:
+    """Return a cached ChipCallable for (platform, kernel sources, pto_isa_commit)."""
+    cache_key = _kernel_cache_key(platform, pto_isa_commit)
+    if cache_key not in _CHIP_CALLABLE_CACHE:
+        _CHIP_CALLABLE_CACHE[cache_key] = _build_chip_callable_uncached(platform, pto_isa_commit)
+    return _CHIP_CALLABLE_CACHE[cache_key]
+
+
+class MeshAllreduceSession:
+    """One compile + one worker init; call execute() many times before close()."""
+
+    def __init__(
+        self,
+        count: int,
+        devices: list[int],
+        platform: str = "a2a3",
+        pto_isa_commit: str | None = None,
+    ) -> None:
+        from simpler.task_interface import CallConfig
+        from simpler.worker import Worker
+
+        self.count = count
+        self.devices = devices
+        self.platform = platform
+        self.pto_isa_commit = pto_isa_commit
+        self.nranks = len(devices)
+
+        if self.nranks < 2 or self.nranks > K_MAX_SUPPORTED_RANKS:
+            raise ValueError(f"nranks must be in [2, {K_MAX_SUPPORTED_RANKS}], got {self.nranks}")
+        if count <= 0:
+            raise ValueError(f"count must be positive, got {count}")
+
+        dtype_nbytes = 4
+        signal_tail_nbytes = self.nranks * 4
+        self.scratch_nbytes = count * dtype_nbytes + signal_tail_nbytes
+        self.window_size = max(self.scratch_nbytes, 4096)
+
+        self.host_inputs = [
+            torch.tensor([i + rank * 100 for i in range(count)], dtype=torch.float32).share_memory_()
+            for rank in range(self.nranks)
+        ]
+        self.host_outputs = [torch.zeros(count, dtype=torch.float32).share_memory_() for _ in range(self.nranks)]
+        self._expected = torch.tensor(expected_output(self.nranks, count), dtype=torch.float32)
+
+        t0 = time.perf_counter()
+        chip_callable = build_chip_callable(platform, pto_isa_commit)
+        self.compile_s = time.perf_counter() - t0
+
+        t1 = time.perf_counter()
+        self.worker = Worker(
+            level=3,
+            platform=platform,
+            runtime="tensormap_and_ringbuffer",
+            device_ids=devices,
+            num_sub_workers=0,
+            pto_isa_commit=pto_isa_commit,
+        )
+        self.chip_handle = self.worker.register(chip_callable)
+        self.worker.init()
+        self.init_s = time.perf_counter() - t1
+
+        self._execute_count = 0
+        self._CallConfig = CallConfig
+
+    def execute(self, verify: bool = True) -> tuple[bool, float, str]:
+        """Run one allreduce. Returns (ok, wall_s, error)."""
+        t0 = time.perf_counter()
+        self.worker.run(self._orch_fn, args=None, config=self._CallConfig())
+        wall_s = time.perf_counter() - t0
+        self._execute_count += 1
+
+        if not verify:
+            return True, wall_s, ""
+
+        for i in range(self.nranks):
+            max_diff = float(torch.max(torch.abs(self.host_outputs[i] - self._expected)))
+            if max_diff > 1e-3:
+                return False, wall_s, f"chip {i}: max diff = {max_diff:.3e}"
+        return True, wall_s, ""
+
+    def execute_phases(self, wall_s: float) -> dict[str, float]:
+        """Phase breakdown for harness reporting."""
+        if self._execute_count == 1:
+            return {
+                "compile": self.compile_s,
+                "init": self.init_s,
+                "execute": max(wall_s, 0.0),
+            }
+        return {"execute": wall_s}
+
+    def _orch_fn(self, orch: Any, _args: Any, cfg: Any) -> None:
+        from simpler.task_interface import CommBufferSpec, ContinuousTensor, DataType, TaskArgs, TensorArgType
+        from simpler_setup.torch_interop import make_tensor_arg
+
+        with orch.allocate_domain(
+            name="default",
+            workers=list(range(self.nranks)),
+            window_size=self.window_size,
+            buffers=[
+                CommBufferSpec(
+                    name="scratch",
+                    dtype="float32",
+                    count=self.count,
+                    nbytes=self.scratch_nbytes,
+                ),
+            ],
+        ) as handle:
+            for i in range(self.nranks):
+                domain = handle[i]
+                chip_args = TaskArgs()
+                chip_args.add_tensor(make_tensor_arg(self.host_inputs[i]), TensorArgType.INPUT)
+                chip_args.add_tensor(make_tensor_arg(self.host_outputs[i]), TensorArgType.OUTPUT_EXISTING)
+                chip_args.add_tensor(
+                    ContinuousTensor.make(
+                        data=domain.buffer_ptrs["scratch"],
+                        shapes=(self.count,),
+                        dtype=DataType.FLOAT32,
+                        child_memory=True,
+                    ),
+                    TensorArgType.INOUT,
+                )
+                chip_args.add_scalar(self.count)
+                chip_args.add_scalar(domain.domain_size)
+                chip_args.add_scalar(domain.device_ctx)
+                orch.submit_next_level(self.chip_handle, chip_args, cfg, worker=i)
+
+    def close(self) -> None:
+        self.worker.close()
+
+
+def _session_key(count: int, devices: list[int], platform: str, pto_isa_commit: str | None) -> tuple[Any, ...]:
+    return (count, tuple(devices), platform, pto_isa_commit or "")
+
+
+def get_mesh_allreduce_session(
+    count: int,
+    devices: list[int],
+    platform: str = "a2a3",
+    pto_isa_commit: str | None = None,
+) -> MeshAllreduceSession:
+    """Return a reused session for repeated harness rounds (same count/devices/platform)."""
+    global _ACTIVE_SESSION, _ACTIVE_SESSION_KEY
+    key = _session_key(count, devices, platform, pto_isa_commit)
+    if _ACTIVE_SESSION is None or _ACTIVE_SESSION_KEY != key:
+        close_mesh_allreduce_session()
+        _ACTIVE_SESSION = MeshAllreduceSession(count, devices, platform, pto_isa_commit)
+        _ACTIVE_SESSION_KEY = key
+    return _ACTIVE_SESSION
+
+
+def close_mesh_allreduce_session() -> None:
+    global _ACTIVE_SESSION, _ACTIVE_SESSION_KEY
+    if _ACTIVE_SESSION is not None:
+        _ACTIVE_SESSION.close()
+        _ACTIVE_SESSION = None
+        _ACTIVE_SESSION_KEY = None
+
+
 def run_mesh_allreduce(
     count: int,
     devices: list[int],
     platform: str = "a2a3",
     pto_isa_commit: str | None = None,
+    verify: bool = True,
 ) -> tuple[bool, float, str]:
-    """Run mesh allreduce with arbitrary count. Returns (ok, wall_s, error)."""
-    from simpler.task_interface import CallConfig, CommBufferSpec
-    from simpler.worker import Worker
-
-    nranks = len(devices)
-    if nranks < 2 or nranks > K_MAX_SUPPORTED_RANKS:
-        return False, 0.0, f"nranks must be in [2, {K_MAX_SUPPORTED_RANKS}], got {nranks}"
-    if count <= 0:
-        return False, 0.0, f"count must be positive, got {count}"
-
-    dtype_nbytes = 4  # float32
-    signal_tail_nbytes = nranks * 4  # one int32 slot per rank
-    scratch_nbytes = count * dtype_nbytes + signal_tail_nbytes
-    window_size = max(scratch_nbytes, 4096)
-
-    host_inputs = [
-        torch.tensor([i + rank * 100 for i in range(count)], dtype=torch.float32).share_memory_()
-        for rank in range(nranks)
-    ]
-    host_outputs = [torch.zeros(count, dtype=torch.float32).share_memory_() for _ in range(nranks)]
-
-    chip_callable = build_chip_callable(platform, pto_isa_commit)
-
-    worker = Worker(
-        level=3,
-        block_dim=None,
-        aicpu_thread_num=None,
-        platform=platform,
-        pto_isa_commit=pto_isa_commit,
-    )
-
+    """Run mesh allreduce once (compile + init + execute). Prefer MeshAllreduceSession for loops."""
+    session = MeshAllreduceSession(count, devices, platform, pto_isa_commit)
     try:
-        worker.init(devices)
-
-        def orch_fn(orch: Any) -> None:
-            from simpler.task_interface import TaskArgs, TensorArgType
-            from simpler_setup.torch_interop import make_tensor_arg
-
-            cfg = CallConfig()
-            with orch.allocate_domain(
-                name="default",
-                workers=list(range(nranks)),
-                window_size=window_size,
-                buffers=[
-                    CommBufferSpec(
-                        name="scratch",
-                        dtype="float32",
-                        count=count,
-                        nbytes=scratch_nbytes,
-                    ),
-                ],
-            ) as handle:
-                for i in range(nranks):
-                    chip_handle = orch.get_chip_handle(i)
-                    domain = handle[i]
-                    chip_args = TaskArgs()
-                    chip_args.add_tensor(make_tensor_arg(host_inputs[i]), TensorArgType.INPUT)
-                    chip_args.add_tensor(make_tensor_arg(host_outputs[i]), TensorArgType.OUTPUT_EXISTING)
-                    # Scratch is a device pointer into the HCCL window.
-                    from simpler.task_interface import ContinuousTensor, DataType
-                    chip_args.add_tensor(
-                        ContinuousTensor.make(
-                            data=domain.buffer_ptrs["scratch"],
-                            shapes=(count,),
-                            dtype=DataType.FLOAT32,
-                            child_memory=True,
-                        ),
-                        TensorArgType.INOUT,
-                    )
-                    chip_args.add_scalar(count)
-                    chip_args.add_scalar(domain.domain_size)
-                    chip_args.add_scalar(domain.device_ctx)
-                    orch.submit_next_level(chip_handle, chip_args, cfg, worker=i)
-
-        t0 = time.perf_counter()
-        worker.run(orch_fn, args=None, config=CallConfig())
-        wall_s = time.perf_counter() - t0
-
-        # Always verify golden — correctness check is fast
-        expected = torch.tensor(expected_output(nranks, count), dtype=torch.float32)
-        for i in range(nranks):
-            max_diff = float(torch.max(torch.abs(host_outputs[i] - expected)))
-            if max_diff > 1e-3:
-                return False, wall_s, f"chip {i}: max diff = {max_diff:.3e}"
-
-        return True, wall_s, ""
+        return session.execute(verify=verify)
     finally:
-        worker.close()
+        session.close()
 
 
 def main() -> int:
@@ -211,30 +307,35 @@ def main() -> int:
 
     devices = _parse_device_range(args.devices)
 
-    # Warmup
-    for r in range(args.warmup_rounds):
-        ok, wall, err = run_mesh_allreduce(args.count, devices, args.platform, args.pto_isa_commit)
-        if not ok:
-            print(f"WARMUP FAILED round {r}: {err}", file=sys.stderr)
-            return 1
-        print(f"[warmup {r+1}/{args.warmup_rounds}] {wall:.4f}s")
+    print("compiling kernels...", flush=True)
+    session = MeshAllreduceSession(args.count, devices, args.platform, args.pto_isa_commit)
+    print(f"init worker (compile={session.compile_s:.2f}s init={session.init_s:.2f}s)...", flush=True)
 
-    # Timed
-    walls: list[float] = []
-    for r in range(args.timed_rounds):
-        ok, wall, err = run_mesh_allreduce(args.count, devices, args.platform, args.pto_isa_commit)
-        if not ok:
-            print(f"TIMED FAILED round {r}: {err}", file=sys.stderr)
-            return 1
-        walls.append(wall)
-        bw = (args.count * 4) / wall if wall > 0 else 0
-        bw_str = f"{bw/1e6:.1f} MB/s" if bw >= 1e6 else f"{bw/1e3:.1f} KB/s"
-        print(f"[timed {r+1}/{args.timed_rounds}] {wall:.4f}s  {bw_str}")
+    try:
+        for r in range(args.warmup_rounds):
+            ok, wall, err = session.execute()
+            if not ok:
+                print(f"WARMUP FAILED round {r}: {err}", file=sys.stderr)
+                return 1
+            print(f"[warmup {r+1}/{args.warmup_rounds}] {wall:.4f}s")
 
-    if walls:
-        mean = sum(walls) / len(walls)
-        print(f"mean={mean:.4f}s  n={len(walls)}  count={args.count}  P={len(devices)}")
-        print("SIMPLER_EXECUTE_DONE")
+        walls: list[float] = []
+        for r in range(args.timed_rounds):
+            ok, wall, err = session.execute()
+            if not ok:
+                print(f"TIMED FAILED round {r}: {err}", file=sys.stderr)
+                return 1
+            walls.append(wall)
+            bw = (args.count * 4) / wall if wall > 0 else 0
+            bw_str = f"{bw/1e6:.1f} MB/s" if bw >= 1e6 else f"{bw/1e3:.1f} KB/s"
+            print(f"[timed {r+1}/{args.timed_rounds}] {wall:.4f}s  {bw_str}")
+
+        if walls:
+            mean = sum(walls) / len(walls)
+            print(f"mean={mean:.4f}s  n={len(walls)}  count={args.count}  P={len(devices)}")
+            print("SIMPLER_EXECUTE_DONE")
+    finally:
+        session.close()
 
     return 0
 

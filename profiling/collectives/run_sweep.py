@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from collectives.artifacts import RunArtifactBundle
-from collectives.config import pypto_root, simpler_root, pto_isa_root
+from collectives.config import profiling_root, pypto_root, simpler_root, pto_isa_root
 from collectives.equivalence import EquivalenceCase
 from collectives.golden import fill_rank_inputs, verify_outputs
 from collectives.treduce_bench import run_treduce_once
@@ -284,24 +284,25 @@ _SIMPLER_OWN_MARKERS = [
 
 
 def _run_simpler_own_once(case: EquivalenceCase, extra_flags: list[str] | None = None) -> tuple[bool, str, list[str], float, dict[str, float]]:
-    """Run our own mesh allreduce kernel (dynamic-count, compiled from profiling/kernels/)."""
+    """Run one mesh allreduce round in-process (compile/init reused across rounds)."""
     if case.variant != "mesh":
         return False, f"simpler-own only supports mesh variant, got {case.variant}", [], 0.0, {}
-    script = profiling_root() / "collectives" / "runners" / "simpler_own.py"
-    cmd = [
-        sys.executable, str(script),
-        "--count", str(case.count),
-        "--devices", _devices_dash(case.device_ids),
-        "--platform", case.platform,
-        # Harness handles warmup/timed; runner does 1 invocation per call.
-        "--warmup-rounds", "0",
-        "--timed-rounds", "1",
-    ] + (extra_flags or [])
-    return _run_with_phases(
-        cmd, str(profiling_root()),
-        {**os.environ, "PYTHONUNBUFFERED": "1"},
-        timeout=600, markers=_SIMPLER_OWN_MARKERS,
-    )
+    del extra_flags  # reserved for future profile flags
+
+    from collectives.runners.simpler_own import get_mesh_allreduce_session
+
+    try:
+        session = get_mesh_allreduce_session(
+            case.count,
+            case.device_ids,
+            case.platform,
+            None,
+        )
+        ok, wall, err = session.execute()
+        phases = session.execute_phases(wall)
+        return ok, err, [], wall, phases
+    except Exception as exc:
+        return False, str(exc), [], 0.0, {}
 
 
 _PYPTO_MARKERS = [
@@ -755,6 +756,9 @@ def _cmd_pair_impl(
             print(f"  first error: {last_error[:200]}")
             print(f"  stopping after {stack} failure; skipping remaining stacks")
             break
+        if stack == "simpler-own":
+            from collectives.runners.simpler_own import close_mesh_allreduce_session
+            close_mesh_allreduce_session()
 
     # Write results.json
     results = {
