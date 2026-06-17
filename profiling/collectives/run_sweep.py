@@ -15,9 +15,10 @@ from pathlib import Path
 from typing import Any
 
 from collectives.artifacts import RunArtifactBundle
-from collectives.config import pypto_root, simpler_root
+from collectives.config import pypto_root, simpler_root, pto_isa_root
 from collectives.equivalence import EquivalenceCase
 from collectives.golden import fill_rank_inputs, verify_outputs
+from collectives.treduce_bench import run_treduce_once
 
 _HERE = Path(__file__).resolve().parent
 _HCCL_BENCH = _HERE / "hccl_bench.py"
@@ -180,11 +181,16 @@ ResultOk = tuple[bool, str, float]  # (ok, error, wall_s)
 # Each marker records the wall time from the *previous* marker to the line
 # containing this string.  The first marker records from process start.
 _SIMPLER_MARKERS = [
-    ("startup",  "compiling kernels"),            # t0 → "compiling kernels" (imports, arg parse)
-    ("compile",  "init worker"),                   # → kernel + orch compilation
-    ("init",     "running "),                      # → worker.init + domain alloc + TaskArgs
-    ("execute",  "all ranks matched golden"),      # → DAG execution + golden verify
-    ("fail",     "golden check FAILED"),
+    ("startup",      "compiling kernels"),        # t0 → "compiling kernels" (imports, arg parse)
+    ("compile",      "init worker"),               # → kernel + orch compilation
+    ("init",         "running "),                  # → worker.init + domain alloc + TaskArgs
+    # execute_done: fires when simpler main.py emits this marker.
+    # Today simpler doesn't emit it, so this phase stays empty
+    # and execute below captures init → golden_match (DAG + host-side verify).
+    # When simpler adds the print, execute captures DAG-only.
+    ("execute_done", "SIMPLER_EXECUTE_DONE"),      # → DAG execution complete
+    ("execute",      "all ranks matched golden"),  # → DAG + host-side golden verify
+    ("fail",         "golden check FAILED"),
 ]
 
 
@@ -245,6 +251,11 @@ def _run_with_phases(
 
 def _run_simpler_once(case: EquivalenceCase, extra_flags: list[str] | None = None) -> tuple[bool, str, list[str], float, dict[str, float]]:
     """Single simpler invocation. Returns (ok, error, lines, total_s, phases)."""
+    if case.count != 256:
+        return False, (
+            f"simpler supports only count=256 (hardcoded ALLREDUCE_COUNT); "
+            f"got {case.count}. Use 'hccl' stack for size sweeps."
+        ), [], 0.0, {}
     if case.variant == "ring":
         script = simpler_root() / "examples" / "workers" / "l3" / "allreduce_ring_distributed" / "main.py"
     else:
@@ -264,6 +275,34 @@ def _run_simpler_once(case: EquivalenceCase, extra_flags: list[str] | None = Non
     )
 
 
+_SIMPLER_OWN_MARKERS = [
+    ("startup",      "compiling kernels"),
+    ("compile",      "init worker"),
+    ("execute_done", "SIMPLER_EXECUTE_DONE"),
+    ("execute",      "SIMPLER_EXECUTE_DONE"),  # our runner prints this
+]
+
+
+def _run_simpler_own_once(case: EquivalenceCase, extra_flags: list[str] | None = None) -> tuple[bool, str, list[str], float, dict[str, float]]:
+    """Run our own mesh allreduce kernel (dynamic-count, compiled from profiling/kernels/)."""
+    if case.variant != "mesh":
+        return False, f"simpler-own only supports mesh variant, got {case.variant}", [], 0.0, {}
+    script = profiling_root() / "collectives" / "runners" / "simpler_own.py"
+    cmd = [
+        sys.executable, str(script),
+        "--count", str(case.count),
+        "--devices", _devices_dash(case.device_ids),
+        "--platform", case.platform,
+        "--warmup-rounds", str(case.warmup_rounds),
+        "--timed-rounds", str(case.timed_rounds),
+    ] + (extra_flags or [])
+    return _run_with_phases(
+        cmd, str(profiling_root()),
+        {**os.environ, "PYTHONUNBUFFERED": "1"},
+        timeout=600, markers=_SIMPLER_OWN_MARKERS,
+    )
+
+
 _PYPTO_MARKERS = [
     ("startup", "PYPTO_COMPILE_BEGIN"),
     ("compile", "PYPTO_RUNTIME_INIT_BEGIN"),
@@ -277,6 +316,13 @@ _PYPTO_MARKERS = [
 _HCCL_MARKERS = [
     ("init", "HCCL_COMM_SETUP_OK"),
     ("execute", "HCCL_ALLREDUCE_OK"),
+]
+
+_PTOREDUCE_MARKERS = [
+    ("init", "[----------]"),     # gtest test case begin
+    ("execute", "[       OK ]"),   # gtest pass
+    ("execute", "[  PASSED  ]"),   # gtest pass (alt)
+    ("fail", "[  FAILED  ]"),
 ]
 
 
@@ -305,11 +351,25 @@ def _run_hccl_once(case: EquivalenceCase, extra_flags: list[str] | None = None) 
     )
 
 
+def _run_pto_isa_once(case: EquivalenceCase, extra_flags: list[str] | None = None) -> tuple[bool, str, list[str], float, dict[str, float]]:
+    """Single pto-isa TREDUCE invocation. Returns (ok, error, lines, total_s, phases)."""
+    return run_treduce_once(case, extra_flags)
+
+
 def _run_pypto_once(case: EquivalenceCase, extra_flags: list[str] | None = None) -> tuple[bool, str, list[str], float, dict[str, float]]:
     """Single pypto pytest invocation. Returns (ok, error, lines, total_s, phases)."""
+    if case.count != 256:
+        return False, (
+            f"pypto supports only count=256 (hardcoded SIZE in test file); "
+            f"got {case.count}. Use 'hccl' stack for size sweeps."
+        ), [], 0.0, {}
     if case.variant == "ring":
         return False, "pypto ring allreduce ST not yet implemented", [], 0.0, {}
-    test_file = pypto_root() / "tests" / "st" / "distributed" / "test_l3_allreduce.py"
+    # Use the composite intrinsic test (pld.tensor.allreduce) to measure
+    # the lowering tax. The hand-rolled test_l3_allreduce.py is the reference
+    # implementation — comparing it against simpler measures "hand-coded DSL
+    # vs hand-coded C++", not the abstraction cost.
+    test_file = pypto_root() / "tests" / "st" / "distributed" / "test_l3_tensor_allreduce_intrinsic.py"
     if not test_file.is_file():
         return False, f"pypto test not found: {test_file}", [], 0.0, {}
 
@@ -321,6 +381,7 @@ def _run_pypto_once(case: EquivalenceCase, extra_flags: list[str] | None = None)
     cmd = [
         sys.executable, "-m", "pytest", str(test_file),
         "-v", "--platform", case.platform, "--device", _devices_comma(case.device_ids),
+        "-k", f"n_ranks-{case.p}",  # only run the parametrized case matching P
         "-s",
     ] + (extra_flags or [])
     return _run_with_phases(
@@ -344,8 +405,12 @@ def _run_stack_multi(
 
     if stack == "simpler":
         runner = _run_simpler_once
+    elif stack == "simpler-own":
+        runner = _run_simpler_own_once
     elif stack == "pypto":
         runner = _run_pypto_once
+    elif stack == "pto-isa":
+        runner = _run_pto_isa_once
     else:
         runner = _run_hccl_once
 
@@ -539,6 +604,12 @@ def _print_diagnostics(case: EquivalenceCase, args) -> None:
         mesh = _sr() / "examples" / "workers" / "l3" / "allreduce_distributed" / "main.py"
         print(f"  simpler mesh script: {'✅' if mesh.is_file() else '❌ not found'}")
 
+    # pto-isa treduce binary
+    if "pto-isa" in stacks:
+        from collectives.treduce_bench import _find_treduce_test_binary
+        binary = _find_treduce_test_binary()
+        print(f"  pto-isa treduce binary: {'✅' if binary else '❌ not found (build with build_st.py)'}")
+
     # Payload size
     nbytes = case.n_bytes
     if nbytes >= 1_000_000:
@@ -618,7 +689,7 @@ def _cmd_pair_impl(
           f"profile={args.profile or 'none'}")
 
     stacks = [s.strip() for s in args.stacks.split(",")]
-    unknown = [s for s in stacks if s not in ("simpler", "pypto", "hccl")]
+    unknown = [s for s in stacks if s not in ("simpler", "simpler-own", "pypto", "hccl", "pto-isa")]
     if unknown:
         print(f"ERROR: unknown stacks: {unknown}", file=sys.stderr)
         return 1
@@ -731,10 +802,11 @@ def main(argv: list[str] | None = None) -> int:
 
     p_pair = sub.add_parser("pair-mesh", help="Run same case on simpler, pypto, and/or hccl")
     p_pair.add_argument("--case-file", required=True)
-    p_pair.add_argument("--stacks", default="hccl,simpler,pypto")
+    p_pair.add_argument("--stacks", default="hccl,simpler,pypto",
+                        help="Comma-separated: hccl,simpler,simpler-own,pypto,pto-isa")
     p_pair.add_argument("--campaign", default="default")
     p_pair.add_argument("--profile", default="", help="Comma: l2,pmu,dep")
-    p_pair.add_argument("--count", type=int, default=None, help="Override case payload element count")
+    p_pair.add_argument("--count", type=int, default=None, help="Override case payload element count (HCCL only; simpler/pypto pinned to 256)")
     p_pair.add_argument("--warmup-rounds", type=int, default=None, help="Override case warmup rounds")
     p_pair.add_argument("--timed-rounds", type=int, default=None, help="Override case timed rounds")
     p_pair.add_argument("--out", required=True, help="results.json path under results/campaigns/")
@@ -742,7 +814,8 @@ def main(argv: list[str] | None = None) -> int:
     p_cross = sub.add_parser("cross-variant", help="Compare two algorithm variants at same (P,count,dtype,devices)")
     p_cross.add_argument("--case-file-a", required=True, help="First variant EquivalenceCase JSON")
     p_cross.add_argument("--case-file-b", required=True, help="Second variant EquivalenceCase JSON")
-    p_cross.add_argument("--stacks", default="hccl,simpler")
+    p_cross.add_argument("--stacks", default="hccl,simpler",
+                         help="Comma-separated: hccl,simpler,simpler-own,pypto,pto-isa")
     p_cross.add_argument("--campaign", default="cross_variant")
     p_cross.add_argument("--profile", default="", help="Comma: l2,pmu,dep")
     p_cross.add_argument("--count", type=int, default=None, help="Override case payload element count")
