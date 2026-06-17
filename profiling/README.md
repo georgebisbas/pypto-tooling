@@ -36,6 +36,34 @@ profiling/
 Auto-detection checks sibling directories first, then falls back to Docker-standard
 paths (`/opt/pypto`, `/opt/pypto/runtime`). Set the env var to override.
 
+## Benchmark methodology
+
+All stacks in `run_sweep.py` report a shared metric schema in `results.json`:
+
+| Field | Meaning |
+|-------|---------|
+| `setup_s` | One-time compile + init + comm setup (first warmup round only) |
+| `execute_s` | **Primary timed metric** — collective execution only |
+| `wall_s` | Total round wall (kept for debugging / subprocess stacks) |
+| `bw_execute_mb_s` | `n_bytes / execute_s` |
+| `per_rank_execute_s` | HCCL only: per-rank times from `HCCL_TIMED` lines |
+
+**Per-stack `execute_s` definition:**
+
+| Stack | Source |
+|-------|--------|
+| **hccl** | `max(per_rank)` from `HCCL_WARMUP` / `HCCL_TIMED` (slowest rank = collective completion) |
+| **simpler-own** | `worker.run()` wall time via in-process session reuse |
+| **simpler / pypto / pto-isa** | `phases["execute"]` when available, else subprocess wall (includes framework overhead) |
+
+HCCL and simpler-own run warmup + timed rounds in **one process** (campaign mode), so
+`setup_s` is amortized once and excluded from timed means. Subprocess stacks still pay
+full init per round; their `execute_s` is the best available phase marker until session
+wrappers land.
+
+`wall_s_mean` in aggregate rows is retained for backward compatibility but **deprecated**
+for cross-stack comparison — use `execute_s_mean` and `bw_execute_mb_s` instead.
+
 ## Status
 
 | Component | Status |

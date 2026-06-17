@@ -28,6 +28,14 @@ FIGURE_IDS = (
 )
 
 
+def _primary_time(run: dict) -> float | None:
+    """Return primary benchmark time (execute_s preferred, wall_s fallback)."""
+    val = run.get("execute_s_mean")
+    if val is None:
+        val = run.get("wall_s_mean") or run.get("wall_s")
+    return float(val) if val is not None else None
+
+
 def _load_matplotlib():
     """Return pyplot configured for headless PNG rendering, or ``None`` if unavailable."""
     try:
@@ -48,7 +56,7 @@ def _plot_paired_stack_ratio(runs: list[dict], fig_dir: Path) -> Path:
     groups: dict[str, dict[str, float | None]] = {}
     for r in runs:
         cid = r["case_id"]
-        groups.setdefault(cid, {})[r["stack"]] = r.get("wall_s_mean") or r.get("wall_s")
+        groups.setdefault(cid, {})[r["stack"]] = _primary_time(r)
 
     case_ids = sorted(groups)
     ratios = []
@@ -70,7 +78,7 @@ def _plot_paired_stack_ratio(runs: list[dict], fig_dir: Path) -> Path:
     ax.axhline(y=1.0, color="gray", linestyle="--", linewidth=0.8, label="parity (1.0×)")
     ax.set_xticks(range(len(ratios)))
     ax.set_xticklabels(labels, rotation=30, ha="right", fontsize=8)
-    ax.set_ylabel("pypto / simpler wall-time ratio")
+    ax.set_ylabel("pypto / simpler execute-time ratio")
     ax.set_title("Paired stack ratio (lower = pypto closer to simpler)")
     ax.legend()
 
@@ -97,7 +105,7 @@ def _plot_strong_scaling_t_total(runs: list[dict], fig_dir: Path) -> Path:
     for r in runs:
         stack = r["stack"]
         p = r.get("p", 0)
-        mean = r.get("wall_s_mean") or r.get("wall_s", 0)
+        mean = _primary_time(r) or 0
         if p > 0 and mean > 0:
             groups.setdefault(stack, {})[p] = mean
 
@@ -116,8 +124,8 @@ def _plot_strong_scaling_t_total(runs: list[dict], fig_dir: Path) -> Path:
                 color=colors.get(stack, None), label=stack, linewidth=1.5, markersize=8)
 
     ax.set_xlabel("Number of ranks (P)")
-    ax.set_ylabel("Wall time (s)")
-    ax.set_title("Strong scaling: total wall time vs P")
+    ax.set_ylabel("Execute time (s)")
+    ax.set_title("Strong scaling: execute time vs P")
     ax.legend()
     ax.grid(True, alpha=0.3)
     fig.tight_layout()
@@ -281,7 +289,7 @@ def _text_fallback(runs: list[dict], fig_dir: Path, fig_id: str) -> Path:
     else:
         groups: dict[str, dict[str, float | None]] = {}
         for r in runs:
-            groups.setdefault(r["case_id"], {})[r["stack"]] = r.get("wall_s")
+            groups.setdefault(r["case_id"], {})[r["stack"]] = _primary_time(r)
         for cid in sorted(groups):
             s = groups[cid].get("simpler")
             p = groups[cid].get("pypto")

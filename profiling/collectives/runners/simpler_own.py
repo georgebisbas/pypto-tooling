@@ -11,9 +11,12 @@ Usage (from harness):
     from collectives.runners.simpler_own import MeshAllreduceSession
     session = MeshAllreduceSession(count=65536, devices=[0,1,2,3], platform="a2a3")
     try:
-        ok, wall_s, err = session.execute()
+        ok, execute_s, err = session.execute()
     finally:
         session.close()
+
+``execute()`` returns ``execute_s``: time for ``worker.run()`` only (collective
+execution). Compile and worker init are reported once via ``execute_phases()``.
 """
 
 from __future__ import annotations
@@ -187,30 +190,33 @@ class MeshAllreduceSession:
         self._CallConfig = CallConfig
 
     def execute(self, verify: bool = True) -> tuple[bool, float, str]:
-        """Run one allreduce. Returns (ok, wall_s, error)."""
+        """Run one allreduce. Returns (ok, execute_s, error).
+
+        ``execute_s`` is ``worker.run()`` wall time only (collective execution).
+        """
         t0 = time.perf_counter()
         self.worker.run(self._orch_fn, args=None, config=self._CallConfig())
-        wall_s = time.perf_counter() - t0
+        execute_s = time.perf_counter() - t0
         self._execute_count += 1
 
         if not verify:
-            return True, wall_s, ""
+            return True, execute_s, ""
 
         for i in range(self.nranks):
             max_diff = float(torch.max(torch.abs(self.host_outputs[i] - self._expected)))
             if max_diff > 1e-3:
-                return False, wall_s, f"chip {i}: max diff = {max_diff:.3e}"
-        return True, wall_s, ""
+                return False, execute_s, f"chip {i}: max diff = {max_diff:.3e}"
+        return True, execute_s, ""
 
-    def execute_phases(self, wall_s: float) -> dict[str, float]:
-        """Phase breakdown for harness reporting."""
+    def execute_phases(self, execute_s: float) -> dict[str, float]:
+        """Phase breakdown for harness reporting (setup vs execute)."""
         if self._execute_count == 1:
             return {
                 "compile": self.compile_s,
                 "init": self.init_s,
-                "execute": max(wall_s, 0.0),
+                "execute": max(execute_s, 0.0),
             }
-        return {"execute": wall_s}
+        return {"execute": execute_s}
 
     def _orch_fn(self, orch: Any, _args: Any, cfg: Any) -> None:
         from simpler.task_interface import CommBufferSpec, ContinuousTensor, DataType, TaskArgs, TensorArgType
@@ -313,26 +319,26 @@ def main() -> int:
 
     try:
         for r in range(args.warmup_rounds):
-            ok, wall, err = session.execute()
+            ok, execute_s, err = session.execute()
             if not ok:
                 print(f"WARMUP FAILED round {r}: {err}", file=sys.stderr)
                 return 1
-            print(f"[warmup {r+1}/{args.warmup_rounds}] {wall:.4f}s")
+            print(f"[warmup {r+1}/{args.warmup_rounds}] execute_s={execute_s:.4f}s")
 
-        walls: list[float] = []
+        execute_times: list[float] = []
         for r in range(args.timed_rounds):
-            ok, wall, err = session.execute()
+            ok, execute_s, err = session.execute()
             if not ok:
                 print(f"TIMED FAILED round {r}: {err}", file=sys.stderr)
                 return 1
-            walls.append(wall)
-            bw = (args.count * 4) / wall if wall > 0 else 0
+            execute_times.append(execute_s)
+            bw = (args.count * 4) / execute_s if execute_s > 0 else 0
             bw_str = f"{bw/1e6:.1f} MB/s" if bw >= 1e6 else f"{bw/1e3:.1f} KB/s"
-            print(f"[timed {r+1}/{args.timed_rounds}] {wall:.4f}s  {bw_str}")
+            print(f"[timed {r+1}/{args.timed_rounds}] execute_s={execute_s:.4f}s  {bw_str}")
 
-        if walls:
-            mean = sum(walls) / len(walls)
-            print(f"mean={mean:.4f}s  n={len(walls)}  count={args.count}  P={len(devices)}")
+        if execute_times:
+            mean = sum(execute_times) / len(execute_times)
+            print(f"execute_s_mean={mean:.4f}s  n={len(execute_times)}  count={args.count}  P={len(devices)}")
             print("SIMPLER_EXECUTE_DONE")
     finally:
         session.close()

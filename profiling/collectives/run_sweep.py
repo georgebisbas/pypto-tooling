@@ -177,6 +177,110 @@ def _profile_flags(profile_spec: str) -> dict[str, list[str]]:
 
 ResultOk = tuple[bool, str, float]  # (ok, error, wall_s)
 
+_CAMPAIGN_STACKS = frozenset({"hccl", "simpler-own"})
+
+
+def _parse_hccl_per_rank(line: str) -> list[float] | None:
+    if "per_rank=" not in line:
+        return None
+    try:
+        payload = line.split("per_rank=", 1)[1].strip()
+        end = payload.index("]")
+        return [float(x) for x in json.loads(payload[: end + 1])]
+    except (ValueError, json.JSONDecodeError):
+        return None
+
+
+def _parse_hccl_setup_s(lines: list[str]) -> float | None:
+    for line in lines:
+        if "HCCL_COMM_SETUP_OK" in line and "setup_s=" in line:
+            try:
+                return float(line.split("setup_s=", 1)[1].split()[0])
+            except ValueError:
+                return None
+        if "HCCL_ALLREDUCE_OK" in line and "setup_s=" in line:
+            try:
+                return float(line.split("setup_s=", 1)[1].split()[0])
+            except ValueError:
+                return None
+    return None
+
+
+def _extract_execute_s(
+    stack: str,
+    wall: float,
+    phases: dict[str, float],
+    lines: list[str],
+    *,
+    per_rank: list[float] | None = None,
+) -> tuple[float, list[float] | None]:
+    """Return (execute_s, per_rank_execute_s) for a benchmark round."""
+    if stack == "hccl" and per_rank:
+        return max(per_rank), per_rank
+    if stack == "simpler-own":
+        return wall, None
+    if phases and "execute" in phases:
+        return float(phases["execute"]), None
+    return wall, None
+
+
+def _compute_setup_s(
+    stack: str,
+    phases: dict[str, float],
+    *,
+    hccl_setup_s: float | None = None,
+) -> float | None:
+    if stack == "hccl":
+        return hccl_setup_s
+    if stack == "simpler-own":
+        setup = 0.0
+        if "compile" in phases:
+            setup += float(phases["compile"])
+        if "init" in phases:
+            setup += float(phases["init"])
+        return setup if setup > 0 else None
+    if phases and "init" in phases:
+        return float(phases["init"])
+    return None
+
+
+def _format_bw(n_bytes: int, seconds: float) -> str:
+    bw = n_bytes / seconds if seconds > 0 else 0
+    if bw >= 1e6:
+        return f"{bw / 1e6:.1f} MB/s"
+    if bw >= 1e3:
+        return f"{bw / 1e3:.1f} KB/s"
+    return f"{bw:.1f} B/s"
+
+
+def _build_sample(
+    *,
+    round_idx: int,
+    label: str,
+    ok: bool,
+    wall_s: float,
+    execute_s: float,
+    setup_s: float | None,
+    n_bytes: int,
+    phases: dict[str, float] | None = None,
+    per_rank_execute_s: list[float] | None = None,
+) -> dict[str, Any]:
+    sample: dict[str, Any] = {
+        "round": round_idx,
+        "phase": label,
+        "wall_s": round(wall_s, 6),
+        "execute_s": round(execute_s, 6),
+        "ok": ok,
+        "bw_execute_mb_s": round((n_bytes / execute_s) / 1e6, 6) if execute_s > 0 else 0.0,
+    }
+    if setup_s is not None:
+        sample["setup_s"] = round(setup_s, 6)
+    if phases:
+        sample["phases"] = {k: round(v, 6) for k, v in phases.items()}
+    if per_rank_execute_s is not None:
+        sample["per_rank_execute_s"] = [round(v, 6) for v in per_rank_execute_s]
+    return sample
+
 # Phase markers for simpler stdout parsing.
 # Each marker records the wall time from the *previous* marker to the line
 # containing this string.  The first marker records from process start.
@@ -330,27 +434,184 @@ _PTOREDUCE_MARKERS = [
 
 def _run_hccl_once(case: EquivalenceCase, extra_flags: list[str] | None = None) -> tuple[bool, str, list[str], float, dict[str, float]]:
     """Single HCCL HcclAllReduce invocation. Returns (ok, error, lines, total_s, phases)."""
+    samples, err = _run_hccl_campaign(case, warmup_rounds=0, timed_rounds=1, extra_flags=extra_flags)
+    if not samples:
+        return False, err or "HCCL campaign produced no samples", [], 0.0, {}
+    sample = samples[-1]
+    phases = sample.get("phases", {})
+    return sample["ok"], err, [], float(sample["wall_s"]), phases
+
+
+def _run_hccl_campaign(
+    case: EquivalenceCase,
+    warmup_rounds: int,
+    timed_rounds: int,
+    extra_flags: list[str] | None = None,
+) -> tuple[list[dict[str, Any]], str]:
+    """Run warmup+timed HCCL rounds in one subprocess. Returns (samples, error)."""
     try:
         bench_bin = _ensure_hccl_bench_binary()
     except (FileNotFoundError, RuntimeError) as exc:
-        return False, str(exc), [], 0.0, {}
+        return [], str(exc)
+
     visible_devices = _devices_comma(case.device_ids)
     cmd = [
         str(bench_bin),
         "--count", str(case.count),
         "--dtype", case.dtype,
         "--devices", _devices_comma(case.device_ids),
+        "--warmup-rounds", str(warmup_rounds),
+        "--timed-rounds", str(timed_rounds),
     ] + (extra_flags or [])
-    return _run_with_phases(
-        cmd, str(_HERE),
-        {
+
+    t0 = time.perf_counter()
+    proc = subprocess.run(
+        cmd,
+        cwd=str(_HERE),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        env={
             **os.environ,
             "PYTHONUNBUFFERED": "1",
             "ASCEND_RT_VISIBLE_DEVICES": visible_devices,
             "HCCL_OP_EXPANSION_MODE": "AI_CPU",
         },
-        timeout=300, markers=_HCCL_MARKERS,
+        timeout=600,
+        check=False,
     )
+    total_wall = time.perf_counter() - t0
+    lines = proc.stdout.splitlines() if proc.stdout else []
+    if proc.returncode != 0:
+        err = f"exit={proc.returncode}"
+        if lines:
+            err += f"\n{lines[-1][:200]}"
+        return [], err
+
+    setup_s = _parse_hccl_setup_s(lines)
+    warmup_lines: list[tuple[int, list[float]]] = []
+    timed_lines: list[tuple[int, list[float]]] = []
+    for line in lines:
+        if line.startswith("HCCL_WARMUP"):
+            per_rank = _parse_hccl_per_rank(line)
+            if per_rank is None:
+                continue
+            try:
+                round_no = int(line.split("round=", 1)[1].split()[0])
+            except ValueError:
+                round_no = len(warmup_lines) + 1
+            warmup_lines.append((round_no, per_rank))
+        elif line.startswith("HCCL_TIMED"):
+            per_rank = _parse_hccl_per_rank(line)
+            if per_rank is None:
+                continue
+            try:
+                round_no = int(line.split("round=", 1)[1].split()[0])
+            except ValueError:
+                round_no = len(timed_lines) + 1
+            timed_lines.append((round_no, per_rank))
+
+    samples: list[dict[str, Any]] = []
+    round_idx = 0
+    for round_no, per_rank in warmup_lines:
+        execute_s = max(per_rank)
+        phases = {"init": setup_s or 0.0, "execute": execute_s} if round_idx == 0 and setup_s else {"execute": execute_s}
+        sample_setup = setup_s if round_idx == 0 else None
+        samples.append(_build_sample(
+            round_idx=round_idx,
+            label=f"warmup-{round_no}" if len(warmup_lines) > 1 else "warmup",
+            ok=True,
+            wall_s=total_wall if round_idx == 0 else execute_s,
+            execute_s=execute_s,
+            setup_s=sample_setup,
+            n_bytes=case.n_bytes,
+            phases=phases,
+            per_rank_execute_s=per_rank,
+        ))
+        round_idx += 1
+
+    for round_no, per_rank in timed_lines:
+        execute_s = max(per_rank)
+        samples.append(_build_sample(
+            round_idx=round_idx,
+            label=f"timed-{round_no}",
+            ok=True,
+            wall_s=execute_s,
+            execute_s=execute_s,
+            setup_s=None,
+            n_bytes=case.n_bytes,
+            phases={"execute": execute_s},
+            per_rank_execute_s=per_rank,
+        ))
+        round_idx += 1
+
+    if not samples:
+        return [], "HCCL campaign produced no HCCL_WARMUP/HCCL_TIMED lines"
+    return samples, ""
+
+
+def _run_simpler_own_campaign(
+    case: EquivalenceCase,
+    warmup_rounds: int,
+    timed_rounds: int,
+    extra_flags: list[str] | None = None,
+) -> tuple[list[dict[str, Any]], str]:
+    """Run warmup+timed simpler-own rounds in-process with one session."""
+    del extra_flags
+    if case.variant != "mesh":
+        return [], f"simpler-own only supports mesh variant, got {case.variant}"
+
+    from collectives.runners.simpler_own import close_mesh_allreduce_session, get_mesh_allreduce_session
+
+    samples: list[dict[str, Any]] = []
+    try:
+        session = get_mesh_allreduce_session(
+            case.count,
+            case.device_ids,
+            case.platform,
+            None,
+        )
+        round_idx = 0
+        for r in range(warmup_rounds):
+            ok, execute_s, err = session.execute()
+            if not ok:
+                return samples, err
+            phases = session.execute_phases(execute_s)
+            setup_s = _compute_setup_s("simpler-own", phases)
+            samples.append(_build_sample(
+                round_idx=round_idx,
+                label="warmup" if warmup_rounds == 1 else f"warmup-{r + 1}",
+                ok=True,
+                wall_s=execute_s,
+                execute_s=execute_s,
+                setup_s=setup_s if round_idx == 0 else None,
+                n_bytes=case.n_bytes,
+                phases=phases,
+            ))
+            round_idx += 1
+
+        for r in range(timed_rounds):
+            ok, execute_s, err = session.execute()
+            if not ok:
+                return samples, err
+            phases = session.execute_phases(execute_s)
+            samples.append(_build_sample(
+                round_idx=round_idx,
+                label=f"timed-{r + 1}",
+                ok=True,
+                wall_s=execute_s,
+                execute_s=execute_s,
+                setup_s=None,
+                n_bytes=case.n_bytes,
+                phases=phases,
+            ))
+            round_idx += 1
+    except Exception as exc:
+        return samples, str(exc)
+    finally:
+        close_mesh_allreduce_session()
+
+    return samples, ""
 
 
 def _run_pto_isa_once(case: EquivalenceCase, extra_flags: list[str] | None = None) -> tuple[bool, str, list[str], float, dict[str, float]]:
@@ -392,138 +653,165 @@ def _run_pypto_once(case: EquivalenceCase, extra_flags: list[str] | None = None)
     )
 
 
+def _format_execute_s(execute_s: float) -> str:
+    if execute_s < 0.001:
+        return f"{execute_s:.6f}s"
+    if execute_s < 0.01:
+        return f"{execute_s:.4f}s"
+    return f"{execute_s:.3f}s"
+
+
+def _print_sample_line(stack: str, sample: dict[str, Any], n_bytes: int, lines: list[str] | None = None) -> None:
+    execute_s = float(sample["execute_s"])
+    details: list[str] = []
+    if sample.get("setup_s") is not None:
+        details.append(f"setup={float(sample['setup_s']):.2f}s")
+    phases = sample.get("phases", {})
+    for key, value in phases.items():
+        if key not in ("fail",):
+            details.append(f"{key}={float(value):.2f}s")
+    details.append(_format_bw(n_bytes, execute_s))
+    if sample.get("per_rank_execute_s"):
+        details.append(f"ranks={sample['per_rank_execute_s']}")
+    elif stack == "hccl" and lines:
+        for line in lines:
+            per_rank = _parse_hccl_per_rank(line)
+            if per_rank is not None:
+                details.append(f"ranks={per_rank}")
+                break
+    status = "✅" if sample.get("ok") else "❌"
+    print(f"{_format_execute_s(execute_s)} {status}  [{', '.join(details)}]")
+
+
+def _aggregate_execute_stats(samples: list[dict[str, Any]]) -> tuple[float, float, float | None]:
+    timed = [s for s in samples if str(s.get("phase", "")).startswith("timed")]
+    execute_values = [float(s["execute_s"]) for s in timed if "execute_s" in s]
+    if execute_values:
+        mean = statistics.mean(execute_values)
+        stdev = statistics.stdev(execute_values) if len(execute_values) > 1 else 0.0
+    else:
+        mean, stdev = 0.0, 0.0
+    setup_s = next((float(s["setup_s"]) for s in samples if s.get("setup_s") is not None), None)
+    return mean, stdev, setup_s
+
+
 def _run_stack_multi(
     case: EquivalenceCase,
     stack: str,
     bundle: RunArtifactBundle,
     profile_spec: str,
-) -> tuple[bool, str, list[dict[str, Any]], float, float]:
-    """Run warmup + timed rounds for one stack. Returns (all_ok, error, samples, mean, stdev)."""
+) -> tuple[bool, str, list[dict[str, Any]], float, float, float, float | None]:
+    """Run warmup + timed rounds for one stack.
+
+    Returns (all_ok, error, samples, execute_s_mean, execute_s_stdev, wall_s_mean, setup_s).
+    """
     warmup = case.warmup_rounds
     timed_rounds = case.timed_rounds
     total = warmup + timed_rounds
     pf = _profile_flags(profile_spec)
     extra = pf.get(stack, [])
 
-    if stack == "simpler":
-        runner = _run_simpler_once
-    elif stack == "simpler-own":
-        runner = _run_simpler_own_once
-    elif stack == "pypto":
-        runner = _run_pypto_once
-    elif stack == "pto-isa":
-        runner = _run_pto_isa_once
-    else:
-        runner = _run_hccl_once
-
     samples: list[dict[str, Any]] = []
     all_ok = True
     last_error = ""
-    timed_walls: list[float] = []
 
-    for r in range(total):
-        label = "warmup" if r < warmup else f"timed-{r - warmup + 1}"
-        print(f"  [{stack:>7}] round {r + 1:>2}/{total} ({label:>7})...", end=" ", flush=True)
-        ok, err, lines, wall, phases = runner(case, extra)
-        status = "✅" if ok else "❌"
-
-        # Build detail line: phases + bandwidth
-        details: list[str] = []
-        if phases:
-            for k, v in phases.items():
-                if k not in ("fail",):
-                    details.append(f"{k}={v:.2f}s")
-        bw = case.n_bytes / wall if wall > 0 else 0
-        if bw >= 1e6:
-            details.append(f"{bw/1e6:.1f} MB/s")
-        elif bw >= 1e3:
-            details.append(f"{bw/1e3:.1f} KB/s")
-        else:
-            details.append(f"{bw:.1f} B/s")
-        # Per-rank HCCL timing
+    if stack in _CAMPAIGN_STACKS:
+        print(f"  [{stack:>7}] campaign ({warmup} warmup + {timed_rounds} timed)...", flush=True)
         if stack == "hccl":
-            for line in lines:
-                if "per_rank=" in line:
-                    try:
-                        ranks = json.loads(line.split("per_rank=")[1].split("]")[0] + "]")
-                        details.append(f"ranks={ranks}")
-                    except Exception:
-                        pass
-                    break
-        if stack == "pypto":
-            for line in lines:
-                if line.startswith("PYPTO_COMPILE_PROFILE "):
-                    parts = line.strip().split()
-                    compile_fields: dict[str, float | str] = {}
-                    for part in parts[1:]:
-                        if "=" not in part:
-                            continue
-                        key, value = part.split("=", 1)
-                        if key == "path":
-                            compile_fields[key] = value
-                        else:
-                            try:
-                                compile_fields[key] = float(value)
-                            except ValueError:
-                                compile_fields[key] = value
-                    if "passes" in compile_fields:
-                        details.append(f"passes={float(compile_fields['passes']):.2f}s")
-                    if "codegen" in compile_fields:
-                        details.append(f"codegen={float(compile_fields['codegen']):.2f}s")
-                    break
+            campaign_samples, err = _run_hccl_campaign(case, warmup, timed_rounds, extra)
+        else:
+            campaign_samples, err = _run_simpler_own_campaign(case, warmup, timed_rounds, extra)
 
-        detail_str = ", ".join(details)
-        print(f"{wall:.3f}s {status}  [{detail_str}]")
-        if not ok and lines:
-            for line in lines[-8:]:
-                stripped = line.rstrip()
-                if stripped:
-                    print(f"         {stripped[:120]}")
-        sample = {"round": r, "phase": label, "wall_s": round(wall, 6), "ok": ok}
-        if phases:
-            sample["phases"] = {k: round(v, 6) for k, v in phases.items()}
-        if stack == "pypto":
-            for line in lines:
-                if line.startswith("PYPTO_COMPILE_PROFILE "):
-                    parts = line.strip().split()
-                    compile_fields: dict[str, Any] = {}
-                    for part in parts[1:]:
-                        if "=" not in part:
-                            continue
-                        key, value = part.split("=", 1)
-                        if key == "path":
-                            compile_fields[key] = value
-                        else:
-                            try:
-                                compile_fields[key] = round(float(value), 6)
-                            except ValueError:
-                                compile_fields[key] = value
-                    sample["compile_profile"] = compile_fields
+        if err and not campaign_samples:
+            return False, err, [], 0.0, 0.0, 0.0, None
+
+        for sample in campaign_samples:
+            label = str(sample.get("phase", ""))
+            print(f"  [{stack:>7}] ({label:>7})...", end=" ", flush=True)
+            _print_sample_line(stack, sample, case.n_bytes)
+            if not sample.get("ok", False):
+                all_ok = False
+                last_error = err or "campaign round failed"
+                if label.startswith("timed"):
+                    print(f"  [{stack:>7}] ABORTING after timed round failure")
                     break
-        sample["bw_mb_s"] = round(bw / 1e6, 6)
-        samples.append(sample)
-        if not ok:
-            all_ok = False
+        samples = campaign_samples
+        if err and all_ok:
             last_error = err
-            if label.startswith("timed"):
-                print(f"  [{stack:>7}] ABORTING after timed round failure")
-                break
-        if r >= warmup:
-            timed_walls.append(wall)
+    else:
+        if stack == "simpler":
+            runner = _run_simpler_once
+        elif stack == "pypto":
+            runner = _run_pypto_once
+        elif stack == "pto-isa":
+            runner = _run_pto_isa_once
+        else:
+            return False, f"unknown stack: {stack}", [], 0.0, 0.0, 0.0, None
 
-    # Write individual samples
-    bundle.log_path.write_text(
-        json.dumps(samples, indent=2) + "\n", encoding="utf-8"
-    )
+        for r in range(total):
+            label = "warmup" if r < warmup else f"timed-{r - warmup + 1}"
+            print(f"  [{stack:>7}] round {r + 1:>2}/{total} ({label:>7})...", end=" ", flush=True)
+            ok, err, lines, wall, phases = runner(case, extra)
+            per_rank = None
+            for line in lines:
+                parsed = _parse_hccl_per_rank(line)
+                if parsed is not None:
+                    per_rank = parsed
+                    break
+            execute_s, per_rank_list = _extract_execute_s(stack, wall, phases, lines, per_rank=per_rank)
+            setup_s = _compute_setup_s(stack, phases) if r == 0 else None
+            sample = _build_sample(
+                round_idx=r,
+                label=label,
+                ok=ok,
+                wall_s=wall,
+                execute_s=execute_s,
+                setup_s=setup_s,
+                n_bytes=case.n_bytes,
+                phases=phases,
+                per_rank_execute_s=per_rank_list,
+            )
+            if stack == "pypto":
+                for line in lines:
+                    if line.startswith("PYPTO_COMPILE_PROFILE "):
+                        parts = line.strip().split()
+                        compile_fields: dict[str, Any] = {}
+                        for part in parts[1:]:
+                            if "=" not in part:
+                                continue
+                            key, value = part.split("=", 1)
+                            if key == "path":
+                                compile_fields[key] = value
+                            else:
+                                try:
+                                    compile_fields[key] = round(float(value), 6)
+                                except ValueError:
+                                    compile_fields[key] = value
+                        sample["compile_profile"] = compile_fields
+                        break
+            samples.append(sample)
+            _print_sample_line(stack, sample, case.n_bytes, lines)
+            if not ok and lines:
+                for line in lines[-8:]:
+                    stripped = line.rstrip()
+                    if stripped:
+                        print(f"         {stripped[:120]}")
+            if not ok:
+                all_ok = False
+                last_error = err
+                if label.startswith("timed"):
+                    print(f"  [{stack:>7}] ABORTING after timed round failure")
+                    break
+
+    bundle.log_path.write_text(json.dumps(samples, indent=2) + "\n", encoding="utf-8")
     bundle.write_timing(samples)
 
-    if timed_walls:
-        mean = statistics.mean(timed_walls)
-        stdev = statistics.stdev(timed_walls) if len(timed_walls) > 1 else 0.0
-    else:
-        mean, stdev = 0.0, 0.0
-
-    return all_ok, last_error, samples, mean, stdev
+    execute_mean, execute_stdev, setup_s = _aggregate_execute_stats(samples)
+    timed_wall = [
+        float(s["wall_s"]) for s in samples if str(s.get("phase", "")).startswith("timed")
+    ]
+    wall_mean = statistics.mean(timed_wall) if timed_wall else execute_mean
+    return all_ok, last_error, samples, execute_mean, execute_stdev, wall_mean, setup_s
 
 
 def _aggregate_timed_phase_means(samples: list[dict[str, Any]]) -> dict[str, float]:
@@ -723,13 +1011,19 @@ def _cmd_pair_impl(
         print(f"\n[phase 1] {stack} ({case.warmup_rounds} warmup + {case.timed_rounds} timed)  "
               f"payload: {payload_desc}")
 
-        all_ok, last_error, samples, mean, stdev = _run_stack_multi(
+        all_ok, last_error, samples, exec_mean, exec_stdev, wall_mean, setup_s = _run_stack_multi(
             case, stack, bundle, args.profile,
         )
 
         bundle.write_manifest(
             correctness="pass" if all_ok else "fail",
             error=last_error or None,
+        )
+
+        timed_samples = [s for s in samples if str(s.get("phase", "")).startswith("timed")]
+        bw_execute = (
+            round(statistics.mean(float(s["bw_execute_mb_s"]) for s in timed_samples), 6)
+            if timed_samples else 0.0
         )
 
         rows.append({
@@ -742,8 +1036,12 @@ def _cmd_pair_impl(
             "dtype": case.dtype,
             "platform": case.platform,
             "correctness": "pass" if all_ok else "fail",
-            "wall_s_mean": round(mean, 6),
-            "wall_s_stdev": round(stdev, 6),
+            "execute_s_mean": round(exec_mean, 6),
+            "execute_s_stdev": round(exec_stdev, 6),
+            "setup_s": round(setup_s, 6) if setup_s is not None else None,
+            "bw_execute_mb_s": bw_execute,
+            "wall_s_mean": round(wall_mean, 6),
+            "wall_s_stdev": round(exec_stdev, 6),
             "phase_means": _aggregate_timed_phase_means(samples),
             "compile_profile_means": _aggregate_timed_compile_profile_means(samples),
             "n_warmup": case.warmup_rounds,
@@ -751,14 +1049,12 @@ def _cmd_pair_impl(
             "artifact_bundle": str(bundle.bundle_dir),
         })
         status = "PASS" if all_ok else "FAIL"
-        print(f"  {stack}: mean={mean:.4f}s stdev={stdev:.4f}s {status}")
+        setup_str = f" setup={setup_s:.2f}s" if setup_s is not None else ""
+        print(f"  {stack}: execute={exec_mean:.4f}s±{exec_stdev:.4f}s{setup_str} {status}")
         if not all_ok and last_error:
             print(f"  first error: {last_error[:200]}")
             print(f"  stopping after {stack} failure; skipping remaining stacks")
             break
-        if stack == "simpler-own":
-            from collectives.runners.simpler_own import close_mesh_allreduce_session
-            close_mesh_allreduce_session()
 
     # Write results.json
     results = {
@@ -771,27 +1067,35 @@ def _cmd_pair_impl(
     out_path.write_text(json.dumps(results, indent=2) + "\n", encoding="utf-8")
     print(f"\nwrote {out_path}")
 
-    # ── summary table ──
+    # ── summary table (execute_s is primary; setup_s reported once per stack) ──
     nbytes = case.n_bytes
     print(f"\n{'═'*70}")
     print(f"  RESULTS  ({case.count}×{case.dtype}, {nbytes} B/rank, P={case.p})")
+    print(f"  Primary metric: execute_s (collective execution only)")
     print(f"{'═'*70}")
+    print(f"  {'stack':>11}  {'execute_s':>16}  {'setup_s':>10}  {'bw_execute':>14}  ok")
+    print(f"  {'-'*11}  {'-'*16}  {'-'*10}  {'-'*14}  --")
     bw_map: dict[str, float] = {}
     for r in rows:
-        mean = r["wall_s_mean"]
-        stdev = r["wall_s_stdev"]
-        bw = nbytes / mean if mean > 0 else 0
-        bw_map[r["stack"]] = bw
+        exec_mean = r["execute_s_mean"]
+        exec_stdev = r["execute_s_stdev"]
+        setup_s = r.get("setup_s")
+        bw = r.get("bw_execute_mb_s") or (nbytes / exec_mean / 1e6 if exec_mean > 0 else 0)
+        bw_map[r["stack"]] = bw * 1e6  # bytes/s for ratio math
         ok = r["correctness"]
-        bw_str = f"{bw/1e6:.1f} MB/s" if bw >= 1e6 else f"{bw/1e3:.2f} KB/s"
-        print(f"  {r['stack']:>7}: {mean:>8.4f}s ±{stdev:.4f}s  {bw_str:>14s}  {'✅' if ok == 'pass' else '❌'}")
+        setup_str = f"{setup_s:.2f}s" if setup_s is not None else "—"
+        bw_str = _format_bw(nbytes, exec_mean)
+        print(f"  {r['stack']:>11}  {exec_mean:>8.4f}s±{exec_stdev:.4f}s  {setup_str:>10}  {bw_str:>14}  "
+              f"{'✅' if ok == 'pass' else '❌'}")
 
     if "hccl" in bw_map and bw_map["hccl"] > 0:
         hccl_bw = bw_map["hccl"]
-        for stack in ("simpler", "pypto"):
-            if stack in bw_map:
-                eff = bw_map[stack] / hccl_bw * 100
-                print(f"  {stack:>7} vs HCCL: {eff:>5.1f}% of HCCL bandwidth")
+        for r in rows:
+            stack = r["stack"]
+            if stack == "hccl":
+                continue
+            eff = bw_map[stack] / hccl_bw * 100
+            print(f"  {stack:>11} vs HCCL execute bandwidth: {eff:>5.1f}%")
     print(f"{'═'*70}")
 
     all_ok = all(r["correctness"] == "pass" for r in rows)

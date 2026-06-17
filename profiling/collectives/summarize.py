@@ -35,10 +35,25 @@ def _pair_ratio(simpler_ws: float | None, pypto_ws: float | None) -> str:
     return f"{pypto_ws / simpler_ws:.2f}×"
 
 
-def _wall_str(run: dict[str, Any]) -> str:
-    """Format wall time with optional stdev."""
-    mean = run.get("wall_s_mean") or run.get("wall_s")
-    stdev = run.get("wall_s_stdev")
+def _primary_time(run: dict[str, Any]) -> float | None:
+    """Return primary benchmark time (execute_s preferred, wall_s fallback)."""
+    val = run.get("execute_s_mean")
+    if val is None:
+        val = run.get("wall_s_mean") or run.get("wall_s")
+    return float(val) if val is not None else None
+
+
+def _primary_stdev(run: dict[str, Any]) -> float | None:
+    val = run.get("execute_s_stdev")
+    if val is None:
+        val = run.get("wall_s_stdev")
+    return float(val) if val is not None else None
+
+
+def _time_str(run: dict[str, Any]) -> str:
+    """Format primary time with optional stdev."""
+    mean = _primary_time(run)
+    stdev = _primary_stdev(run)
     if mean is None:
         return "—"
     if stdev and stdev > 0:
@@ -49,6 +64,7 @@ def _wall_str(run: dict[str, Any]) -> str:
 def _print_table(groups: dict[str, dict[str, dict[str, Any]]]) -> list[dict[str, Any]]:
     """Print a comparison table and return summary rows for JSON export."""
     print(f"{'case_id':<50} {'simpler':>10} {'pypto':>10} {'ratio':>8} {'ok'}")
+    print(f"{'':50} {'(execute_s)':>10} {'(execute_s)':>10}")
     print("-" * 92)
 
     rows: list[dict[str, Any]] = []
@@ -56,18 +72,20 @@ def _print_table(groups: dict[str, dict[str, dict[str, Any]]]) -> list[dict[str,
         stacks = groups[cid]
         s = stacks.get("simpler", {})
         p = stacks.get("pypto", {})
-        sw = s.get("wall_s_mean") or s.get("wall_s")
-        pw = p.get("wall_s_mean") or p.get("wall_s")
+        sw = _primary_time(s)
+        pw = _primary_time(p)
         s_ok = s.get("correctness", "?")
         p_ok = p.get("correctness", "?")
         both_ok = "✅" if s_ok == "pass" and p_ok == "pass" else "❌"
 
-        print(f"{cid:<50} {_wall_str(s):>14} {_wall_str(p):>14} {_pair_ratio(sw, pw):>8}  {both_ok}")
+        print(f"{cid:<50} {_time_str(s):>14} {_time_str(p):>14} {_pair_ratio(sw, pw):>8}  {both_ok}")
 
         rows.append({
             "case_id": cid,
-            "simpler_wall_s": sw,
-            "pypto_wall_s": pw,
+            "simpler_execute_s": sw,
+            "pypto_execute_s": pw,
+            "simpler_wall_s": s.get("wall_s_mean") or s.get("wall_s"),
+            "pypto_wall_s": p.get("wall_s_mean") or p.get("wall_s"),
             "ratio": round(pw / sw, 4) if sw and pw and sw > 0 else None,
             "simpler_correctness": s_ok,
             "pypto_correctness": p_ok,
@@ -79,10 +97,13 @@ def _print_table(groups: dict[str, dict[str, dict[str, Any]]]) -> list[dict[str,
     return rows
 
 
-def _wall_str_fmt(row: dict[str, Any], stack: str) -> str:
-    """Format wall time for report table."""
-    key = f"{stack}_wall_s"
+def _time_str_fmt(row: dict[str, Any], stack: str) -> str:
+    """Format primary time for report table."""
+    key = f"{stack}_execute_s"
     val = row.get(key)
+    if val is None:
+        key = f"{stack}_wall_s"
+        val = row.get(key)
     if val is None:
         return "—"
     return f"{val:.4f}"
@@ -114,8 +135,8 @@ def _write_report(run_dir: Path, rows: list[dict[str, Any]], header: dict[str, A
     ]
 
     for r in rows:
-        sw = _wall_str_fmt(r, "simpler")
-        pw = _wall_str_fmt(r, "pypto")
+        sw = _time_str_fmt(r, "simpler")
+        pw = _time_str_fmt(r, "pypto")
         ratio = f"{r['ratio']:.2f}×" if r["ratio"] else "—"
         ok = "✅" if r["simpler_correctness"] == "pass" and r["pypto_correctness"] == "pass" else "❌"
         lines.append(f"| {r['case_id']} | {sw} | {pw} | {ratio} | {ok} |")
