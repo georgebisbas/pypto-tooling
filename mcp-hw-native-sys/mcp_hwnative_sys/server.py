@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import json
-import os
 import shutil
 import subprocess
 from dataclasses import dataclass
@@ -9,6 +7,13 @@ from pathlib import Path
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
+
+from mcp_hwnative_sys.knowledge import get_repository_meta, register_knowledge
+from mcp_hwnative_sys.paths import (
+    load_repos_config,
+    safe_relpath,
+    workspace_root,
+)
 
 mcp = FastMCP("hw-native-sys-workflows")
 
@@ -45,49 +50,21 @@ class TaskSpec:
     prerequisites: tuple[str, ...] = ()
 
 
-def _project_root() -> Path:
-    return Path(__file__).resolve().parents[1]
-
-
-def _default_workspace_root() -> Path:
-    return _project_root().parents[1]
-
-
-def _config_path() -> Path:
-    return _project_root() / "config" / "repos.json"
-
-
 def _load_raw_config() -> dict[str, Any]:
-    with _config_path().open("r", encoding="utf-8") as handle:
-        return json.load(handle)
-
-
-def _workspace_root(raw_config: dict[str, Any]) -> Path:
-    env_root = os.getenv("HW_NATIVE_SYS_ROOT", "").strip()
-    if env_root:
-        return Path(env_root).expanduser().resolve()
-
-    configured_root = str(raw_config.get("workspace_root", "")).strip()
-    if configured_root:
-        candidate = Path(configured_root).expanduser()
-        if not candidate.is_absolute():
-            candidate = (_project_root() / candidate).resolve()
-        return candidate.resolve()
-
-    return _default_workspace_root().resolve()
+    return load_repos_config()
 
 
 def _load_repositories() -> tuple[Path, list[RepoConfig]]:
     raw_config = _load_raw_config()
-    workspace_root = _workspace_root(raw_config)
+    root = workspace_root(raw_config)
     repo_map = raw_config.get("repositories", {})
 
     repositories: list[RepoConfig] = []
     for name, relative_path in repo_map.items():
-        repo_path = (workspace_root / str(relative_path)).resolve()
+        repo_path = (root / str(relative_path)).resolve()
         repositories.append(RepoConfig(name=name, path=repo_path))
 
-    return workspace_root, repositories
+    return root, repositories
 
 
 def _to_bool(value: Any) -> bool:
@@ -247,17 +224,17 @@ def _task_to_dict(task: TaskSpec, include_command: bool = True) -> dict[str, Any
 
 
 def _repo_index() -> tuple[Path, dict[str, RepoConfig]]:
-    workspace_root, repositories = _load_repositories()
-    return workspace_root, {repo.name: repo for repo in repositories}
+    root, repositories = _load_repositories()
+    return root, {repo.name: repo for repo in repositories}
 
 
 def _require_repo(repo_name: str) -> tuple[Path, RepoConfig]:
-    workspace_root, repo_by_name = _repo_index()
+    root, repo_by_name = _repo_index()
     repo = repo_by_name.get(repo_name)
     if repo is None:
         available = ", ".join(sorted(repo_by_name))
         raise ValueError(f"Unknown repo '{repo_name}'. Available: {available}")
-    return workspace_root, repo
+    return root, repo
 
 
 def _run_command(
@@ -281,13 +258,6 @@ def _run_shell(command: str, cwd: Path, timeout_seconds: int) -> subprocess.Comp
 
 def _git(repo_path: Path, args: list[str], timeout_seconds: int = 20) -> subprocess.CompletedProcess[str]:
     return _run_command(["git", "-C", str(repo_path), *args], timeout_seconds=timeout_seconds)
-
-
-def _safe_relpath(path: Path, root: Path) -> str:
-    try:
-        return str(path.resolve().relative_to(root.resolve()))
-    except ValueError:
-        return str(path)
 
 
 def _status_counts(status_lines: list[str]) -> tuple[int, int, int]:
@@ -321,20 +291,22 @@ def _truncate_text(text: str, max_lines: int = 200, max_chars: int = 20000) -> s
 
 @mcp.tool()
 def list_repositories() -> list[dict[str, Any]]:
-    """List configured repositories and whether they are available on disk."""
-    workspace_root, repositories = _load_repositories()
+    """List configured repositories, architecture metadata, and disk availability."""
+    root, repositories = _load_repositories()
+    meta = get_repository_meta()
 
     output: list[dict[str, Any]] = []
     for repo in repositories:
-        output.append(
-            {
-                "name": repo.name,
-                "path": _safe_relpath(repo.path, workspace_root),
-                "absolute_path": str(repo.path),
-                "exists": repo.path.exists(),
-                "is_git_repo": (repo.path / ".git").exists(),
-            }
-        )
+        row: dict[str, Any] = {
+            "name": repo.name,
+            "path": safe_relpath(repo.path, root),
+            "absolute_path": str(repo.path),
+            "exists": repo.path.exists(),
+            "is_git_repo": (repo.path / ".git").exists(),
+        }
+        if repo.name in meta:
+            row["meta"] = meta[repo.name]
+        output.append(row)
 
     return output
 
@@ -342,13 +314,13 @@ def list_repositories() -> list[dict[str, Any]]:
 @mcp.tool()
 def repository_health(include_clean: bool = True) -> dict[str, Any]:
     """Get branch, dirty state, and ahead/behind for every configured repo."""
-    workspace_root, repositories = _load_repositories()
+    root, repositories = _load_repositories()
     output: list[dict[str, Any]] = []
 
     for repo in repositories:
         row: dict[str, Any] = {
             "repo": repo.name,
-            "path": _safe_relpath(repo.path, workspace_root),
+            "path": safe_relpath(repo.path, root),
             "exists": repo.path.exists(),
         }
 
@@ -398,7 +370,7 @@ def repository_health(include_clean: bool = True) -> dict[str, Any]:
             output.append(row)
 
     return {
-        "workspace_root": str(workspace_root),
+        "workspace_root": str(root),
         "repositories": output,
     }
 
@@ -421,7 +393,7 @@ def search_code(
     if rg_path is None:
         raise RuntimeError("ripgrep (rg) is required but was not found in PATH")
 
-    workspace_root, repo_by_name = _repo_index()
+    root, repo_by_name = _repo_index()
     targets: list[RepoConfig] = []
 
     if repo == "all":
@@ -481,7 +453,7 @@ def search_code(
         matches.append(
             {
                 "repo": repo_name,
-                "file": _safe_relpath(file_path, workspace_root),
+                "file": safe_relpath(file_path, root),
                 "line": line_number,
                 "text": text,
             }
@@ -525,7 +497,7 @@ def run_task(
     if timeout_seconds < 1 or timeout_seconds > 7200:
         raise ValueError("timeout_seconds must be between 1 and 7200")
 
-    workspace_root, repo_cfg = _require_repo(repo)
+    root, repo_cfg = _require_repo(repo)
     if not repo_cfg.path.exists():
         raise ValueError(f"Repository path does not exist: {repo_cfg.path}")
 
@@ -544,7 +516,7 @@ def run_task(
 
     return {
         "repo": repo,
-        "path": _safe_relpath(repo_cfg.path, workspace_root),
+        "path": safe_relpath(repo_cfg.path, root),
         "task": task,
         "command": command,
         "task_metadata": _task_to_dict(task_spec, include_command=False),
@@ -567,14 +539,14 @@ def run_command(
     if timeout_seconds < 1 or timeout_seconds > 7200:
         raise ValueError("timeout_seconds must be between 1 and 7200")
 
-    workspace_root, repo_cfg = _require_repo(repo)
+    root, repo_cfg = _require_repo(repo)
     if not repo_cfg.path.exists():
         raise ValueError(f"Repository path does not exist: {repo_cfg.path}")
 
     proc = _run_shell(command, repo_cfg.path, timeout_seconds)
     return {
         "repo": repo,
-        "path": _safe_relpath(repo_cfg.path, workspace_root),
+        "path": safe_relpath(repo_cfg.path, root),
         "command": command,
         "exit_code": proc.returncode,
         "stdout": _truncate_text(proc.stdout),
@@ -597,6 +569,9 @@ def explain_task(task: str, repo: str = "pypto") -> dict[str, Any]:
         "task": task,
         "details": _task_to_dict(task_spec, include_command=True),
     }
+
+
+register_knowledge(mcp)
 
 
 def main() -> None:

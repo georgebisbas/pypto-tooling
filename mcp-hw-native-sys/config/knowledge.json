@@ -1,0 +1,347 @@
+{
+  "version": "1.0.0",
+  "resources": {
+    "overview/ecosystem": {
+      "path": "pypto/docs/en/dev/00-ecosystem.md",
+      "max_chars": 8000
+    },
+    "overview/pipeline": {
+      "path": "pypto/docs/en/dev/00-ecosystem.md",
+      "max_chars": 4000,
+      "section_hint": "Compilation Pipeline"
+    },
+    "pypto/ir": {
+      "path": "pypto/docs/en/dev/ir/00-overview.md",
+      "max_chars": 6000
+    },
+    "pypto/passes": {
+      "path": "pypto/docs/en/dev/passes/00-pass_manager.md",
+      "max_chars": 8000
+    },
+    "pypto/codegen": {
+      "paths": [
+        "pypto/docs/en/dev/codegen/00-pto_codegen.md",
+        "pypto/docs/en/dev/codegen/01-orchestration_codegen.md"
+      ],
+      "max_chars": 6000
+    },
+    "pypto/distributed": {
+      "path": "pypto/docs/en/dev/distributed_ops.md",
+      "max_chars": 6000
+    },
+    "ptoas/overview": {
+      "paths": [
+        "PTOAS/README_en.md",
+        "PTOAS/docs/PTO_IR_manual.md"
+      ],
+      "max_chars": 6000
+    },
+    "pto-isa/overview": {
+      "path": "pto-isa/docs/README.md",
+      "max_chars": 6000
+    },
+    "simpler/overview": {
+      "paths": [
+        "simpler/README.md",
+        "simpler/docs/chip-level-arch.md"
+      ],
+      "max_chars": 6000
+    },
+    "pypto-lib/overview": {
+      "paths": [
+        "pypto-lib/README.md",
+        "pypto-lib/docs/pypto-coding-style.md"
+      ],
+      "max_chars": 4000
+    },
+    "agent/invariants": {
+      "paths": [
+        "pypto/.claude/rules/first-principles.md",
+        "pypto/.claude/rules/pass-submit-awareness.md",
+        "pypto/.claude/rules/cross-layer-sync.md",
+        "pypto/.claude/rules/error-checking.md"
+      ],
+      "max_chars": 8000
+    },
+    "flows/compile_to_device": {
+      "path": "pypto-lib/docs/compile-runtime-workflow.md",
+      "max_chars": 8000
+    },
+    "flows/matmul_demo": {
+      "path": "pypto-3.0-notes/matmul_demo.md",
+      "max_chars": 8000,
+      "tier": "enriched"
+    },
+    "flows/distributed_allreduce": {
+      "paths": [
+        "pypto-3.0-notes/simpler_distributed_allreduce.md",
+        "pypto/docs/en/dev/distributed_ops.md"
+      ],
+      "max_chars": 8000
+    },
+    "flows/dependency_triangle": {
+      "path": "pypto-3.0-notes/dependency_triangle.md",
+      "max_chars": 8000,
+      "tier": "enriched"
+    },
+    "flows/performance": {
+      "paths": [
+        "pypto-3.0-notes/performance_tuning.md/SKILL.md",
+        "pypto/docs/en/dev/01-compile-profiling.md",
+        "pypto/docs/en/dev/03-runtime-dfx.md"
+      ],
+      "max_chars": 8000
+    }
+  },
+  "notes_topics": {
+    "pass_infrastructure": "pypto-3.0-notes/pass_infrastructure.md",
+    "codegen_infrastructure": "pypto-3.0-notes/codegen_infrastructure.md",
+    "dependency_triangle": "pypto-3.0-notes/dependency_triangle.md",
+    "notes_simpler": "pypto-3.0-notes/notes_simpler.md",
+    "kernel_orchestration": "pypto-3.0-notes/kernel_orchestration.md",
+    "stack_availability": "pypto-3.0-notes/allreduce_benchmark_variants/stack_availability.md"
+  },
+  "routes": {
+    "stack_overview": {
+      "description": "Any new session — multi-repo roles and compilation pipeline",
+      "read_first_canonical": [
+        "pypto/docs/en/dev/00-ecosystem.md"
+      ],
+      "read_first_enriched": [
+        "pypto-3.0-notes/pypto3.0-intro.md"
+      ],
+      "rules": [],
+      "entrypoint_areas": ["pypto"],
+      "verify_tasks": [],
+      "resources": ["overview/ecosystem", "overview/pipeline"]
+    },
+    "ir_change": {
+      "description": "New IR nodes, types, or structural changes",
+      "read_first_canonical": [
+        "pypto/docs/en/dev/ir/00-overview.md",
+        "pypto/docs/en/dev/ir/01-hierarchy.md",
+        "pypto/docs/en/dev/ir/02-types.md"
+      ],
+      "read_first_enriched": [],
+      "rules": [
+        "pypto/.claude/rules/ir-kind-traits.md",
+        "pypto/.claude/rules/cross-layer-sync.md"
+      ],
+      "entrypoint_areas": ["pypto:ir"],
+      "verify_tasks": ["pypto:unit_tests_fast"],
+      "resources": ["pypto/ir", "agent/invariants"]
+    },
+    "pass_change": {
+      "description": "Pass pipeline additions or modifications",
+      "read_first_canonical": [
+        "pypto/docs/en/dev/passes/00-pass_manager.md"
+      ],
+      "read_first_enriched": [
+        "pypto-3.0-notes/pass_infrastructure.md"
+      ],
+      "rules": [
+        "pypto/.claude/rules/pass-submit-awareness.md",
+        "pypto/.claude/rules/pass-context-config.md",
+        "pypto/.claude/rules/pass-complexity.md",
+        "pypto/.claude/rules/first-principles.md"
+      ],
+      "entrypoint_areas": ["pypto:passes"],
+      "verify_tasks": ["pypto:unit_tests_fast"],
+      "resources": ["pypto/passes", "agent/invariants"]
+    },
+    "codegen_pto": {
+      "description": "InCore codegen to .pto MLIR (AICore path)",
+      "read_first_canonical": [
+        "pypto/docs/en/dev/codegen/00-pto_codegen.md"
+      ],
+      "read_first_enriched": [
+        "pypto-3.0-notes/codegen_infrastructure.md"
+      ],
+      "rules": [
+        "pypto/.claude/rules/cross-layer-sync.md"
+      ],
+      "entrypoint_areas": ["pypto:codegen_pto"],
+      "verify_tasks": ["pypto:codegen_tests"],
+      "resources": ["pypto/codegen"]
+    },
+    "codegen_orch": {
+      "description": "Orchestration codegen to PTO2 runtime C++ (AICPU path)",
+      "read_first_canonical": [
+        "pypto/docs/en/dev/codegen/01-orchestration_codegen.md"
+      ],
+      "read_first_enriched": [
+        "pypto-3.0-notes/kernel_orchestration.md"
+      ],
+      "rules": [
+        "pypto/.claude/rules/cross-layer-sync.md"
+      ],
+      "entrypoint_areas": ["pypto:codegen_orch"],
+      "verify_tasks": ["pypto:codegen_tests"],
+      "resources": ["pypto/codegen", "simpler/overview"]
+    },
+    "distributed": {
+      "description": "N6 distributed ops, collectives, multi-rank",
+      "read_first_canonical": [
+        "pypto/docs/en/dev/distributed_ops.md",
+        "pypto/docs/en/dev/passes/37-materialize_comm_domain_scopes.md",
+        "pypto/docs/en/dev/passes/38-lower_host_tensor_collectives.md"
+      ],
+      "read_first_enriched": [
+        "pypto-3.0-notes/abstractions/composite_collectives.md"
+      ],
+      "rules": [
+        "pypto/.claude/rules/first-principles.md"
+      ],
+      "entrypoint_areas": ["pypto:distributed_ops", "pypto:codegen_dist"],
+      "verify_tasks": ["pypto:system_tests_sim"],
+      "resources": ["pypto/distributed", "flows/distributed_allreduce"]
+    },
+    "distributed_collectives": {
+      "description": "Composite collectives, ring vs mesh algorithms",
+      "read_first_canonical": [
+        "pypto/docs/en/dev/distributed_ops.md"
+      ],
+      "read_first_enriched": [
+        "pypto-3.0-notes/abstractions/composite_collectives.md",
+        "pypto-3.0-notes/abstractions/allreduce.md",
+        "pypto-3.0-notes/allreduce_benchmark_variants/stack_availability.md"
+      ],
+      "rules": [],
+      "entrypoint_areas": ["pypto:distributed_ops", "pypto:tests_st_distributed"],
+      "verify_tasks": ["pypto:system_tests_sim"],
+      "resources": ["flows/distributed_allreduce"]
+    },
+    "distributed_codegen": {
+      "description": "Distributed codegen backend",
+      "read_first_canonical": [
+        "pypto/docs/en/dev/distributed_ops.md"
+      ],
+      "read_first_enriched": [
+        "pypto-3.0-notes/codegen_infrastructure.md",
+        "pypto-3.0-notes/pypto-3.0-distributed_support.md"
+      ],
+      "rules": [
+        "pypto/.claude/rules/cross-layer-sync.md"
+      ],
+      "entrypoint_areas": ["pypto:codegen_dist"],
+      "verify_tasks": ["pypto:codegen_tests"],
+      "resources": ["pypto/distributed", "pypto/codegen"]
+    },
+    "distributed_runtime": {
+      "description": "simpler comm-domain, L3 worker, remote execution",
+      "read_first_canonical": [
+        "simpler/docs/comm-domain.md",
+        "simpler/docs/hierarchical_level_runtime.md",
+        "simpler/docs/remote-l3-worker-design.md"
+      ],
+      "read_first_enriched": [
+        "pypto-3.0-notes/notes_simpler.md",
+        "pypto-3.0-notes/simpler_distributed_allreduce.md"
+      ],
+      "rules": [
+        "simpler/.claude/rules/ascend.md"
+      ],
+      "entrypoint_areas": ["simpler:comm", "simpler:worker"],
+      "verify_tasks": ["simpler:test_sim"],
+      "resources": ["simpler/overview", "flows/distributed_allreduce"]
+    },
+    "large_model_inference": {
+      "description": "pypto-lib models, golden harness, inference paths",
+      "read_first_canonical": [
+        "pypto-lib/docs/pypto-coding-style.md",
+        "pypto-lib/docs/compile-runtime-workflow.md",
+        "pypto-lib/docs/debugging.md"
+      ],
+      "read_first_enriched": [
+        "pypto-3.0-notes/pypto-lib-summary.md"
+      ],
+      "rules": [
+        "pypto-lib/.claude/CLAUDE.md"
+      ],
+      "entrypoint_areas": ["pypto-lib:models", "pypto-lib:golden"],
+      "verify_tasks": ["pypto-lib:tests_golden", "pypto-lib:example_hello_sim"],
+      "resources": ["pypto-lib/overview", "flows/compile_to_device"]
+    },
+    "ptoas": {
+      "description": "PTO assembler and optimizer (.pto to C++)",
+      "read_first_canonical": [
+        "PTOAS/README_en.md",
+        "PTOAS/docs/PTO_IR_manual.md"
+      ],
+      "read_first_enriched": [
+        "pypto-3.0-notes/PTOAS.md"
+      ],
+      "rules": [
+        "PTOAS/.claude/rules/cross-layer-sync.md"
+      ],
+      "entrypoint_areas": ["PTOAS:cli", "PTOAS:ir"],
+      "verify_tasks": ["PTOAS:ir_smoke"],
+      "resources": ["ptoas/overview"]
+    },
+    "pto_isa": {
+      "description": "Virtual tile ISA headers and backends",
+      "read_first_canonical": [
+        "pto-isa/docs/README.md",
+        "pto-isa/docs/PTOISA.md"
+      ],
+      "read_first_enriched": [
+        "pypto-3.0-notes/overview_pto-isa.md"
+      ],
+      "rules": [
+        "pto-isa/docs/agent.md"
+      ],
+      "entrypoint_areas": ["pto-isa:headers", "pto-isa:docs"],
+      "verify_tasks": ["pto-isa:cpu_smoke"],
+      "resources": ["pto-isa/overview"]
+    },
+    "runtime": {
+      "description": "simpler task runtime execution on Ascend",
+      "read_first_canonical": [
+        "simpler/docs/hierarchical_level_runtime.md",
+        "simpler/docs/task-flow.md",
+        "simpler/docs/orchestrator.md"
+      ],
+      "read_first_enriched": [
+        "pypto-3.0-notes/notes_simpler.md"
+      ],
+      "rules": [
+        "simpler/.claude/rules/ascend.md",
+        "simpler/.claude/rules/project-layout.md"
+      ],
+      "entrypoint_areas": ["simpler:orchestrator", "simpler:worker"],
+      "verify_tasks": ["pypto-lib:example_hello_sim", "simpler:test_sim"],
+      "resources": ["simpler/overview", "flows/compile_to_device"]
+    },
+    "pypto_lib": {
+      "description": "Model zoo, kernels, golden validation harness",
+      "read_first_canonical": [
+        "pypto-lib/docs/pypto-coding-style.md",
+        "pypto-lib/docs/compile-runtime-workflow.md"
+      ],
+      "read_first_enriched": [
+        "pypto-3.0-notes/pypto-lib-summary.md"
+      ],
+      "rules": [
+        "pypto-lib/.claude/CLAUDE.md"
+      ],
+      "entrypoint_areas": ["pypto-lib:golden", "pypto-lib:examples"],
+      "verify_tasks": ["pypto-lib:tests_golden"],
+      "resources": ["pypto-lib/overview"]
+    },
+    "performance": {
+      "description": "Compile and runtime profiling for training/inference tuning",
+      "read_first_canonical": [
+        "pypto/docs/en/dev/01-compile-profiling.md",
+        "pypto/docs/en/dev/03-runtime-dfx.md"
+      ],
+      "read_first_enriched": [
+        "pypto-3.0-notes/performance_tuning.md/SKILL.md",
+        "pypto-3.0-notes/performance_tuning.md/profiling.md"
+      ],
+      "rules": [],
+      "entrypoint_areas": ["pypto:passes", "simpler:worker"],
+      "verify_tasks": ["pypto-tooling:profiling_smoke"],
+      "resources": ["flows/performance"]
+    }
+  }
+}

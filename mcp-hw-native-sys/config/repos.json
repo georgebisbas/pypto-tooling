@@ -1,5 +1,56 @@
 {
   "workspace_root": "../..",
+  "repository_meta": {
+    "pypto": {
+      "role": "Compiler framework: Python DSL → IR → passes → codegen",
+      "layer": "compiler",
+      "outputs": [".pto MLIR", "orchestration C++"],
+      "canonical_docs": ["pypto/docs/en/dev/00-ecosystem.md"],
+      "agent_rules": ["pypto/.claude/CLAUDE.md"]
+    },
+    "PTOAS": {
+      "role": "PTO assembler and optimizer: .pto MLIR → C++ kernels",
+      "layer": "assembler",
+      "outputs": ["AICore/AIV kernel C++"],
+      "canonical_docs": ["PTOAS/README_en.md", "PTOAS/docs/PTO_IR_manual.md"],
+      "agent_rules": ["PTOAS/.claude/CLAUDE.md"]
+    },
+    "pto-isa": {
+      "role": "Virtual tile ISA: C++ headers and CPU/NPU backends",
+      "layer": "isa",
+      "outputs": ["tile instruction implementations"],
+      "canonical_docs": ["pto-isa/docs/README.md", "pto-isa/docs/PTOISA.md"],
+      "agent_rules": ["pto-isa/docs/agent.md"]
+    },
+    "simpler": {
+      "role": "PTO2 runtime: task graph execution on AICPU and AICore",
+      "layer": "runtime",
+      "outputs": ["orchestration .so", "device execution"],
+      "canonical_docs": ["simpler/docs/hierarchical_level_runtime.md", "simpler/docs/task-flow.md"],
+      "agent_rules": ["simpler/.claude/CLAUDE.md"]
+    },
+    "pypto-lib": {
+      "role": "Model zoo and golden validation harness on pypto",
+      "layer": "applications",
+      "outputs": ["compiled models", "golden test results"],
+      "canonical_docs": ["pypto-lib/docs/pypto-coding-style.md"],
+      "agent_rules": ["pypto-lib/.claude/CLAUDE.md"]
+    },
+    "pypto-3.0-notes": {
+      "role": "Enriched planning notes and cross-repo retrospectives (non-canonical)",
+      "layer": "notes",
+      "outputs": [],
+      "canonical_docs": ["pypto-3.0-notes/AGENTS.md"],
+      "agent_rules": ["pypto-3.0-notes/AGENTS.md"]
+    },
+    "pypto-tooling": {
+      "role": "Docker images, profiling campaigns, MCP server",
+      "layer": "tooling",
+      "outputs": ["containers", "profiling reports"],
+      "canonical_docs": [],
+      "agent_rules": []
+    }
+  },
   "repositories": {
     "PTOAS": "PTOAS",
     "pto-isa": "pto-isa",

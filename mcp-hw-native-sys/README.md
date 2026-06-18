@@ -1,38 +1,89 @@
 # hw-native-sys MCP server
 
-A local Model Context Protocol (MCP) server for improving multi-repo workflows in this workspace.
+A local Model Context Protocol (MCP) server for full-stack compiler development across the hw-native-sys workspace. It combines **operations** (git health, search, run tasks) with a **knowledge layer** (architecture docs, task routing, abstraction index) so agents start each session oriented on pypto → PTOAS → pto-isa → simpler → pypto-lib.
 
-It is designed for your current layout:
+## Repositories
 
-- `PTOAS`
-- `pto-isa`
-- `pypto`
-- `pypto-3.0-notes`
-- `pypto-lib`
-- `pypto-tooling`
-- `simpler`
+- `PTOAS` — assembler/optimizer
+- `pto-isa` — virtual tile ISA
+- `pypto` — compiler framework
+- `pypto-3.0-notes` — enriched planning notes (secondary tier)
+- `pypto-lib` — model zoo and golden harness
+- `pypto-tooling` — Docker, profiling, this MCP server
+- `simpler` — PTO2 runtime
 
-## What you get
+## Daily workflow (recommended)
 
-Tools exposed by the server:
+1. Start MCP server (see Setup below).
+2. Invoke MCP prompt **`start_compiler_work`** (or **`start_distributed_work`** for collectives/L3).
+3. Read resources `hw-native-sys://overview/ecosystem` and `hw-native-sys://agent/invariants`.
+4. Call **`route_task`** with your task type (e.g. `pass_change`, `codegen_orch`, `distributed`).
+5. Call **`repository_health`** with `include_clean=false`.
+6. Use **`explain_abstraction`** / **`search_abstractions`** for stack concepts.
+7. Implement, then run **`verify_tasks`** from `route_task` via **`run_task`**.
 
-- `list_repositories`: confirm all configured repos and paths.
-- `repository_health`: branch, dirty state, ahead/behind, last commit for each repo.
-- `search_code`: ripgrep search in one repo or across all repos.
-- `list_tasks`: list named tasks for a repo.
-- `run_task`: run named tasks from config.
-- `run_command`: run ad-hoc commands in a selected repo.
-- `explain_task`: show exact command behind a named task.
+A workspace Cursor rule at `.cursor/rules/hw-native-sys-mcp.md` reminds agents to bootstrap via MCP before editing.
 
-## Task profile
+## Tools
 
-This server ships with a **balanced** profile:
+### Operations
 
-- Includes fast daily tasks (git health, focused tests, lint checks).
-- Includes heavier tasks (docker builds, profiling, hardware-dependent tests).
-- Marks heavy tasks with warning metadata so you can decide before running.
+| Tool | Purpose |
+|------|---------|
+| `list_repositories` | Repos, paths, architecture metadata |
+| `repository_health` | Branch, dirty state, ahead/behind |
+| `search_code` | Ripgrep across repos |
+| `list_tasks` | Named tasks for a repo |
+| `run_task` | Run configured task |
+| `run_command` | Ad-hoc shell in a repo |
+| `explain_task` | Task command and metadata |
 
-Warnings are surfaced by `list_tasks`, `explain_task`, and `run_task`.
+### Knowledge
+
+| Tool | Purpose |
+|------|---------|
+| `route_task` | Read-first docs, rules, entrypoints, verify tasks by workflow |
+| `list_knowledge_topics` | Discover task types, resources, prompts |
+| `read_doc` | Read workspace doc with tier label (canonical/enriched) |
+| `explain_abstraction` | Concept card (IR, passes, codegen, ISA, runtime) |
+| `search_abstractions` | Keyword search over abstraction index |
+| `find_entrypoints` | Code paths per repo/area |
+| `trace_in_stack` | Where a symbol/path sits in the pipeline |
+| `knowledge_health` | Missing paths, stale enriched docs |
+
+## MCP resources
+
+Fixed URIs (read via MCP resource client):
+
+| URI | Content |
+|-----|---------|
+| `hw-native-sys://overview/ecosystem` | Multi-repo roles and pipeline |
+| `hw-native-sys://overview/pipeline` | Compilation pipeline excerpt |
+| `hw-native-sys://pypto/ir` | IR overview |
+| `hw-native-sys://pypto/passes` | Pass manager framework |
+| `hw-native-sys://pypto/codegen` | PTO + orchestration codegen |
+| `hw-native-sys://pypto/distributed` | Distributed ops |
+| `hw-native-sys://ptoas/overview` | PTOAS assembler |
+| `hw-native-sys://pto-isa/overview` | Tile ISA |
+| `hw-native-sys://simpler/overview` | Runtime |
+| `hw-native-sys://pypto-lib/overview` | Model/harness layer |
+| `hw-native-sys://agent/invariants` | Key `.claude/rules` |
+| `hw-native-sys://agent/routing` | Task routing index |
+| `hw-native-sys://notes/{topic}` | Enriched notes (pass_infrastructure, codegen_infrastructure, …) |
+| `hw-native-sys://flows/*` | End-to-end flows (compile_to_device, distributed_allreduce, …) |
+
+**Doc tiers:** `canonical` (sibling repo docs) is authoritative. `enriched` (pypto-3.0-notes) is secondary — check `last_verified` in front matter.
+
+## MCP prompts
+
+| Prompt | Use when |
+|--------|----------|
+| `start_compiler_work` | General compiler work (`area` = task_type) |
+| `start_distributed_work` | Collectives, L3, large-scale inference (`focus` = collectives/codegen/runtime/inference) |
+
+## Task types (`route_task`)
+
+`stack_overview`, `ir_change`, `pass_change`, `codegen_pto`, `codegen_orch`, `distributed`, `distributed_collectives`, `distributed_codegen`, `distributed_runtime`, `large_model_inference`, `ptoas`, `pto_isa`, `runtime`, `pypto_lib`, `performance`
 
 ## Setup
 
@@ -47,96 +98,54 @@ pip install -e .
 
 ```bash
 source .venv/bin/activate
+export HW_NATIVE_SYS_ROOT=/home/gb4018/workspace/hw-native-sys
 hw-native-sys-mcp
 ```
 
-## VS Code MCP integration
+## Cursor / VS Code MCP integration
 
-Use the Command Palette and add a new MCP server with stdio command:
+Register stdio MCP server:
 
-- command: `/home/gb4018/workspace/hw-native-sys/pypto-tooling/mcp-hw-native-sys/.venv/bin/hw-native-sys-mcp`
-- env var: `HW_NATIVE_SYS_ROOT=/home/gb4018/workspace/hw-native-sys`
+- **command:** `/home/gb4018/workspace/hw-native-sys/pypto-tooling/mcp-hw-native-sys/.venv/bin/hw-native-sys-mcp`
+- **env:** `HW_NATIVE_SYS_ROOT=/home/gb4018/workspace/hw-native-sys`
 
-If you prefer config files, use equivalent command/env values in your MCP server settings.
+## Configuration
 
-## Configure repos and tasks
+| File | Purpose |
+|------|---------|
+| `config/repos.json` | Workspace root, repos, tasks, `repository_meta` |
+| `config/knowledge.json` | Task routes, resources, notes topics |
+| `config/entrypoints.json` | Per-repo code entrypoints |
+| `config/abstractions.json` | ~40 stack concept cards |
 
-Edit `config/repos.json`.
+### Maintain knowledge config
 
-- `workspace_root`: base path that contains all repos.
-- `repositories`: repo name to relative path.
-- `tasks.default`: tasks available to all repos.
-- `tasks.<repo_name>`: repo-specific tasks.
+```bash
+# Verify all referenced paths exist
+python tools/verify_knowledge_config.py
 
-Task values support both formats:
-
-- Legacy string command:
-  - `"git_status": "git status -sb"`
-- Structured task object:
-  - `"git_status": {"command": "git status -sb", "category": "git", "risk": "safe-read-only"}`
-
-Supported structured fields:
-
-- `command` (required)
-- `category` (optional)
-- `risk` (optional): `safe-read-only`, `writes-build-artifacts`, `long-running`, `environment-sensitive`
-- `long_running` (optional bool)
-- `environment_sensitive` (optional bool)
-- `duration_hint` (optional)
-- `warning` (optional)
-- `prerequisites` (optional list)
-
-Destructive task patterns such as `git reset --hard` are blocked from config normalization.
-
-Example:
-
-```json
-{
-  "tasks": {
-    "default": {
-      "git_status": {
-        "command": "git status -sb",
-        "category": "git",
-        "risk": "safe-read-only"
-      }
-    },
-    "pypto": {
-      "unit_tests_fast": {
-        "command": "pytest tests/ut -q --tb=short",
-        "category": "test",
-        "risk": "long-running",
-        "long_running": true,
-        "duration_hint": "1-5m"
-      }
-    }
-  }
-}
+# Scan codebase for index suggestions (updates .index_build_time marker)
+python tools/build_knowledge_index.py
 ```
 
-## Under-5-minute quick start
+## Task profile (operations)
 
-After registering the MCP server in VS Code, run these in Copilot Chat:
+Balanced profile: fast daily tasks (git, lint) plus heavier tasks (docker, profiling, hardware tests). Warnings surfaced by `list_tasks`, `explain_task`, `run_task`.
 
-1. `list_repositories`
-2. `repository_health` (set `include_clean=false` to focus on active repos)
-3. `list_tasks` for one repo you touch frequently (for example `pypto`)
-4. `run_task` with repo=`pypto` and task=`unit_tests_fast`
-5. `explain_task` for one heavy task before running it (for example `profiling_full` in `pypto-tooling`)
+Destructive patterns (`git reset --hard`, etc.) are blocked in task config.
 
-This sequence gives a fast health snapshot, a task catalog view, and one real execution path in a few minutes.
+## Example agent prompts
+
+- "Invoke `start_compiler_work` with area=`codegen_orch` and follow the bootstrap."
+- "`route_task` for `distributed_collectives` — what should I read first?"
+- "`explain_abstraction` for `IterArgCarryAnalyzer`."
+- "`trace_in_stack` for `pypto/src/codegen/pto/pto_codegen.cpp`."
+- "`search_abstractions` for allreduce."
+- "`knowledge_health` — any stale or missing docs?"
 
 ## Prerequisite notes
 
-- Simulator and CPU tests generally require Python dependencies and build toolchain only.
-- Hardware-sensitive tasks require the correct Ascend runtime/device environment.
-- Docker tasks require an available Docker daemon and can consume significant disk/network resources.
-- Profiling tasks are intentionally heavy; start with smoke variants first.
-
-## Example prompts to use in Copilot Chat
-
-- "Run `repository_health` and show only dirty repos."
-- "Search for `AllReduce` across all repos."
-- "Run `list_tasks` for `pypto-tooling` and highlight long-running tasks."
-- "Run `run_task` with repo=`pypto` and task=`unit_tests_fast`."
-- "Run `run_command` on `pto-isa`: `git --no-pager log -5 --oneline`."
-- "Explain task `profiling_full` for `pypto-tooling` and show warnings/prerequisites."
+- Simulator/CPU tests: Python deps and build toolchain.
+- Hardware tasks: Ascend runtime/device environment.
+- Docker tasks: daemon available; can be heavy on disk/network.
+- Profiling: start with `profiling_smoke` before `profiling_full`.

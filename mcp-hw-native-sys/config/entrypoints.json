@@ -1,0 +1,114 @@
+{
+  "pypto": {
+    "ir": [
+      "include/pypto/ir/",
+      "python/pypto/language/",
+      "python/pypto/ir/"
+    ],
+    "passes": [
+      "src/ir/transforms/",
+      "python/pypto/ir/pass_manager.py",
+      "include/pypto/ir/transforms/"
+    ],
+    "codegen_pto": [
+      "src/codegen/pto/pto_codegen.cpp",
+      "include/pypto/codegen/"
+    ],
+    "codegen_orch": [
+      "src/codegen/orchestration/",
+      "include/pypto/codegen/orchestration/"
+    ],
+    "codegen_dist": [
+      "src/codegen/distributed/distributed_codegen.cpp"
+    ],
+    "distributed_ops": [
+      "src/ir/op/distributed/",
+      "include/pypto/ir/op/distributed/"
+    ],
+    "tests_ut": [
+      "tests/ut/"
+    ],
+    "tests_st_codegen": [
+      "tests/st/codegen/"
+    ],
+    "tests_st_distributed": [
+      "tests/st/distributed/"
+    ],
+    "backend": [
+      "src/backend/",
+      "python/pypto/backend/"
+    ],
+    "runtime_python": [
+      "python/pypto/runtime/",
+      "runtime/"
+    ]
+  },
+  "PTOAS": {
+    "cli": [
+      "tools/ptoas/ptoas.cpp"
+    ],
+    "ir": [
+      "include/PTO/IR/"
+    ],
+    "lib": [
+      "lib/PTO/"
+    ],
+    "docs": [
+      "docs/PTO_IR_manual.md"
+    ]
+  },
+  "pto-isa": {
+    "headers": [
+      "include/pto/"
+    ],
+    "docs": [
+      "docs/isa/"
+    ],
+    "tests": [
+      "tests/run_cpu.py",
+      "tests/script/run_st.py"
+    ],
+    "comm": [
+      "docs/isa/comm/"
+    ]
+  },
+  "simpler": {
+    "orchestrator": [
+      "docs/orchestrator.md",
+      "src/common/orchestrator/"
+    ],
+    "worker": [
+      "src/common/worker/",
+      "src/common/task_interface/"
+    ],
+    "comm": [
+      "docs/comm-domain.md",
+      "python/simpler/task_interface.py"
+    ],
+    "scheduler": [
+      "docs/scheduler.md",
+      "src/a2a3/runtime/tensormap_and_ringbuffer/runtime/scheduler/"
+    ],
+    "setup": [
+      "simpler_setup/"
+    ],
+    "examples": [
+      "examples/"
+    ]
+  },
+  "pypto-lib": {
+    "golden": [
+      "golden/runner.py",
+      "golden/"
+    ],
+    "examples": [
+      "examples/"
+    ],
+    "models": [
+      "models/"
+    ],
+    "docs": [
+      "docs/"
+    ]
+  }
+}
