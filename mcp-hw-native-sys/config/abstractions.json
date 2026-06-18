@@ -137,11 +137,16 @@
     "repos": ["pypto"],
     "paths": ["pypto/src/ir/transforms/lower_host_tensor_collectives_pass.cpp"],
     "docs_canonical": ["pypto/docs/en/dev/passes/38-lower_host_tensor_collectives.md"],
-    "docs_enriched": [],
+    "docs_enriched": [
+      "pypto-3.0-notes/memories/host_collectives.md",
+      "pypto-3.0-notes/agent/distributed_work_policy.md"
+    ],
     "rules": [],
-    "related": ["distributed_ops", "composite collectives"],
-    "downstream": ["distributed_codegen"],
-    "verify_tasks": ["pypto:system_tests_sim"]
+    "related": ["MaterializeCommDomainScopes", "DistributedCodegen", "host_collectives_program"],
+    "downstream": ["distributed_codegen", "builtin.tensor.*"],
+    "verify_tasks": ["pypto-tooling:host_collectives_ut_sim"],
+    "agent_verify_tasks": ["pypto-tooling:host_collectives_ut_sim"],
+    "developer_verify_tasks": ["pypto:host_collectives_st_npu"]
   },
   "PTOCodegen": {
     "layer": "pypto/codegen",
@@ -480,6 +485,43 @@
     "rules": [],
     "related": ["CommDomainScopeStmt", "ChipDomainContext"],
     "downstream": ["distributed_runner.py", "simpler L3"],
-    "verify_tasks": ["pypto:system_tests_sim"]
+    "verify_tasks": ["pypto:codegen_tests"]
+  },
+  "host_collectives_program": {
+    "layer": "pypto/distributed",
+    "kind": "program",
+    "repos": ["pypto", "pypto-3.0-notes"],
+    "paths": [
+      "pypto/src/ir/transforms/lower_host_tensor_collectives_pass.cpp",
+      "pypto/src/codegen/distributed/distributed_ops_codegen.cpp",
+      "pypto/python/pypto/runtime/builtins/collectives/"
+    ],
+    "docs_canonical": ["pypto/docs/en/dev/distributed_ops.md"],
+    "docs_enriched": [
+      "pypto-3.0-notes/memories/host_collectives.md",
+      "pypto-3.0-notes/agent/distributed_work_policy.md",
+      "pypto-3.0-notes/abstractions/composite_collectives.md"
+    ],
+    "rules": [],
+    "related": [
+      "LowerHostTensorCollectives",
+      "MaterializeCommDomainScopes",
+      "pld.tensor.allreduce",
+      "builtin.tensor.barrier",
+      "builtin.tensor.broadcast",
+      "builtin.tensor.reduce_scatter",
+      "builtin.tensor.allgather"
+    ],
+    "downstream": ["next_levels/builtin.tensor.*", "test_l3_host_tensor_*"],
+    "verify_tasks": ["pypto-tooling:host_collectives_ut_sim"],
+    "agent_verify_tasks": ["pypto-tooling:host_collectives_ut_sim"],
+    "developer_verify_tasks": ["pypto:host_collectives_st_npu"],
+    "agent_policy": [
+      "UT in sim Docker only; NPU STs are developer-only",
+      "Push to fork-gbisbas only; do not open PR unless asked",
+      "Do not commit pypto/runtime submodule pointer changes",
+      "Single batched fork branch OK despite multi-PR plan",
+      "HOST allgather uses pld.tensor.allgather_staged (2-arg)"
+    ]
   }
 }

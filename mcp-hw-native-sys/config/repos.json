@@ -235,6 +235,19 @@
         "environment_sensitive": true,
         "duration_hint": "10-45m",
         "warning": "Large simulator suite; use targeted paths for faster feedback when possible."
+      },
+      "host_collectives_st_npu": {
+        "command": "pytest tests/st/distributed/test_l3_host_tensor_barrier.py tests/st/distributed/test_l3_host_tensor_broadcast.py tests/st/distributed/test_l3_host_tensor_reduce_scatter.py tests/st/distributed/test_l3_host_tensor_allgather.py -v --platform=a2a3 --device=0,1",
+        "category": "test",
+        "risk": "environment-sensitive",
+        "long_running": true,
+        "environment_sensitive": true,
+        "duration_hint": "2-15m",
+        "prerequisites": [
+          "Ascend NPU with >=2 devices",
+          "pypto built for a2a3"
+        ],
+        "warning": "Developer verification only — agent must not run. Requires NPU hardware."
       }
     },
     "pypto-3.0-notes": {
@@ -331,6 +344,32 @@
         "prerequisites": [
           "Docker daemon available"
         ]
+      },
+      "docker_build_sim_pinned_pypto": {
+        "command": "docker build --build-arg PYPTO_COMMIT=\"$(git -C ../pypto rev-parse HEAD)\" -t pypto3-hw-native-sys:sim -f Dockerfile.hw-native-sys.sim.ubuntu22.04 .",
+        "category": "build",
+        "risk": "writes-build-artifacts",
+        "long_running": true,
+        "environment_sensitive": true,
+        "duration_hint": "10-35m",
+        "prerequisites": [
+          "Docker daemon available",
+          "Sibling pypto checkout at ../pypto"
+        ],
+        "warning": "Pins pypto to current ../pypto HEAD for fork branch verification."
+      },
+      "host_collectives_ut_sim": {
+        "command": "docker run --rm -v \"$(cd ../pypto && pwd):/opt/pypto\" pypto3-hw-native-sys:sim bash -lc 'cd /opt/pypto && pip install -q ./runtime && pip install -q \".[dev]\" && pytest tests/ut/ir/transforms/test_lower_host_tensor_collectives.py tests/ut/codegen/distributed/test_host_orch_distributed.py tests/ut/ir/transforms/test_lower_composite_ops.py -v -k \"host_barrier or host_broadcast or host_reduce_scatter or host_allgather or materializes or template_package or host_allreduce or allgather or barrier or broadcast or reduce_scatter\"'",
+        "category": "test",
+        "risk": "long-running",
+        "long_running": true,
+        "environment_sensitive": true,
+        "duration_hint": "3-15m",
+        "prerequisites": [
+          "Docker image pypto3-hw-native-sys:sim (run docker_build_sim or docker_build_sim_pinned_pypto first)",
+          "Sibling pypto checkout at ../pypto"
+        ],
+        "warning": "Agent gate for plan 33 host collectives. Mounts live pypto tree; rebuilds extension inside container."
       },
       "docker_build_simpler": {
         "command": "docker build -t simpler-cann9 - < Dockerfile.simpler.cann9.0",

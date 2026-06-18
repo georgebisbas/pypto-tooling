@@ -63,6 +63,11 @@
       ],
       "max_chars": 8000
     },
+    "agent/distributed_work_policy": {
+      "path": "pypto-3.0-notes/agent/distributed_work_policy.md",
+      "max_chars": 12000,
+      "tier": "enriched"
+    },
     "flows/compile_to_device": {
       "path": "pypto-lib/docs/compile-runtime-workflow.md",
       "max_chars": 8000
@@ -99,7 +104,9 @@
     "dependency_triangle": "pypto-3.0-notes/dependency_triangle.md",
     "notes_simpler": "pypto-3.0-notes/notes_simpler.md",
     "kernel_orchestration": "pypto-3.0-notes/kernel_orchestration.md",
-    "stack_availability": "pypto-3.0-notes/allreduce_benchmark_variants/stack_availability.md"
+    "stack_availability": "pypto-3.0-notes/allreduce_benchmark_variants/stack_availability.md",
+    "host_collectives": "pypto-3.0-notes/memories/host_collectives.md",
+    "distributed_work_policy": "pypto-3.0-notes/agent/distributed_work_policy.md"
   },
   "routes": {
     "stack_overview": {
@@ -193,8 +200,10 @@
         "pypto/.claude/rules/first-principles.md"
       ],
       "entrypoint_areas": ["pypto:distributed_ops", "pypto:codegen_dist"],
-      "verify_tasks": ["pypto:system_tests_sim"],
-      "resources": ["pypto/distributed", "flows/distributed_allreduce"]
+      "verify_tasks": ["pypto:codegen_tests"],
+      "agent_verify_tasks": ["pypto:codegen_tests"],
+      "developer_verify_tasks": ["pypto:host_collectives_st_npu"],
+      "resources": ["pypto/distributed", "flows/distributed_allreduce", "agent/distributed_work_policy"]
     },
     "distributed_collectives": {
       "description": "Composite collectives, ring vs mesh algorithms",
@@ -208,8 +217,30 @@
       ],
       "rules": [],
       "entrypoint_areas": ["pypto:distributed_ops", "pypto:tests_st_distributed"],
-      "verify_tasks": ["pypto:system_tests_sim"],
-      "resources": ["flows/distributed_allreduce"]
+      "verify_tasks": ["pypto-tooling:host_collectives_ut_sim"],
+      "agent_verify_tasks": ["pypto-tooling:host_collectives_ut_sim"],
+      "developer_verify_tasks": ["pypto:host_collectives_st_npu"],
+      "resources": ["flows/distributed_allreduce", "agent/distributed_work_policy"]
+    },
+    "host_collectives_program": {
+      "description": "Host builtin collectives program (plan 33): barrier, broadcast, reduce_scatter, allgather on #1798 rail",
+      "read_first_canonical": [
+        "pypto/docs/en/dev/distributed_ops.md",
+        "pypto/docs/en/dev/passes/37-materialize_comm_domain_scopes.md",
+        "pypto/docs/en/dev/passes/38-lower_host_tensor_collectives.md"
+      ],
+      "read_first_enriched": [
+        "pypto-3.0-notes/memories/host_collectives.md",
+        "pypto-3.0-notes/agent/distributed_work_policy.md",
+        "pypto-3.0-notes/abstractions/composite_collectives.md",
+        "pypto-3.0-notes/abstractions/pld.tensor_host.allreduce.md"
+      ],
+      "rules": [],
+      "entrypoint_areas": ["pypto:distributed_ops", "pypto:codegen_dist", "pypto:tests_st_distributed"],
+      "verify_tasks": ["pypto-tooling:host_collectives_ut_sim"],
+      "agent_verify_tasks": ["pypto-tooling:host_collectives_ut_sim"],
+      "developer_verify_tasks": ["pypto:host_collectives_st_npu"],
+      "resources": ["agent/distributed_work_policy", "flows/distributed_allreduce"]
     },
     "distributed_codegen": {
       "description": "Distributed codegen backend",

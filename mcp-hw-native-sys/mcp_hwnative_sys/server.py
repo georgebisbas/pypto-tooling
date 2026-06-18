@@ -366,6 +366,18 @@ def repository_health(include_clean: bool = True) -> dict[str, Any]:
         commit_result = _git(repo.path, ["log", "-1", "--pretty=%h %cr %s"])
         row["last_commit"] = commit_result.stdout.strip() if commit_result.returncode == 0 else "unknown"
 
+        if repo.name == "pypto" and row.get("branch") == "feat/host-collectives-builtin":
+            row["active_program_hints"] = [
+                {
+                    "program": "host_collectives_program",
+                    "plan": "pypto-3.0-notes/pr_plans/33-pypto-host-collectives-builtin-program.md",
+                    "memory": "pypto-3.0-notes/memories/host_collectives.md",
+                    "agent_verify": "pypto-tooling:host_collectives_ut_sim",
+                    "developer_verify": "pypto:host_collectives_st_npu",
+                    "route_task": "host_collectives_program",
+                }
+            ]
+
         if include_clean or not row["clean"]:
             output.append(row)
 

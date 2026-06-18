@@ -281,8 +281,10 @@ def route_task_impl(task_type: str, detail: str = "") -> dict[str, Any]:
         "rules": rules,
         "entrypoints": _resolve_entrypoints(route.get("entrypoint_areas", [])),
         "verify_tasks": route.get("verify_tasks", []),
+        "agent_verify_tasks": route.get("agent_verify_tasks", route.get("verify_tasks", [])),
+        "developer_verify_tasks": route.get("developer_verify_tasks", []),
         "resources": [f"hw-native-sys://{uri}" for uri in route.get("resources", [])],
-        "bootstrap_prompt": "start_compiler_work" if not task_type.startswith("distributed") else "start_distributed_work",
+        "bootstrap_prompt": "start_compiler_work" if not task_type.startswith("distributed") and task_type != "host_collectives_program" else "start_distributed_work",
     }
 
 
@@ -347,6 +349,9 @@ def explain_abstraction_impl(name: str) -> dict[str, Any]:
         "related": card.get("related", []),
         "downstream": card.get("downstream", []),
         "verify_tasks": card.get("verify_tasks", []),
+        "agent_verify_tasks": card.get("agent_verify_tasks", card.get("verify_tasks", [])),
+        "developer_verify_tasks": card.get("developer_verify_tasks", []),
+        "agent_policy": card.get("agent_policy", []),
     }
 
 
@@ -625,6 +630,7 @@ Canonical docs are authoritative. Enriched notes (pypto-3.0-notes) are secondary
     def start_distributed_work(focus: str = "collectives") -> str:
         focus_route = {
             "collectives": "distributed_collectives",
+            "host_collectives": "host_collectives_program",
             "codegen": "distributed_codegen",
             "runtime": "distributed_runtime",
             "inference": "large_model_inference",
@@ -633,10 +639,16 @@ Canonical docs are authoritative. Enriched notes (pypto-3.0-notes) are secondary
         return f"""You are working on distributed / large-scale training or inference on Ascend NPUs.
 
 Before editing any code:
-1. Read MCP resources: hw-native-sys://pypto/distributed and hw-native-sys://flows/distributed_allreduce
-2. Call route_task with task_type="{focus_route}"
-3. Call explain_abstraction for relevant concepts (e.g. pld.tensor.allreduce, ChipDomainContext)
-4. Call repository_health with include_clean=false
-5. Prefer targeted ST tests under pypto/tests/st/distributed/ before full system_tests_sim
+1. Read MCP resources: hw-native-sys://pypto/distributed, hw-native-sys://agent/distributed_work_policy, hw-native-sys://flows/distributed_allreduce
+2. Call route_task with task_type="{focus_route}" (use host_collectives_program for plan 33 host builtins)
+3. Call explain_abstraction for relevant concepts (e.g. host_collectives_program, LowerHostTensorCollectives)
+4. Call repository_health with include_clean=false — check active_program_hints on pypto
+5. Read notes topic host_collectives when resuming fork work (hw-native-sys://notes/host_collectives)
+
+Verification split (George / gbisbas workflow):
+- **Agent gate:** run agent_verify_tasks from route_task via run_task — for host collectives use pypto-tooling:host_collectives_ut_sim (sim Docker, not bare-metal pytest).
+- **Developer gate:** pypto:host_collectives_st_npu on NPU — agents must NOT run this or open upstream PRs unless asked.
+- **Do not commit** pypto/runtime submodule pointer changes unless the plan explicitly scopes runtime.
+- Push only to fork-gbisbas; record git rev-parse HEAD in pypto-3.0-notes/memories/ when handing off.
 
 Distinguish compiler layer (pypto distributed ops/codegen) from runtime layer (simpler comm-domain, L3 worker)."""

@@ -68,8 +68,9 @@ Fixed URIs (read via MCP resource client):
 | `hw-native-sys://simpler/overview` | Runtime |
 | `hw-native-sys://pypto-lib/overview` | Model/harness layer |
 | `hw-native-sys://agent/invariants` | Key `.claude/rules` |
+| `hw-native-sys://agent/distributed_work_policy` | Agent git/verify policy for distributed & host collectives (George workflow) |
 | `hw-native-sys://agent/routing` | Task routing index |
-| `hw-native-sys://notes/{topic}` | Enriched notes (pass_infrastructure, codegen_infrastructure, …) |
+| `hw-native-sys://notes/{topic}` | Enriched notes (pass_infrastructure, host_collectives, …) |
 | `hw-native-sys://flows/*` | End-to-end flows (compile_to_device, distributed_allreduce, …) |
 
 **Doc tiers:** `canonical` (sibling repo docs) is authoritative. `enriched` (pypto-3.0-notes) is secondary — check `last_verified` in front matter.
@@ -79,11 +80,22 @@ Fixed URIs (read via MCP resource client):
 | Prompt | Use when |
 |--------|----------|
 | `start_compiler_work` | General compiler work (`area` = task_type) |
-| `start_distributed_work` | Collectives, L3, large-scale inference (`focus` = collectives/codegen/runtime/inference) |
+| `start_distributed_work` | Collectives, L3, large-scale inference (`focus` = collectives / **host_collectives** / codegen / runtime / inference) |
 
 ## Task types (`route_task`)
 
-`stack_overview`, `ir_change`, `pass_change`, `codegen_pto`, `codegen_orch`, `distributed`, `distributed_collectives`, `distributed_codegen`, `distributed_runtime`, `large_model_inference`, `ptoas`, `pto_isa`, `runtime`, `pypto_lib`, `performance`
+`stack_overview`, `ir_change`, `pass_change`, `codegen_pto`, `codegen_orch`, `distributed`, `distributed_collectives`, **`host_collectives_program`**, `distributed_codegen`, `distributed_runtime`, `large_model_inference`, `ptoas`, `pto_isa`, `runtime`, `pypto_lib`, `performance`
+
+`route_task` returns **`agent_verify_tasks`** (agent gate) and **`developer_verify_tasks`** (NPU/hardware — agent must not run) when configured.
+
+### Host collectives (plan 33)
+
+| Agent | Task |
+|-------|------|
+| Sim UT gate | `pypto-tooling:host_collectives_ut_sim` |
+| NPU ST (developer) | `pypto:host_collectives_st_npu` |
+
+Read `hw-native-sys://agent/distributed_work_policy` and `hw-native-sys://notes/host_collectives` before resuming fork work.
 
 ## Setup
 
@@ -137,7 +149,8 @@ Destructive patterns (`git reset --hard`, etc.) are blocked in task config.
 ## Example agent prompts
 
 - "Invoke `start_compiler_work` with area=`codegen_orch` and follow the bootstrap."
-- "`route_task` for `distributed_collectives` — what should I read first?"
+- "`route_task` for `host_collectives_program` — sim Docker UT vs NPU ST split."
+- "`explain_abstraction` for `host_collectives_program`."
 - "`explain_abstraction` for `IterArgCarryAnalyzer`."
 - "`trace_in_stack` for `pypto/src/codegen/pto/pto_codegen.cpp`."
 - "`search_abstractions` for allreduce."
