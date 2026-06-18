@@ -13,7 +13,7 @@
 #   docker build -t pypto3-hw-native-sys:sim -f Dockerfile.hw-native-sys.sim.ubuntu22.04 .
 #
 # BUILD (pinned commits):
-#   docker build --build-arg PYPTO_COMMIT=c9e23c62f9368515128a56fc18f9560898684d2b --build-arg PTO_ISA_COMMIT=016396b57e2c17093f1194e6acd89bb112b0ab24 -t pypto3-hw-native-sys:sim -f Dockerfile.hw-native-sys.sim.ubuntu22.04 .
+#   docker build --build-arg PYPTO_COMMIT=1217e0c1c0c5fb29b514ab32909a0cf2277813ec --build-arg PTO_ISA_COMMIT=016396b57e2c17093f1194e6acd89bb112b0ab24 -t pypto3-hw-native-sys:sim -f Dockerfile.hw-native-sys.sim.ubuntu22.04 .
 #
 # RUN:
 #   docker run --rm -it pypto3-hw-native-sys:sim
@@ -59,7 +59,7 @@ ARG UBUNTU_VERSION=22.04
 FROM ubuntu:${UBUNTU_VERSION}
 
 ARG INSTALL_PREFIX=/opt
-ARG PYPTO_COMMIT=c9e23c62f9368515128a56fc18f9560898684d2b
+ARG PYPTO_COMMIT=1217e0c1c0c5fb29b514ab32909a0cf2277813ec
 # PTO_ISA_COMMIT defaults to empty — auto-derived from pypto ci.yml at build time.
 # Set via --build-arg to pin a specific commit.
 ARG PTO_ISA_COMMIT=

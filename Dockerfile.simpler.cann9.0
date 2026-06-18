@@ -7,8 +7,8 @@
 # All paths are driven by build args:
 #   CANN_VERSION    (default: 9.0.0)  — selects base image tag and all cann-* paths
 #   INSTALL_PREFIX  (default: /opt)   — root for simpler and pto-isa installs
-#   SIMPLER_COMMIT  (default: afb5c5a95cf05d5bb346eaef83a318c6f3164971) — simpler commit to build from; changing it busts cache
-#   PTO_ISA_COMMIT  (default: ddafa8da9c760ecd13fe9fe2833d6ee55fb20bd8) — pto-isa commit paired with SIMPLER_COMMIT afb5c5a9
+#   SIMPLER_COMMIT  (default: 286aa7e4100dc9fc71b77a0f1b279fb5a2207afa) — simpler commit to build from; changing it busts cache
+#   PTO_ISA_COMMIT  (default: ddafa8da9c760ecd13fe9fe2833d6ee55fb20bd8) — pto-isa commit paired with SIMPLER_COMMIT 286aa7e4
 #
 # REQUIREMENTS:
 #   - Internet access during build (GitHub)
@@ -24,7 +24,7 @@
 #   docker build -t simpler-cann9 - < Dockerfile.simpler.cann9.0
 #
 # BUILD (pinned simpler + pinned pto-isa):
-#   docker build --build-arg SIMPLER_COMMIT=afb5c5a95cf05d5bb346eaef83a318c6f3164971 --build-arg PTO_ISA_COMMIT=ddafa8da9c760ecd13fe9fe2833d6ee55fb20bd8 -t simpler-cann9 - < Dockerfile.simpler.cann9.0
+#   docker build --build-arg SIMPLER_COMMIT=286aa7e4100dc9fc71b77a0f1b279fb5a2207afa --build-arg PTO_ISA_COMMIT=ddafa8da9c760ecd13fe9fe2833d6ee55fb20bd8 -t simpler-cann9 - < Dockerfile.simpler.cann9.0
 #
 # RUN (single-device):
 #   docker run --rm -it --privileged --ipc=host -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi:ro -v /usr/local/Ascend/driver:/usr/local/Ascend/driver:ro -v /dev:/dev simpler-cann9
@@ -66,9 +66,9 @@ FROM quay.io/ascend/cann:${CANN_VERSION}-910b-ubuntu22.04-py3.12
 
 ARG CANN_VERSION=9.0.0
 ARG INSTALL_PREFIX=/opt
-# PTO_ISA_COMMIT defaults to ddafa8da9c760ecd13fe9fe2833d6ee55fb20bd8 — paired with SIMPLER_COMMIT afb5c5a9 per simpler CI.
+# PTO_ISA_COMMIT defaults to ddafa8da9c760ecd13fe9fe2833d6ee55fb20bd8 — paired with SIMPLER_COMMIT 286aa7e4 per simpler CI.
 ARG PTO_ISA_COMMIT=ddafa8da9c760ecd13fe9fe2833d6ee55fb20bd8
-ARG SIMPLER_COMMIT=afb5c5a95cf05d5bb346eaef83a318c6f3164971
+ARG SIMPLER_COMMIT=286aa7e4100dc9fc71b77a0f1b279fb5a2207afa
 
 ENV CANN_VERSION=${CANN_VERSION} \
     INSTALL_PREFIX=${INSTALL_PREFIX}
