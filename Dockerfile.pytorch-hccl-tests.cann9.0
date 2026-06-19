@@ -30,13 +30,13 @@
 # NOTE:
 #   - Do NOT mount /usr/local/Ascend from host. The image already contains CANN.
 #   - The benchmark Makefile controls the torch / torch-npu install contract.
-#   - Do NOT set LD_PRELOAD image-wide (VS Code attach hang — see dockerfile_skills/issue_vscode_summary.md).python -c "import torch_npu; import torch.distributed as dist; print('torch_npu', torch_npu.__version__); print('hccl', getattr(dist, 'is_hccl_available', lambda: 'n/a')())"python -c "import torch_npu; import torch.distributed as dist; print('torch_npu', torch_npu.__version__); print('hccl', getattr(dist, 'is_hccl_available', lambda: 'n/a')())"
+#   - Do NOT set LD_PRELOAD image-wide (VS Code attach hang — see dockerfile_skills/issue_vscode_summary.md).
 #   - This image does NOT need LD_PRELOAD for torch HCCL benchmarks (no host_runtime.so).
 #   - CANN env is set via ENV; source set_env.sh manually only when debugging a missing var.
 #   - NPU collectives need --pid=host at docker run; LD_PRELOAD not required for this image.
 #
 # COMMANDS INSIDE CONTAINER (copy-paste; venv auto-activated in interactive shells):
-#python -c "import torch_npu; import torch.distributed as dist; print('torch_npu', torch_npu.__version__); print('hccl', getattr(dist, 'is_hccl_available', lambda: 'n/a')())"python -c "import torch_npu; import torch.distributed as dist; print('torch_npu', torch_npu.__version__); print('hccl', getattr(dist, 'is_hccl_available', lambda: 'n/a')())"
+#
 #   cd /opt/pytorch-hccl-tests
 #   npu-smi info
 #   python -c "import torch, pytorch_hccl_tests; print('torch', torch.__version__)"
@@ -45,7 +45,7 @@
 #   torchrun --nnodes 1 --nproc_per_node 2 pytorch_hccl_tests/cli.py --benchmark latency --device cpu
 #   torchrun --nnodes 1 --nproc_per_node 2 pytorch_hccl_tests/cli.py --benchmark latency --device npu
 #   torchrun --nnodes 1 --nproc_per_node 2 pytorch_hccl_tests/cli.py --benchmark allreduce --device npu
-python -c "import torch_npu; import torch.distributed as dist; print('torch_npu', torch_npu.__version__); print('hccl', getattr(dist, 'is_hccl_available', lambda: 'n/a')())"#   WORLD_SIZE=4 make allreduce DEVICE=npu
+#   WORLD_SIZE=4 make allreduce DEVICE=npu
 
 ARG CANN_VERSION=9.0.0
 FROM quay.io/ascend/cann:${CANN_VERSION}-910b-ubuntu22.04-py3.12
