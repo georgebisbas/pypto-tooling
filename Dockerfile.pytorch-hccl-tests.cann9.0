@@ -18,17 +18,8 @@
 # BUILD (defaults):
 #   docker build -t pytorch-hccl-tests:cann9 - < Dockerfile.pytorch-hccl-tests.cann9.0
 #
-<<<<<<< HEAD
-# BUILD (custom fork ref / install target):
-#   docker build \
-#     --build-arg PT_HCCL_COMMIT=dfd5a7ed58e04d9de7ddb97fa8161b66f9252458 \
-#     --build-arg PT_HCCL_INSTALL_TARGET=install-npu-x86 \
-#     -t pytorch-hccl-tests:cann9 \
-#     - < Dockerfile.pytorch-hccl-tests.cann9.0
-=======
 # BUILD (x86 host / custom ref):
 #   docker build --build-arg PT_HCCL_COMMIT=314b0ca4667bef624e826aae6633e1a6f275d9cd --build-arg PT_HCCL_INSTALL_TARGET=install-npu-x86 -t pytorch-hccl-tests:cann9 - < Dockerfile.pytorch-hccl-tests.cann9.0
->>>>>>> 314fa8a (docker: update)
 #
 # RUN (single-device, NO HCCL collectives):
 #   docker run --rm -it --privileged --ipc=host -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi:ro -v /usr/local/Ascend/driver:/usr/local/Ascend/driver:ro -v /dev:/dev pytorch-hccl-tests:cann9
