@@ -8,6 +8,7 @@ Dockerfiles and runbooks for PyPTO and simpler development on Ascend 910B.
 - [Dockerfile.hw-native-sys.cann9.0](Dockerfile.hw-native-sys.cann9.0): Standalone PyPTO image that clones all sources from GitHub at build time.
 - [Dockerfile.server.cann:9.0](Dockerfile.server.cann:9.0): Server/dev image that uses a local pypto build context.
 - [Dockerfile.simpler.cann9.0](Dockerfile.simpler.cann9.0): Standalone simpler image with pinned commit support and HCCL-safe runtime defaults.
+- [Dockerfile.pytorch-hccl-tests.cann9.0](Dockerfile.pytorch-hccl-tests.cann9.0): Standalone HCCL micro-benchmark image (`torchrun` + pytorch-hccl-tests fork).
 - [Dockerfile.hw-native-sys.sim.ubuntu22.04](Dockerfile.hw-native-sys.sim.ubuntu22.04): Standalone local simulation image for PyPTO (`a2a3sim`/`a5sim`) on x86_64 without NPU devices.
 - [docker-entrypoint-cann.sh](docker-entrypoint-cann.sh): Runtime helper for workspace/runtime symlink handling.
 - [bz910b-reproduce.md](bz910b-reproduce.md): Reproduction and test workflow guide.
@@ -21,6 +22,7 @@ Dockerfiles and runbooks for PyPTO and simpler development on Ascend 910B.
 - [Dockerfile.hw-native-sys.cann9.0](Dockerfile.hw-native-sys.cann9.0): Build a standalone PyPTO image by cloning repositories during build; best for reproducible CI-like setup without local source dependencies.
 - [Dockerfile.server.cann:9.0](Dockerfile.server.cann:9.0): Build a server/dev image from a local hw-native-sys workspace where pypto is copied from build context; best for local iteration.
 - [Dockerfile.simpler.cann9.0](Dockerfile.simpler.cann9.0): Build a standalone simpler-only image for runtime and worker validation when pypto is not required.
+- [Dockerfile.pytorch-hccl-tests.cann9.0](Dockerfile.pytorch-hccl-tests.cann9.0): Build a standalone HCCL benchmark image for baseline latency/bandwidth/allreduce comparisons (not for pypto/simpler composite tests).
 - [Dockerfile.hw-native-sys.sim.ubuntu22.04](Dockerfile.hw-native-sys.sim.ubuntu22.04): Build a standalone simulation-only PyPTO image for local development/testing on CPU-hosted simulators (`a2a3sim`, `a5sim`).
 - [docker-entrypoint-cann.sh](docker-entrypoint-cann.sh): Runtime helper script that normalizes runtime layout (workspace/runtime symlink behavior) before launching the container command.
 - [bz910b-reproduce.md](bz910b-reproduce.md): Operator runbook for reproducing tests and validating NPU execution on Ascend 910B hosts.
@@ -75,6 +77,21 @@ docker build \
   --build-arg PTO_ISA_COMMIT=ddafa8da9c760ecd13fe9fe2833d6ee55fb20bd8 \
   -t simpler-cann9 \
   - < Dockerfile.simpler.cann9.0
+```
+
+Build standalone pytorch-hccl-tests image (defaults):
+
+```bash
+docker build -t pytorch-hccl-tests:cann9 - < Dockerfile.pytorch-hccl-tests.cann9.0
+```
+
+Build standalone pytorch-hccl-tests image (x86 host / custom ref):
+
+```bash
+docker build \
+  --build-arg PT_HCCL_INSTALL_TARGET=install-npu-x86 \
+  -t pytorch-hccl-tests:cann9 \
+  - < Dockerfile.pytorch-hccl-tests.cann9.0
 ```
 
 Build standalone local simulation image (no NPU required):
@@ -153,7 +170,15 @@ docker run --rm -it \
   pypto3-hw-native-sys:cann9
 ```
 
-The same runtime rule applies to `simpler-cann9`: include `--pid=host` for distributed/HCCL workflows.
+The same runtime rule applies to `simpler-cann9` and `pytorch-hccl-tests:cann9`: include `--pid=host` for distributed/HCCL workflows.
+
+Before HCCL tests in **pypto** or **simpler** images, export `LD_PRELOAD` in your shell (not baked into the image):
+
+```bash
+export LD_PRELOAD=${CANN_HOME}/aarch64-linux/lib64/libhccl.so
+```
+
+The **pytorch-hccl-tests** image uses torch HCCL directly and does not need `LD_PRELOAD`; it still requires `--pid=host` for multi-rank NPU collectives.
 
 Mount only the host driver path at runtime:
 

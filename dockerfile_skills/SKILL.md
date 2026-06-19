@@ -66,6 +66,8 @@ Each Dockerfile pins specific external versions. When asked to update one, run t
 |---|-------|---------|--------------------------|
 | 1 | simpler `origin/main` ahead of `SIMPLER_COMMIT`? | `git -C /path/to/simpler rev-list --count ${SIMPLER_COMMIT}..origin/main` | `ARG SIMPLER_COMMIT` + header comment |
 | 2 | pto-isa commit in simpler's CI changed? | `grep -oP 'PTO_ISA_COMMIT:\s*\K[a-f0-9]+' simpler/.github/workflows/ci.yml \| head -1` | `ARG PTO_ISA_COMMIT` (simpler CI format, not pypto!) |
+| 3 | `ENV LD_PRELOAD` absent? | `grep LD_PRELOAD Dockerfile.simpler.cann9.0` — should be comments only | Remove image-wide `ENV LD_PRELOAD` |
+| 4 | `set_env.sh` stripped, not re-added to bashrc? | `grep set_env Dockerfile.simpler.cann9.0` — strip `RUN` only, no bashrc append | Align with hw-native-sys pattern |
 
 Note: No PTOAS or pypto dependencies — simpler-only image.
 
@@ -84,6 +86,8 @@ Note: Uses **x86_64** `ptoas-bin-x86_64.tar.gz` with a **different SHA256** than
 | # | Check | Command | What to update if drifted |
 |---|-------|---------|--------------------------|
 | 1 | Fork `origin/master` ahead of `PT_HCCL_COMMIT`? | `git -C /path/to/pytorch-hccl-tests rev-list --count ${PT_HCCL_COMMIT}..origin/master` | `ARG PT_HCCL_COMMIT` |
+| 2 | `ENV LD_PRELOAD` absent? | `grep LD_PRELOAD Dockerfile.pytorch-hccl-tests.cann9.0` — should be comments only | Remove image-wide `ENV LD_PRELOAD` |
+| 3 | `set_env.sh` stripped, not re-added to bashrc? | `grep set_env Dockerfile.pytorch-hccl-tests.cann9.0` — strip `RUN` only, no bashrc append | Align strip `RUN` with hw-native-sys |
 
 ### `Dockerfile.server.cann:9.0` — pypto dev workspace (host mount)
 
@@ -260,7 +264,9 @@ Additional for HCCL / multi-device:
 
 `LD_PRELOAD=libhccl.so` is **NOT** set image-wide. Setting it as `ENV` or in `bashrc`
 injects libhccl.so into every process including VS Code's server node → hang on attach.
-Set it manually in the shell before running HCCL tests:
+
+- **pypto / simpler images:** set it manually in the shell before running HCCL tests:
+- **pytorch-hccl-tests image:** `LD_PRELOAD` is not needed (torch HCCL path; no `host_runtime.so`).
 
 ```bash
 export LD_PRELOAD=${CANN_HOME}/aarch64-linux/lib64/libhccl.so

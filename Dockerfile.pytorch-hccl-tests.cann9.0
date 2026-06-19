@@ -43,6 +43,9 @@
 # NOTE:
 #   - Do NOT mount /usr/local/Ascend from host. The image already contains CANN.
 #   - The benchmark Makefile controls the torch / torch-npu install contract.
+#   - Do NOT set LD_PRELOAD image-wide (VS Code attach hang — see dockerfile_skills/issue_vscode_summary.md).
+#   - This image does NOT need LD_PRELOAD for torch HCCL benchmarks (no host_runtime.so).
+#   - CANN env is set via ENV; source set_env.sh manually only when debugging a missing var.
 #
 # COMMANDS INSIDE CONTAINER:
 #   The benchmark venv is auto-activated for interactive shells via /etc/bash.bashrc.
@@ -104,8 +107,17 @@ RUN python3.10 -m venv "${PT_HCCL_VENV}" && \
     make "${PT_HCCL_INSTALL_TARGET}" && \
     python -c "import pytorch_hccl_tests; print('pytorch_hccl_tests ok')"
 
-RUN echo "[ -f ${CANN_HOME}/set_env.sh ] && { source ${CANN_HOME}/set_env.sh 2>/dev/null || true; }" >> /etc/bash.bashrc && \
-    echo "[ -d ${PT_HCCL_VENV} ] && source ${PT_HCCL_VENV}/bin/activate" >> /etc/bash.bashrc && \
+# Remove set_env.sh auto-sourcing from ALL system/user startup files.
+# The Ascend base image injects these hooks; they take 10–30s and break VS Code attach.
+# All required env vars are set via ENV below; source manually when needed.
+RUN for f in /etc/profile /etc/bash.bashrc /root/.profile /root/.bashrc /root/.bash_profile; do \
+      [ -f "$f" ] && sed -i '/set_env\.sh/d' "$f" || true; \
+    done && \
+    for f in /etc/profile.d/*.sh; do \
+      [ -f "$f" ] && sed -i '/set_env\.sh/d' "$f" || true; \
+    done
+
+RUN echo "[ -d ${PT_HCCL_VENV} ] && source ${PT_HCCL_VENV}/bin/activate" >> /etc/bash.bashrc && \
     echo "export OMP_NUM_THREADS=1" >> /etc/bash.bashrc
 
 ENV PATH=${PT_HCCL_VENV}/bin:${PATH}
@@ -118,8 +130,8 @@ RUN test -f "${CANN_HOME}/aarch64-linux/lib64/libhccl.so" \
     || (echo "ERROR: libhccl.so missing at ${CANN_HOME}/aarch64-linux/lib64/libhccl.so" \
         && ls -la "${CANN_HOME}/aarch64-linux/lib64/" | grep -i hccl \
         && exit 1)
+# LD_PRELOAD is NOT set — this image uses torch_npu HCCL, not host_runtime.so weak symbols.
 
-ENV LD_PRELOAD=${CANN_HOME}/aarch64-linux/lib64/libhccl.so
 ENV PYTHONPATH=${CANN_HOME}/python/site-packages:${CANN_HOME}/opp/built-in/op_impl/ai_core/tbe
 ENV PYTHONPATH=${PYTHONPATH}:/usr/local/Ascend/ascend-toolkit/latest/python/site-packages:/usr/local/Ascend/ascend-toolkit/latest/opp/built-in/op_impl/ai_core/tbe
 
