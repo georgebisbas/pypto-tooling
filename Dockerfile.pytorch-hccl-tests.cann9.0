@@ -7,7 +7,7 @@
 #   CANN_VERSION            (default: 9.0.0) — selects the base image tag and cann-* paths
 #   INSTALL_PREFIX          (default: /opt)  — root for the benchmark checkout and venv
 #   PT_HCCL_REPO_URL        (default: georgebisbas fork URL)
-#   PT_HCCL_COMMIT          (default: 314b0ca4667bef624e826aae6633e1a6f275d9cd) — benchmark repo ref to checkout
+#   PT_HCCL_COMMIT          (default: dfd5a7ed58e04d9de7ddb97fa8161b66f9252458) — benchmark repo ref to checkout
 #   PT_HCCL_INSTALL_TARGET  (default: install-npu-arm) — Makefile target to install deps into the venv
 #
 # REQUIREMENTS:
@@ -20,7 +20,7 @@
 #
 # BUILD (custom fork ref / install target):
 #   docker build \
-#     --build-arg PT_HCCL_COMMIT=314b0ca4667bef624e826aae6633e1a6f275d9cd \
+#     --build-arg PT_HCCL_COMMIT=dfd5a7ed58e04d9de7ddb97fa8161b66f9252458 \
 #     --build-arg PT_HCCL_INSTALL_TARGET=install-npu-x86 \
 #     -t pytorch-hccl-tests:cann9 \
 #     - < Dockerfile.pytorch-hccl-tests.cann9.0
@@ -72,7 +72,7 @@ FROM quay.io/ascend/cann:${CANN_VERSION}-910b-ubuntu22.04-py3.12
 ARG CANN_VERSION=9.0.0
 ARG INSTALL_PREFIX=/opt
 ARG PT_HCCL_REPO_URL=https://github.com/georgebisbas/pytorch-hccl-tests.git
-ARG PT_HCCL_COMMIT=314b0ca4667bef624e826aae6633e1a6f275d9cd
+ARG PT_HCCL_COMMIT=dfd5a7ed58e04d9de7ddb97fa8161b66f9252458
 ARG PT_HCCL_INSTALL_TARGET=install-npu-arm
 
 ENV CANN_VERSION=${CANN_VERSION} \
