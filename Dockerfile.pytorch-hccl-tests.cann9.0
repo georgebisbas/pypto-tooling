@@ -85,6 +85,7 @@ RUN python3.10 -m venv "${PT_HCCL_VENV}" && \
     . "${PT_HCCL_VENV}/bin/activate" && \
     python -m pip install --upgrade pip && \
     pip install -r requirements_dev.txt && \
+    pip install -r requirements_plotting.txt && \
     make "${PT_HCCL_INSTALL_TARGET}" && \
     python -c "import pytorch_hccl_tests; print('pytorch_hccl_tests ok')"
 
