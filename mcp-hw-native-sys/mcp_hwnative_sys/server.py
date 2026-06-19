@@ -48,6 +48,10 @@ class TaskSpec:
     duration_hint: str | None = None
     warning: str | None = None
     prerequisites: tuple[str, ...] = ()
+    arch_families: tuple[str, ...] = ()
+    requires: dict[str, Any] | None = None
+    developer_only: bool = False
+    container_notes: str | None = None
 
 
 def _load_raw_config() -> dict[str, Any]:
@@ -102,6 +106,22 @@ def _blocked_pattern(command: str) -> str | None:
     return None
 
 
+def _normalize_string_list(value: Any) -> tuple[str, ...]:
+    if value is None:
+        return ()
+    if isinstance(value, str):
+        stripped = value.strip()
+        return (stripped,) if stripped else ()
+    if isinstance(value, list):
+        output: list[str] = []
+        for item in value:
+            text = str(item).strip()
+            if text:
+                output.append(text)
+        return tuple(output)
+    return (str(value).strip(),) if str(value).strip() else ()
+
+
 def _normalize_task_spec(task_key: str, raw_task: Any) -> TaskSpec:
     if isinstance(raw_task, str):
         command = raw_task.strip()
@@ -127,6 +147,9 @@ def _normalize_task_spec(task_key: str, raw_task: Any) -> TaskSpec:
 
     duration_hint_raw = str(raw_task.get("duration_hint", "")).strip()
     warning_raw = str(raw_task.get("warning", "")).strip()
+    container_notes_raw = str(raw_task.get("container_notes", "")).strip()
+    requires_raw = raw_task.get("requires")
+    requires_dict = dict(requires_raw) if isinstance(requires_raw, dict) else None
 
     return TaskSpec(
         key=task_key,
@@ -138,6 +161,10 @@ def _normalize_task_spec(task_key: str, raw_task: Any) -> TaskSpec:
         duration_hint=duration_hint_raw if duration_hint_raw else None,
         warning=warning_raw if warning_raw else None,
         prerequisites=_normalize_prerequisites(raw_task.get("prerequisites", [])),
+        arch_families=_normalize_string_list(raw_task.get("arch_families", [])),
+        requires=requires_dict,
+        developer_only=_to_bool(raw_task.get("developer_only", False)),
+        container_notes=container_notes_raw if container_notes_raw else None,
     )
 
 
@@ -215,6 +242,14 @@ def _task_to_dict(task: TaskSpec, include_command: bool = True) -> dict[str, Any
         payload["command"] = task.command
     if task.duration_hint:
         payload["duration_hint"] = task.duration_hint
+    if task.arch_families:
+        payload["arch_families"] = list(task.arch_families)
+    if task.requires:
+        payload["requires"] = task.requires
+    if task.developer_only:
+        payload["developer_only"] = True
+    if task.container_notes:
+        payload["container_notes"] = task.container_notes
 
     warning = _task_warning(task)
     if warning:

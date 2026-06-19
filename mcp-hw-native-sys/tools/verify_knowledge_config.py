@@ -21,10 +21,14 @@ from mcp_hwnative_sys.knowledge import (  # noqa: E402
     load_knowledge_config,
     resolve_doc_tier,
 )
-from mcp_hwnative_sys.paths import workspace_root  # noqa: E402
+from mcp_hwnative_sys.paths import project_root, resolve_doc_path, workspace_root  # noqa: E402
 
 
 def _check_path(root: Path, path: str, errors: list[str], warnings: list[str]) -> None:
+    if path.replace("\\", "/").startswith("content/"):
+        if not resolve_doc_path(path).exists():
+            errors.append(f"Missing path: {path}")
+        return
     if not (root / path).exists():
         errors.append(f"Missing path: {path}")
 
@@ -71,6 +75,17 @@ def main() -> int:
                 _check_path(root, path, errors, warnings)
         for path in card.get("docs_canonical", []):
             _check_path(root, path, errors, warnings)
+        for path in card.get("docs_enriched", []):
+            _check_path(root, path, errors, warnings)
+
+    for name in ("which_platform.md", "alignment_rules.md", "hccl_container_checklist.md"):
+        content_path = f"content/ascend/{name}"
+        if not resolve_doc_path(content_path).exists():
+            errors.append(f"Missing MCP content: {content_path}")
+
+    ascend_routes = [k for k in config.get("routes", {}) if k.startswith(("ascend_", "npu_"))]
+    if len(ascend_routes) < 4:
+        warnings.append(f"Expected >=4 ascend/npu routes, found {len(ascend_routes)}")
 
     for prefix in EPHEMERAL_PREFIXES:
         for route in config.get("routes", {}).values():

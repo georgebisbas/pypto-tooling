@@ -30,6 +30,22 @@ def abstractions_config_path() -> Path:
     return project_root() / "config" / "abstractions.json"
 
 
+def ascend_abstractions_config_path() -> Path:
+    return project_root() / "config" / "ascend_abstractions.json"
+
+
+def resolve_doc_path(relative_path: str) -> Path:
+    """Resolve a document path — MCP-owned content/ lives under project_root."""
+    normalized = relative_path.replace("\\", "/")
+    if normalized.startswith("content/"):
+        resolved = (project_root() / normalized).resolve()
+        root = project_root().resolve()
+        if not str(resolved).startswith(str(root)):
+            raise ValueError(f"Path escapes MCP project root: {relative_path}")
+        return resolved
+    return resolve_workspace_path(relative_path)
+
+
 def load_repos_config() -> dict[str, Any]:
     with repos_config_path().open("r", encoding="utf-8") as handle:
         return json.load(handle)

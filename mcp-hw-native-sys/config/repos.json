@@ -243,6 +243,13 @@
         "long_running": true,
         "environment_sensitive": true,
         "duration_hint": "2-15m",
+        "arch_families": ["a2a3"],
+        "requires": {
+          "npu_count_min": 2,
+          "hccl_preload": true
+        },
+        "developer_only": true,
+        "container_notes": "Docker: --privileged --ipc=host --pid=host; set LD_PRELOAD=libhccl.so in test shell only",
         "prerequisites": [
           "Ascend NPU with >=2 devices",
           "pypto built for a2a3"
@@ -437,6 +444,14 @@
         "long_running": true,
         "environment_sensitive": true,
         "duration_hint": "10-45m",
+        "arch_families": ["a2a3"],
+        "requires": {
+          "npu_count_min": 1
+        },
+        "developer_only": true,
+        "prerequisites": [
+          "Ascend hardware access and compatible runtime setup"
+        ],
         "warning": "Requires Ascend hardware access and compatible runtime setup."
       }
     }

@@ -10,10 +10,12 @@ from mcp.server.fastmcp import FastMCP
 
 from mcp_hwnative_sys.paths import (
     abstractions_config_path,
+    ascend_abstractions_config_path,
     entrypoints_config_path,
     knowledge_config_path,
     load_repos_config,
     project_root,
+    resolve_doc_path,
     resolve_workspace_path,
     safe_relpath,
     workspace_root,
@@ -22,7 +24,7 @@ from mcp_hwnative_sys.paths import (
 EPHEMERAL_PREFIXES = ("pypto-3.0-notes/pr_plans/", "pypto-3.0-notes/pull_requests/")
 NOTES_FRESHNESS_PATH = "pypto-3.0-notes/NOTES_FRESHNESS.md"
 
-_STACK_TRACE_RULES: list[tuple[str, str, str, list[str], list[str]]] = [
+_STACK_TRACE_RULES: list[tuple[str, str, str, str, list[str], list[str], list[str]]] = [
     (
         "pypto/src/ir/transforms/",
         "pypto",
@@ -30,6 +32,7 @@ _STACK_TRACE_RULES: list[tuple[str, str, str, list[str], list[str]]] = [
         "IR transformation passes (before codegen)",
         ["pypto", "PTOAS", "pto-isa", "simpler"],
         ["codegen"],
+        [],
     ),
     (
         "pypto/src/codegen/pto/",
@@ -38,6 +41,25 @@ _STACK_TRACE_RULES: list[tuple[str, str, str, list[str], list[str]]] = [
         "InCore PTO codegen → .pto MLIR",
         ["pypto"],
         ["PTOAS", "pto-isa", "AICore"],
+        ["A2A3 mixed kernels may inject GM pipe buffer (RequiresGMPipeBuffer); A5 uses on-chip fractal path"],
+    ),
+    (
+        "pypto/include/pypto/backend/910B/",
+        "pypto",
+        "backend_a2a3",
+        "Ascend910B backend handler — A2/A3 alignment and mixed-kernel policy",
+        ["pypto codegen"],
+        ["AICore launch"],
+        ["512B GM granularity; dual-AIV for unsplit mixed kernels; L0C 128KiB"],
+    ),
+    (
+        "pypto/include/pypto/backend/950/",
+        "pypto",
+        "backend_a5",
+        "Ascend950 backend handler — A5 fractal and alignment policy",
+        ["pypto codegen"],
+        ["AICore launch"],
+        ["128B min GM granularity; V2C fractal adapter; L0C 256KiB"],
     ),
     (
         "pypto/src/codegen/orchestration/",
@@ -46,6 +68,7 @@ _STACK_TRACE_RULES: list[tuple[str, str, str, list[str], list[str]]] = [
         "Orchestration codegen → PTO2 runtime C++",
         ["pypto"],
         ["simpler", "AICPU"],
+        [],
     ),
     (
         "pypto/src/codegen/distributed/",
@@ -54,6 +77,7 @@ _STACK_TRACE_RULES: list[tuple[str, str, str, list[str], list[str]]] = [
         "Distributed codegen → multi-rank orchestration",
         ["pypto"],
         ["simpler", "comm-domain"],
+        [],
     ),
     (
         "pypto/src/ir/op/distributed/",
@@ -62,6 +86,7 @@ _STACK_TRACE_RULES: list[tuple[str, str, str, list[str], list[str]]] = [
         "Distributed IR ops and collectives",
         ["pypto"],
         ["distributed_codegen", "pto-isa comm", "simpler"],
+        ["HCCL windows; signal [NR,1]; notify/wait lowered to TNOTIFY/TWAIT"],
     ),
     (
         "PTOAS/",
@@ -70,6 +95,7 @@ _STACK_TRACE_RULES: list[tuple[str, str, str, list[str], list[str]]] = [
         ".pto MLIR assembler and optimizer",
         ["pypto"],
         ["pto-isa", "AICore binaries"],
+        [],
     ),
     (
         "pto-isa/include/",
@@ -78,6 +104,7 @@ _STACK_TRACE_RULES: list[tuple[str, str, str, list[str], list[str]]] = [
         "Virtual tile ISA C++ implementations",
         ["PTOAS", "pypto"],
         ["AICore execution"],
+        ["MTE pipes bridge GM/L1/L0; cube vs vector instruction families"],
     ),
     (
         "simpler/src/common/worker/",
@@ -86,6 +113,7 @@ _STACK_TRACE_RULES: list[tuple[str, str, str, list[str], list[str]]] = [
         "Device worker execution",
         ["pypto orchestration codegen"],
         ["Ascend AICPU/AICore"],
+        [],
     ),
     (
         "simpler/src/common/comm/",
@@ -94,6 +122,7 @@ _STACK_TRACE_RULES: list[tuple[str, str, str, list[str], list[str]]] = [
         "Comm-domain and distributed runtime",
         ["pypto distributed codegen"],
         ["multi-chip execution"],
+        ["HCCL window layout; CommRemotePtr peer addressing; LD_PRELOAD for comm_init"],
     ),
     (
         "pypto-lib/golden/",
@@ -102,6 +131,7 @@ _STACK_TRACE_RULES: list[tuple[str, str, str, list[str], list[str]]] = [
         "Golden test harness",
         ["pypto"],
         ["device validation"],
+        [],
     ),
     (
         "pypto-lib/models/",
@@ -110,6 +140,7 @@ _STACK_TRACE_RULES: list[tuple[str, str, str, list[str], list[str]]] = [
         "End-to-end LLM model kernels",
         ["pypto", "pypto-lib"],
         ["training/inference workloads"],
+        [],
     ),
 ]
 
@@ -128,11 +159,57 @@ def load_entrypoints() -> dict[str, Any]:
 
 
 def load_abstractions() -> dict[str, Any]:
-    return _load_json(abstractions_config_path())
+    merged = _load_json(abstractions_config_path())
+    ascend_path = ascend_abstractions_config_path()
+    if ascend_path.exists():
+        ascend_cards = _load_json(ascend_path)
+        merged.update(ascend_cards)
+    return merged
+
+
+_ABSTRACTION_ALIASES: dict[str, str] = {
+    "aicore-cube": "AIC",
+    "cube": "AIC",
+    "aicore-vector": "AIV",
+    "vector": "AIV",
+    "hccl": "HCCLWindow",
+    "hcclwindow": "HCCLWindow",
+    "commremoteptr": "CommRemotePtr",
+    "910b": "Ascend910B",
+    "910c": "Ascend910B",
+    "950": "Ascend950",
+    "arch35": "Ascend950",
+    "notifyop": "NotifyOp",
+    "waitcmp": "WaitCmp",
+}
+
+
+def _resolve_abstraction_name(name: str) -> str | None:
+    abstractions = load_abstractions()
+    if name in abstractions:
+        return name
+    lowered = name.lower().replace(" ", "").replace("_", "")
+    key = next((k for k in abstractions if k.lower() == lowered), None)
+    if key:
+        return key
+    alias = _ABSTRACTION_ALIASES.get(lowered)
+    if alias and alias in abstractions:
+        return alias
+    return None
+
+
+def _bootstrap_prompt_for_task(task_type: str) -> str:
+    if task_type in ("ascend_arch", "ascend_runtime", "npu_tuning", "npu_verify_handoff"):
+        return "start_ascend_work"
+    if task_type.startswith("distributed") or task_type == "host_collectives_program":
+        return "start_distributed_work"
+    return "start_compiler_work"
 
 
 def resolve_doc_tier(relative_path: str) -> str:
     normalized = relative_path.replace("\\", "/")
+    if normalized.startswith("content/"):
+        return "mcp-owned"
     for prefix in EPHEMERAL_PREFIXES:
         if normalized.startswith(prefix):
             return "ephemeral"
@@ -178,7 +255,7 @@ def _truncate_slice(text: str, max_chars: int, relative_path: str) -> str:
 
 
 def read_doc_slice(relative_path: str, max_chars: int = 8000) -> str:
-    resolved = resolve_workspace_path(relative_path)
+    resolved = resolve_doc_path(relative_path)
     if not resolved.exists():
         raise FileNotFoundError(f"Document not found: {relative_path}")
 
@@ -212,7 +289,7 @@ def read_doc_payload(path: str, max_chars: int = 12000) -> dict[str, Any]:
     if tier == "ephemeral":
         raise ValueError(f"Refusing to serve ephemeral-tier doc via read_doc: {path}")
 
-    exists = resolve_workspace_path(path).exists()
+    exists = resolve_doc_path(path).exists()
     content = read_doc_slice(path, max_chars=max_chars) if exists else ""
     return {
         "path": path,
@@ -284,7 +361,7 @@ def route_task_impl(task_type: str, detail: str = "") -> dict[str, Any]:
         "agent_verify_tasks": route.get("agent_verify_tasks", route.get("verify_tasks", [])),
         "developer_verify_tasks": route.get("developer_verify_tasks", []),
         "resources": [f"hw-native-sys://{uri}" for uri in route.get("resources", [])],
-        "bootstrap_prompt": "start_compiler_work" if not task_type.startswith("distributed") and task_type != "host_collectives_program" else "start_distributed_work",
+        "bootstrap_prompt": _bootstrap_prompt_for_task(task_type),
     }
 
 
@@ -314,16 +391,15 @@ def list_knowledge_topics_impl() -> dict[str, Any]:
             {"topic": key, "uri": f"hw-native-sys://notes/{key}"}
             for key in sorted(notes_topics)
         ],
-        "prompts": ["start_compiler_work", "start_distributed_work"],
+        "prompts": ["start_compiler_work", "start_distributed_work", "start_ascend_work", "start_npu_verify"],
     }
 
 
 def explain_abstraction_impl(name: str) -> dict[str, Any]:
     abstractions = load_abstractions()
-    # Case-insensitive lookup
-    key = next((k for k in abstractions if k.lower() == name.lower()), None)
+    key = _resolve_abstraction_name(name)
     if key is None:
-        available = ", ".join(sorted(abstractions)[:20])
+        available = ", ".join(sorted(abstractions)[:25])
         raise ValueError(f"Unknown abstraction '{name}'. Examples: {available}")
 
     card = abstractions[key]
@@ -331,10 +407,12 @@ def explain_abstraction_impl(name: str) -> dict[str, Any]:
         "name": key,
         "layer": card.get("layer"),
         "kind": card.get("kind"),
+        "tags": card.get("tags", []),
+        "arch_families": card.get("arch_families", []),
         "repos": card.get("repos", []),
         "paths": card.get("paths", []),
         "docs_canonical": [
-            {"path": p, "exists": resolve_workspace_path(p).exists()}
+            {"path": p, "exists": _path_exists(p)}
             for p in card.get("docs_canonical", [])
         ],
         "docs_enriched": [
@@ -371,6 +449,8 @@ def search_abstractions_impl(query: str, max_results: int = 20) -> dict[str, Any
                 name,
                 str(card.get("layer", "")),
                 str(card.get("kind", "")),
+                " ".join(card.get("tags", [])),
+                " ".join(card.get("arch_families", [])),
                 " ".join(card.get("repos", [])),
                 " ".join(card.get("related", [])),
                 " ".join(card.get("downstream", [])),
@@ -382,6 +462,8 @@ def search_abstractions_impl(query: str, max_results: int = 20) -> dict[str, Any
                     "name": name,
                     "layer": card.get("layer"),
                     "kind": card.get("kind"),
+                    "tags": card.get("tags", []),
+                    "arch_families": card.get("arch_families", []),
                     "repos": card.get("repos", []),
                 }
             )
@@ -432,9 +514,9 @@ def trace_in_stack_impl(symbol_or_path: str) -> dict[str, Any]:
         }
 
     # Path-prefix heuristics
-    for prefix, repo, stage, description, upstream, downstream in _STACK_TRACE_RULES:
+    for prefix, repo, stage, description, upstream, downstream, arch_notes in _STACK_TRACE_RULES:
         if token.startswith(prefix) or prefix.rstrip("/") in token:
-            return {
+            result: dict[str, Any] = {
                 "input": symbol_or_path,
                 "matched_as": "path_prefix",
                 "repo": repo,
@@ -443,6 +525,9 @@ def trace_in_stack_impl(symbol_or_path: str) -> dict[str, Any]:
                 "upstream": upstream,
                 "downstream": downstream,
             }
+            if arch_notes:
+                result["arch_implications"] = arch_notes
+            return result
 
     return {
         "input": symbol_or_path,
@@ -451,16 +536,23 @@ def trace_in_stack_impl(symbol_or_path: str) -> dict[str, Any]:
     }
 
 
+def _path_exists(relative_path: str) -> bool:
+    if relative_path.replace("\\", "/").startswith("content/"):
+        return resolve_doc_path(relative_path).exists()
+    return resolve_workspace_path(relative_path).exists()
+
+
 def knowledge_health_impl() -> dict[str, Any]:
     config = load_knowledge_config()
     root = workspace_root()
     missing: list[str] = []
     stale_enriched: list[dict[str, str]] = []
+    ascend_issues: list[str] = []
     freshness = _parse_notes_freshness()
     today = date.today()
 
     def check_path(path: str) -> None:
-        if not (root / path).exists():
+        if path and not _path_exists(path):
             missing.append(path)
 
     for route in config.get("routes", {}).values():
@@ -475,28 +567,57 @@ def knowledge_health_impl() -> dict[str, Any]:
                 if age_days > 30:
                     stale_enriched.append({"path": path, "last_verified": verified, "age_days": str(age_days)})
 
+    ascend_arch_path = "pypto-3.0-notes/performance_tuning.md/ascend-architectures.md"
+    if not _path_exists(ascend_arch_path):
+        ascend_issues.append(f"Missing ascend arch reference: {ascend_arch_path}")
+    else:
+        verified = freshness.get(ascend_arch_path)
+        if verified:
+            age_days = (today - datetime.strptime(verified, "%Y-%m-%d").date()).days
+            if age_days > 30:
+                ascend_issues.append(f"Stale ascend-architectures.md ({age_days}d since last_verified)")
+
+    for name in ("which_platform.md", "alignment_rules.md", "hccl_container_checklist.md"):
+        content_path = f"content/ascend/{name}"
+        if not resolve_doc_path(content_path).exists():
+            ascend_issues.append(f"Missing MCP content: {content_path}")
+
     for resource in config.get("resources", {}).values():
-        for path in resource.get("paths", [resource.get("path")]):
-            if path:
-                check_path(path)
+        paths = resource.get("paths", [])
+        single = resource.get("path")
+        if single:
+            paths = [*paths, single]
+        for path in paths:
+            check_path(path)
 
     for path in config.get("notes_topics", {}).values():
         check_path(path)
 
     abstractions = load_abstractions()
+    for card in abstractions.values():
+        for path in card.get("paths", []):
+            check_path(path)
+        for path in card.get("docs_canonical", []):
+            check_path(path)
+
     index_build_marker = project_root() / "config" / ".index_build_time"
     last_index_build = None
     if index_build_marker.exists():
         last_index_build = index_build_marker.read_text(encoding="utf-8").strip()
 
+    ascend_route_count = sum(1 for k in config.get("routes", {}) if k.startswith(("ascend_", "npu_")))
+
     return {
         "config_version": config.get("version", "unknown"),
         "workspace_root": str(root),
         "abstraction_count": len(abstractions),
+        "ascend_route_count": ascend_route_count,
         "missing_paths_count": len(missing),
-        "missing_paths": missing[:50],
+        "missing_paths": list(dict.fromkeys(missing))[:50],
         "stale_enriched_count": len(stale_enriched),
         "stale_enriched": stale_enriched[:20],
+        "ascend_issues_count": len(ascend_issues),
+        "ascend_issues": ascend_issues[:20],
         "last_index_build": last_index_build,
     }
 
@@ -509,8 +630,18 @@ def render_resource(uri_suffix: str) -> str:
     if uri_suffix == "agent/routing":
         topics = list_knowledge_topics_impl()
         lines = ["# Task routing index", ""]
+        lines.append("## Compiler / stack")
         for item in topics["task_types"]:
+            if item["task_type"].startswith(("ascend_", "npu_")):
+                continue
             lines.append(f"- **{item['task_type']}**: {item['description']}")
+        lines.append("")
+        lines.append("## Ascend architecture / NPU")
+        for item in topics["task_types"]:
+            if item["task_type"].startswith(("ascend_", "npu_")):
+                lines.append(f"- **{item['task_type']}**: {item['description']}")
+        lines.append("")
+        lines.append("Bootstrap: `start_ascend_work` (focus: arch | tuning | hccl | verify)")
         return _doc_front_matter("config/knowledge.json") + "\n".join(lines)
 
     if uri_suffix.startswith("notes/"):
@@ -588,7 +719,7 @@ def register_knowledge(mcp: FastMCP) -> None:
 
     @mcp.tool()
     def explain_abstraction(name: str) -> dict[str, Any]:
-        """Explain a compiler/runtime abstraction by name (IR nodes, passes, codegen, ISA, runtime)."""
+        """Explain a stack abstraction: IR/passes/codegen/ISA/runtime or Ascend hardware (AIC, HCCL, etc.)."""
         return explain_abstraction_impl(name)
 
     @mcp.tool()
@@ -608,8 +739,38 @@ def register_knowledge(mcp: FastMCP) -> None:
 
     @mcp.tool()
     def knowledge_health() -> dict[str, Any]:
-        """Check knowledge config health: missing paths, stale enriched docs, index build time."""
+        """Check knowledge config health: missing paths, stale enriched docs, Ascend corpus, index build time."""
         return knowledge_health_impl()
+
+    @mcp.tool()
+    def ascend_env_check() -> dict[str, Any]:
+        """Read-only Ascend/CANN environment check: devices, HCCL preload, Docker hints."""
+        from mcp_hwnative_sys.ascend_env import ascend_env_check_impl
+
+        return ascend_env_check_impl()
+
+    @mcp.tool()
+    def generate_verify_handoff(
+        repo: str,
+        branch: str,
+        sha: str = "",
+        task_type: str = "npu_verify_handoff",
+        device_ids: str = "0,1",
+        platform: str = "a2a3",
+        fork_remote: str = "fork-gbisbas",
+    ) -> dict[str, Any]:
+        """Generate markdown handoff for developer NPU verification in a container."""
+        from mcp_hwnative_sys.handoff import generate_verify_handoff_impl
+
+        return generate_verify_handoff_impl(
+            repo=repo,
+            branch=branch,
+            sha=sha,
+            task_type=task_type,
+            device_ids=device_ids,
+            platform=platform,
+            fork_remote=fork_remote,
+        )
 
     @mcp.prompt(title="Start full-stack compiler work")
     def start_compiler_work(area: str = "stack_overview") -> str:
@@ -652,3 +813,42 @@ Verification split (George / gbisbas workflow):
 - Push only to fork-gbisbas; record git rev-parse HEAD in pypto-3.0-notes/memories/ when handing off.
 
 Distinguish compiler layer (pypto distributed ops/codegen) from runtime layer (simpler comm-domain, L3 worker)."""
+
+    @mcp.prompt(title="Start Ascend architecture / NPU work")
+    def start_ascend_work(focus: str = "arch") -> str:
+        focus_route = {
+            "arch": "ascend_arch",
+            "tuning": "npu_tuning",
+            "hccl": "ascend_runtime",
+            "runtime": "ascend_runtime",
+            "verify": "npu_verify_handoff",
+        }.get(focus, "ascend_arch")
+
+        return f"""You are working on Huawei Ascend NPU architecture, tuning, or distributed runtime topics.
+
+Before editing any code:
+1. Read MCP resources: hw-native-sys://ascend/hardware, hw-native-sys://ascend/arch_families
+2. Call route_task with task_type="{focus_route}"
+3. Call explain_abstraction for hardware concepts (AIC, AIV, MTE, HCCLWindow, BackendHandler910B, etc.)
+4. Call ascend_env_check when on or handing off to an NPU host/container
+5. For developer NPU verify: generate_verify_handoff — agents must NOT open upstream PRs
+
+Ascend expertise layers:
+- **Hardware:** AIC (cube), AIV (vector), AICPU scheduler, GM/L1/L0/UB (see ascend/memory_hierarchy)
+- **Arch families:** A2A3 (910B/910C) vs A5 (950) — hw-native-sys://ascend/arch_families
+- **Distributed:** HCCL windows, signal buffers [NR,1], container checklist — ascend/hccl_container_checklist
+
+Canonical docs are authoritative. Enriched notes (pypto-3.0-notes) are secondary — check tier labels."""
+
+    @mcp.prompt(title="Start NPU container verification (developer gate)")
+    def start_npu_verify() -> str:
+        return """You are verifying pypto/simpler changes on real Ascend NPUs (developer gate).
+
+Workflow:
+1. Call ascend_env_check — confirm devices, CANN_HOME, HCCL LD_PRELOAD path
+2. Read hw-native-sys://ascend/hccl_container_checklist
+3. Call generate_verify_handoff with repo, branch, platform, device_ids
+4. Checkout branch, pip install --no-build-isolation -e ".[dev]"
+5. export LD_PRELOAD=${CANN_HOME}/aarch64-linux/lib64/libhccl.so  (test shell only)
+6. Run developer_verify_tasks from route_task(npu_verify_handoff) — NOT agent sim tasks
+7. Record git rev-parse HEAD; do not open upstream PR unless explicitly asked"""

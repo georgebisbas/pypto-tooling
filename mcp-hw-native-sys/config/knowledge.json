@@ -1,5 +1,5 @@
 {
-  "version": "1.0.0",
+  "version": "1.1.0",
   "resources": {
     "overview/ecosystem": {
       "path": "pypto/docs/en/dev/00-ecosystem.md",
@@ -96,6 +96,56 @@
         "pypto/docs/en/dev/03-runtime-dfx.md"
       ],
       "max_chars": 8000
+    },
+    "ascend/hardware": {
+      "paths": [
+        "simpler/docs/hardware/chip-architecture.md",
+        "simpler/docs/chip-level-arch.md"
+      ],
+      "max_chars": 10000,
+      "tier": "canonical"
+    },
+    "ascend/arch_families": {
+      "path": "pypto-3.0-notes/performance_tuning.md/ascend-architectures.md",
+      "max_chars": 12000,
+      "tier": "enriched"
+    },
+    "ascend/memory_hierarchy": {
+      "paths": [
+        "simpler/docs/hardware/chip-architecture.md",
+        "pypto-lib/docs/performance-tuning.md"
+      ],
+      "max_chars": 8000
+    },
+    "ascend/cann_mapping": {
+      "paths": [
+        "pypto-lib/.claude/skills/cannbot-skills/ascendc-npu-arch/SKILL.md",
+        "pypto-lib/.claude/skills/cannbot-skills/ascendc-npu-arch/references/npu-arch-guide.md"
+      ],
+      "max_chars": 8000,
+      "tier": "enriched"
+    },
+    "ascend/hccl_runtime": {
+      "paths": [
+        "pypto-3.0-notes/tools/docker-cann-pr-test-workflow.md",
+        "pypto/docs/en/dev/distributed_ops.md"
+      ],
+      "max_chars": 10000
+    },
+    "ascend/platform_decisions": {
+      "path": "content/ascend/which_platform.md",
+      "max_chars": 6000,
+      "tier": "mcp-owned"
+    },
+    "ascend/alignment_rules": {
+      "path": "content/ascend/alignment_rules.md",
+      "max_chars": 6000,
+      "tier": "mcp-owned"
+    },
+    "ascend/hccl_container_checklist": {
+      "path": "content/ascend/hccl_container_checklist.md",
+      "max_chars": 8000,
+      "tier": "mcp-owned"
     }
   },
   "notes_topics": {
@@ -220,7 +270,7 @@
       "verify_tasks": ["pypto-tooling:host_collectives_ut_sim"],
       "agent_verify_tasks": ["pypto-tooling:host_collectives_ut_sim"],
       "developer_verify_tasks": ["pypto:host_collectives_st_npu"],
-      "resources": ["flows/distributed_allreduce", "agent/distributed_work_policy"]
+      "resources": ["flows/distributed_allreduce", "agent/distributed_work_policy", "ascend/hccl_runtime"]
     },
     "host_collectives_program": {
       "description": "Host builtin collectives program (plan 33): barrier, broadcast, reduce_scatter, allgather on #1798 rail",
@@ -274,7 +324,7 @@
       ],
       "entrypoint_areas": ["simpler:comm", "simpler:worker"],
       "verify_tasks": ["simpler:test_sim"],
-      "resources": ["simpler/overview", "flows/distributed_allreduce"]
+      "resources": ["simpler/overview", "flows/distributed_allreduce", "ascend/hccl_runtime"]
     },
     "large_model_inference": {
       "description": "pypto-lib models, golden harness, inference paths",
@@ -341,7 +391,7 @@
       ],
       "entrypoint_areas": ["simpler:orchestrator", "simpler:worker"],
       "verify_tasks": ["pypto-lib:example_hello_sim", "simpler:test_sim"],
-      "resources": ["simpler/overview", "flows/compile_to_device"]
+      "resources": ["simpler/overview", "flows/compile_to_device", "ascend/hardware"]
     },
     "pypto_lib": {
       "description": "Model zoo, kernels, golden validation harness",
@@ -372,7 +422,69 @@
       "rules": [],
       "entrypoint_areas": ["pypto:passes", "simpler:worker"],
       "verify_tasks": ["pypto-tooling:profiling_smoke"],
-      "resources": ["flows/performance"]
+      "resources": ["flows/performance", "ascend/arch_families", "ascend/alignment_rules"]
+    },
+    "ascend_arch": {
+      "description": "Ascend chip architecture: AIC/AIV, memory hierarchy, A2A3 vs A5",
+      "read_first_canonical": [
+        "simpler/docs/hardware/chip-architecture.md"
+      ],
+      "read_first_enriched": [
+        "pypto-3.0-notes/performance_tuning.md/ascend-architectures.md"
+      ],
+      "rules": [
+        "simpler/.claude/rules/ascend.md"
+      ],
+      "entrypoint_areas": ["simpler:worker", "pypto:codegen_pto"],
+      "verify_tasks": ["pypto-lib:example_hello_sim"],
+      "resources": ["ascend/hardware", "ascend/arch_families", "ascend/platform_decisions", "ascend/memory_hierarchy"]
+    },
+    "ascend_runtime": {
+      "description": "HCCL, comm windows, CANN container verify, distributed execution",
+      "read_first_canonical": [
+        "pypto/docs/en/dev/distributed_ops.md"
+      ],
+      "read_first_enriched": [
+        "pypto-3.0-notes/tools/docker-cann-pr-test-workflow.md",
+        "pypto-3.0-notes/allreduce_benchmark_variants/stack_availability.md"
+      ],
+      "rules": [
+        "simpler/.claude/rules/ascend.md"
+      ],
+      "entrypoint_areas": ["pypto:distributed_ops", "simpler:comm"],
+      "verify_tasks": ["pypto:codegen_tests"],
+      "agent_verify_tasks": ["pypto-tooling:host_collectives_ut_sim"],
+      "developer_verify_tasks": ["pypto:host_collectives_st_npu"],
+      "resources": ["ascend/hccl_runtime", "ascend/hccl_container_checklist", "flows/distributed_allreduce"]
+    },
+    "npu_tuning": {
+      "description": "Performance tuning: block_dim, swimlanes, PMU, arch-specific backend handlers",
+      "read_first_canonical": [
+        "pypto-lib/docs/performance-tuning.md"
+      ],
+      "read_first_enriched": [
+        "pypto-3.0-notes/performance_tuning.md/ascend-architectures.md"
+      ],
+      "rules": [],
+      "entrypoint_areas": ["pypto:passes", "pypto-lib:golden"],
+      "verify_tasks": ["pypto-tooling:profiling_smoke"],
+      "resources": ["ascend/arch_families", "ascend/alignment_rules", "flows/performance"]
+    },
+    "npu_verify_handoff": {
+      "description": "Developer NPU verification handoff — container checkout, HCCL STs, record SHA",
+      "read_first_canonical": [
+        "pypto/docs/en/dev/distributed_ops.md"
+      ],
+      "read_first_enriched": [
+        "pypto-3.0-notes/tools/docker-cann-pr-test-workflow.md",
+        "pypto-3.0-notes/agent/distributed_work_policy.md"
+      ],
+      "rules": [],
+      "entrypoint_areas": ["pypto:tests_st_distributed"],
+      "verify_tasks": [],
+      "agent_verify_tasks": [],
+      "developer_verify_tasks": ["pypto:host_collectives_st_npu"],
+      "resources": ["ascend/hccl_container_checklist", "ascend/hccl_runtime", "agent/distributed_work_policy"]
     }
   }
 }

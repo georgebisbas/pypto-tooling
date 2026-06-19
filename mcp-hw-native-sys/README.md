@@ -15,7 +15,7 @@ A local Model Context Protocol (MCP) server for full-stack compiler development 
 ## Daily workflow (recommended)
 
 1. Start MCP server (see Setup below).
-2. Invoke MCP prompt **`start_compiler_work`** (or **`start_distributed_work`** for collectives/L3).
+2. Invoke MCP prompt **`start_compiler_work`** (or **`start_distributed_work`** for collectives/L3, or **`start_ascend_work`** for Ascend architecture/tuning/HCCL).
 3. Read resources `hw-native-sys://overview/ecosystem` and `hw-native-sys://agent/invariants`.
 4. Call **`route_task`** with your task type (e.g. `pass_change`, `codegen_orch`, `distributed`).
 5. Call **`repository_health`** with `include_clean=false`.
@@ -48,8 +48,10 @@ A workspace Cursor rule at `.cursor/rules/hw-native-sys-mcp.md` reminds agents t
 | `explain_abstraction` | Concept card (IR, passes, codegen, ISA, runtime) |
 | `search_abstractions` | Keyword search over abstraction index |
 | `find_entrypoints` | Code paths per repo/area |
-| `trace_in_stack` | Where a symbol/path sits in the pipeline |
-| `knowledge_health` | Missing paths, stale enriched docs |
+| `trace_in_stack` | Where a symbol/path sits in the pipeline (+ Ascend arch notes) |
+| `knowledge_health` | Missing paths, stale enriched docs, Ascend corpus checks |
+| `ascend_env_check` | Read-only NPU/CANN/HCCL environment diagnosis |
+| `generate_verify_handoff` | Markdown handoff for developer NPU container verify |
 
 ## MCP resources
 
@@ -72,6 +74,7 @@ Fixed URIs (read via MCP resource client):
 | `hw-native-sys://agent/routing` | Task routing index |
 | `hw-native-sys://notes/{topic}` | Enriched notes (pass_infrastructure, host_collectives, …) |
 | `hw-native-sys://flows/*` | End-to-end flows (compile_to_device, distributed_allreduce, …) |
+| `hw-native-sys://ascend/*` | Ascend hardware, arch families, HCCL/container checklists |
 
 **Doc tiers:** `canonical` (sibling repo docs) is authoritative. `enriched` (pypto-3.0-notes) is secondary — check `last_verified` in front matter.
 
@@ -81,10 +84,12 @@ Fixed URIs (read via MCP resource client):
 |--------|----------|
 | `start_compiler_work` | General compiler work (`area` = task_type) |
 | `start_distributed_work` | Collectives, L3, large-scale inference (`focus` = collectives / **host_collectives** / codegen / runtime / inference) |
+| `start_ascend_work` | Ascend architecture, tuning, HCCL (`focus` = arch / tuning / hccl / verify) |
+| `start_npu_verify` | Developer NPU container verification handoff |
 
 ## Task types (`route_task`)
 
-`stack_overview`, `ir_change`, `pass_change`, `codegen_pto`, `codegen_orch`, `distributed`, `distributed_collectives`, **`host_collectives_program`**, `distributed_codegen`, `distributed_runtime`, `large_model_inference`, `ptoas`, `pto_isa`, `runtime`, `pypto_lib`, `performance`
+`stack_overview`, `ir_change`, `pass_change`, `codegen_pto`, `codegen_orch`, `distributed`, `distributed_collectives`, **`host_collectives_program`**, `distributed_codegen`, `distributed_runtime`, `large_model_inference`, `ptoas`, `pto_isa`, `runtime`, `pypto_lib`, `performance`, **`ascend_arch`**, **`ascend_runtime`**, **`npu_tuning`**, **`npu_verify_handoff`**
 
 `route_task` returns **`agent_verify_tasks`** (agent gate) and **`developer_verify_tasks`** (NPU/hardware — agent must not run) when configured.
 
@@ -128,7 +133,9 @@ Register stdio MCP server:
 | `config/repos.json` | Workspace root, repos, tasks, `repository_meta` |
 | `config/knowledge.json` | Task routes, resources, notes topics |
 | `config/entrypoints.json` | Per-repo code entrypoints |
-| `config/abstractions.json` | ~40 stack concept cards |
+| `config/abstractions.json` | Compiler/stack concept cards (~40) |
+| `config/ascend_abstractions.json` | Ascend hardware, arch, HCCL concept cards |
+| `content/ascend/*.md` | MCP-owned decision trees (platform, alignment, HCCL) |
 
 ### Maintain knowledge config
 
@@ -151,6 +158,10 @@ Destructive patterns (`git reset --hard`, etc.) are blocked in task config.
 - "Invoke `start_compiler_work` with area=`codegen_orch` and follow the bootstrap."
 - "`route_task` for `host_collectives_program` — sim Docker UT vs NPU ST split."
 - "`explain_abstraction` for `host_collectives_program`."
+- "`explain_abstraction` for `BackendHandler910B` — when is GM pipe buffer required?"
+- "`route_task` `ascend_runtime` — HCCL windows and container flags"
+- "`ascend_env_check` then `generate_verify_handoff` for branch feat/foo"
+- "`search_abstractions` hccl window"
 - "`explain_abstraction` for `IterArgCarryAnalyzer`."
 - "`trace_in_stack` for `pypto/src/codegen/pto/pto_codegen.cpp`."
 - "`search_abstractions` for allreduce."
