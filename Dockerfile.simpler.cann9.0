@@ -34,28 +34,17 @@
 #
 # NOTE: Do NOT mount /usr/local/Ascend from host.
 #   This image already contains CANN; only /usr/local/Ascend/driver is needed.
+#   HCCL: use --pid=host at docker run; export LD_PRELOAD in shell before HCCL lines below (not image-wide).
 #
-# COMMON COMMANDS INSIDE CONTAINER (defaults: INSTALL_PREFIX=/opt, CANN_VERSION=9.0.0):
+# COMMON COMMANDS INSIDE CONTAINER (copy-paste; defaults: INSTALL_PREFIX=/opt, CANN_VERSION=9.0.0):
 #
 #   cd /opt/simpler
-#
-#   # [Optional] Rebuild C++ extension after editing source (wheel is pre-installed at build):
 #   pip install --no-build-isolation .
-#
-#   # Non-hardware unit tests (pure Python/sim paths; no NPU needed):
 #   python -m pytest tests/ut -m "not requires_hardware" -v --clone-protocol https
-#
-#   # Hardware UT — NO HCCL:
-#   #   run requires_hardware tests but skip HCCL-specific comm windows test.
 #   python -m pytest tests -m requires_hardware --platform a2a3 --device 0,1,2,3 -v --ignore=tests/ut/py/test_worker/test_platform_comm.py
-#   # Scene tests — NO HCCL:
 #   python -m pytest tests/st -v --platform a2a3 --device 0,1,2,3 --pto-session-timeout 600 --clone-protocol https --require-pto-isa
-#
-#   # HCCL UT — REQUIRES --pid=host at docker run time (see RUN block above).
-#   # Before HCCL tests/examples, export LD_PRELOAD in this shell (not image-wide):
-#   #   export LD_PRELOAD=${CANN_HOME}/aarch64-linux/lib64/libhccl.so
+#   export LD_PRELOAD=${CANN_HOME}/aarch64-linux/lib64/libhccl.so
 #   python -m pytest tests/ut/py/test_worker/test_platform_comm.py -m requires_hardware --platform a2a3 --device 0,1,2,3 -v
-#   # HCCL examples — allocate_domain paths (same --pid=host requirement applies):
 #   python examples/workers/l3/allreduce_distributed/main.py -p a2a3 -d 0-1
 #   python examples/workers/l3/ep_dispatch_combine/main.py -p a2a3 -d 0-1
 #   python examples/workers/l3/ffn_tp_parallel/main.py -p a2a3 -d 0-1

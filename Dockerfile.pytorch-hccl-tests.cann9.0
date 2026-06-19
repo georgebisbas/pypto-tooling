@@ -18,53 +18,43 @@
 # BUILD (defaults):
 #   docker build -t pytorch-hccl-tests:cann9 - < Dockerfile.pytorch-hccl-tests.cann9.0
 #
+<<<<<<< HEAD
 # BUILD (custom fork ref / install target):
 #   docker build \
 #     --build-arg PT_HCCL_COMMIT=dfd5a7ed58e04d9de7ddb97fa8161b66f9252458 \
 #     --build-arg PT_HCCL_INSTALL_TARGET=install-npu-x86 \
 #     -t pytorch-hccl-tests:cann9 \
 #     - < Dockerfile.pytorch-hccl-tests.cann9.0
+=======
+# BUILD (x86 host / custom ref):
+#   docker build --build-arg PT_HCCL_COMMIT=314b0ca4667bef624e826aae6633e1a6f275d9cd --build-arg PT_HCCL_INSTALL_TARGET=install-npu-x86 -t pytorch-hccl-tests:cann9 - < Dockerfile.pytorch-hccl-tests.cann9.0
+>>>>>>> 314fa8a (docker: update)
 #
 # RUN (single-device, NO HCCL collectives):
-#   docker run --rm -it --privileged --ipc=host \
-#     -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi:ro \
-#     -v /usr/local/Ascend/driver:/usr/local/Ascend/driver:ro \
-#     -v /dev:/dev \
-#     pytorch-hccl-tests:cann9
+#   docker run --rm -it --privileged --ipc=host -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi:ro -v /usr/local/Ascend/driver:/usr/local/Ascend/driver:ro -v /dev:/dev pytorch-hccl-tests:cann9
 #
 # RUN (multi-device, HCCL collectives — MUST use --pid=host):
-#   docker run --rm -it --privileged --ipc=host --pid=host \
-#     --cap-add=SYS_PTRACE --security-opt seccomp=unconfined \
-#     -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi:ro \
-#     -v /usr/local/Ascend/driver:/usr/local/Ascend/driver:ro \
-#     -v /dev:/dev \
-#     pytorch-hccl-tests:cann9
+#   docker run --rm -it --privileged --ipc=host --pid=host --cap-add=SYS_PTRACE --security-opt seccomp=unconfined -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi:ro -v /usr/local/Ascend/driver:/usr/local/Ascend/driver:ro -v /dev:/dev pytorch-hccl-tests:cann9
 #
 # NOTE:
 #   - Do NOT mount /usr/local/Ascend from host. The image already contains CANN.
 #   - The benchmark Makefile controls the torch / torch-npu install contract.
-#   - Do NOT set LD_PRELOAD image-wide (VS Code attach hang — see dockerfile_skills/issue_vscode_summary.md).
+#   - Do NOT set LD_PRELOAD image-wide (VS Code attach hang — see dockerfile_skills/issue_vscode_summary.md).python -c "import torch_npu; import torch.distributed as dist; print('torch_npu', torch_npu.__version__); print('hccl', getattr(dist, 'is_hccl_available', lambda: 'n/a')())"python -c "import torch_npu; import torch.distributed as dist; print('torch_npu', torch_npu.__version__); print('hccl', getattr(dist, 'is_hccl_available', lambda: 'n/a')())"
 #   - This image does NOT need LD_PRELOAD for torch HCCL benchmarks (no host_runtime.so).
 #   - CANN env is set via ENV; source set_env.sh manually only when debugging a missing var.
+#   - NPU collectives need --pid=host at docker run; LD_PRELOAD not required for this image.
 #
-# COMMANDS INSIDE CONTAINER:
-#   The benchmark venv is auto-activated for interactive shells via /etc/bash.bashrc.
-#
+# COMMANDS INSIDE CONTAINER (copy-paste; venv auto-activated in interactive shells):
+#python -c "import torch_npu; import torch.distributed as dist; print('torch_npu', torch_npu.__version__); print('hccl', getattr(dist, 'is_hccl_available', lambda: 'n/a')())"python -c "import torch_npu; import torch.distributed as dist; print('torch_npu', torch_npu.__version__); print('hccl', getattr(dist, 'is_hccl_available', lambda: 'n/a')())"
 #   cd /opt/pytorch-hccl-tests
 #   npu-smi info
 #   python -c "import torch, pytorch_hccl_tests; print('torch', torch.__version__)"
 #   python -c "import torch_npu; import torch.distributed as dist; print('torch_npu', torch_npu.__version__); print('hccl', getattr(dist, 'is_hccl_available', lambda: 'n/a')())"
-#
-#   # CPU sanity checks:
 #   pytest tests/test_pytorch_hccl_tests.py tests/test_commons.py -q
 #   torchrun --nnodes 1 --nproc_per_node 2 pytorch_hccl_tests/cli.py --benchmark latency --device cpu
-#
-#   # Single-node NPU smoke tests (two ranks):
 #   torchrun --nnodes 1 --nproc_per_node 2 pytorch_hccl_tests/cli.py --benchmark latency --device npu
 #   torchrun --nnodes 1 --nproc_per_node 2 pytorch_hccl_tests/cli.py --benchmark allreduce --device npu
-#
-#   # Larger collective example (requires enough devices and --pid=host at docker run time):
-#   WORLD_SIZE=4 make allreduce DEVICE=npu
+python -c "import torch_npu; import torch.distributed as dist; print('torch_npu', torch_npu.__version__); print('hccl', getattr(dist, 'is_hccl_available', lambda: 'n/a')())"#   WORLD_SIZE=4 make allreduce DEVICE=npu
 
 ARG CANN_VERSION=9.0.0
 FROM quay.io/ascend/cann:${CANN_VERSION}-910b-ubuntu22.04-py3.12
