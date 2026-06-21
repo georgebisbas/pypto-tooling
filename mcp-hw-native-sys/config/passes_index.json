@@ -1,0 +1,368 @@
+{
+  "version": "1.0.0",
+  "generated_from": "pypto/python/pypto/ir/pass_manager.py",
+  "strategy": "Default",
+  "pass_count": 40,
+  "passes": [
+    {
+      "name": "InlineFunctions",
+      "order": 1,
+      "phase": "1_normalization_ssa",
+      "strategy": "Default",
+      "verify_tasks": [
+        "pypto:unit_tests_fast"
+      ]
+    },
+    {
+      "name": "UnrollLoops",
+      "order": 2,
+      "phase": "1_normalization_ssa",
+      "strategy": "Default",
+      "verify_tasks": [
+        "pypto:unit_tests_fast"
+      ]
+    },
+    {
+      "name": "CtrlFlowTransform",
+      "order": 3,
+      "phase": "1_normalization_ssa",
+      "strategy": "Default",
+      "verify_tasks": [
+        "pypto:unit_tests_fast"
+      ]
+    },
+    {
+      "name": "ConvertToSSA",
+      "order": 4,
+      "phase": "1_normalization_ssa",
+      "strategy": "Default",
+      "verify_tasks": [
+        "pypto:unit_tests_fast"
+      ]
+    },
+    {
+      "name": "Simplify",
+      "order": 5,
+      "phase": "1_normalization_ssa",
+      "strategy": "Default",
+      "verify_tasks": [
+        "pypto:unit_tests_fast"
+      ]
+    },
+    {
+      "name": "NormalizeStmtStructure",
+      "order": 6,
+      "phase": "1_normalization_ssa",
+      "strategy": "Default",
+      "verify_tasks": [
+        "pypto:unit_tests_fast"
+      ]
+    },
+    {
+      "name": "FlattenCallExpr",
+      "order": 7,
+      "phase": "1_normalization_ssa",
+      "strategy": "Default",
+      "verify_tasks": [
+        "pypto:unit_tests_fast"
+      ]
+    },
+    {
+      "name": "SplitChunkedLoops",
+      "order": 8,
+      "phase": "2_scope_tensor_lowering",
+      "strategy": "Default",
+      "verify_tasks": [
+        "pypto:unit_tests_fast"
+      ]
+    },
+    {
+      "name": "InterchangeChunkLoops",
+      "order": 9,
+      "phase": "2_scope_tensor_lowering",
+      "strategy": "Default",
+      "verify_tasks": [
+        "pypto:unit_tests_fast"
+      ]
+    },
+    {
+      "name": "OutlineHierarchyScopes",
+      "order": 10,
+      "phase": "2_scope_tensor_lowering",
+      "strategy": "Default",
+      "verify_tasks": [
+        "pypto:unit_tests_fast"
+      ]
+    },
+    {
+      "name": "OutlineIncoreScopes",
+      "order": 11,
+      "phase": "2_scope_tensor_lowering",
+      "strategy": "Default",
+      "verify_tasks": [
+        "pypto:unit_tests_fast"
+      ]
+    },
+    {
+      "name": "OutlineClusterScopes",
+      "order": 12,
+      "phase": "2_scope_tensor_lowering",
+      "strategy": "Default",
+      "verify_tasks": [
+        "pypto:unit_tests_fast"
+      ]
+    },
+    {
+      "name": "ConvertTensorToTileOps",
+      "order": 13,
+      "phase": "2_scope_tensor_lowering",
+      "strategy": "Default",
+      "verify_tasks": [
+        "pypto:unit_tests_fast"
+      ]
+    },
+    {
+      "name": "OptimizeOrchTensors",
+      "order": 14,
+      "phase": "2_scope_tensor_lowering",
+      "strategy": "Default",
+      "verify_tasks": [
+        "pypto:unit_tests_fast"
+      ]
+    },
+    {
+      "name": "LowerCompositeOps",
+      "order": 15,
+      "phase": "3_tile_layout",
+      "strategy": "Default",
+      "verify_tasks": [
+        "pypto:system_tests_sim"
+      ]
+    },
+    {
+      "name": "FlattenTileNdTo2D",
+      "order": 16,
+      "phase": "3_tile_layout",
+      "strategy": "Default",
+      "verify_tasks": [
+        "pypto:unit_tests_fast"
+      ]
+    },
+    {
+      "name": "AutoTileMatmulL0",
+      "order": 17,
+      "phase": "3_tile_layout",
+      "strategy": "Default",
+      "verify_tasks": [
+        "pypto:unit_tests_fast"
+      ]
+    },
+    {
+      "name": "CanonicalizeTileSlice",
+      "order": 18,
+      "phase": "3_tile_layout",
+      "strategy": "Default",
+      "verify_tasks": [
+        "pypto:unit_tests_fast"
+      ]
+    },
+    {
+      "name": "InferTileMemorySpace",
+      "order": 19,
+      "phase": "3_tile_layout",
+      "strategy": "Default",
+      "verify_tasks": [
+        "pypto:unit_tests_fast"
+      ]
+    },
+    {
+      "name": "LowerTransposeLoadParamLayout",
+      "order": 20,
+      "phase": "3_tile_layout",
+      "strategy": "Default",
+      "verify_tasks": [
+        "pypto:unit_tests_fast"
+      ]
+    },
+    {
+      "name": "ResolveBackendOpLayouts",
+      "order": 21,
+      "phase": "3_tile_layout",
+      "strategy": "Default",
+      "verify_tasks": [
+        "pypto:unit_tests_fast"
+      ]
+    },
+    {
+      "name": "ExpandMixedKernel",
+      "order": 22,
+      "phase": "4_cross_core_scheduling",
+      "strategy": "Default",
+      "verify_tasks": [
+        "pypto:unit_tests_fast"
+      ]
+    },
+    {
+      "name": "InjectGMPipeBuffer",
+      "order": 23,
+      "phase": "4_cross_core_scheduling",
+      "strategy": "Default",
+      "verify_tasks": [
+        "pypto:unit_tests_fast"
+      ]
+    },
+    {
+      "name": "SplitVectorKernel",
+      "order": 24,
+      "phase": "4_cross_core_scheduling",
+      "strategy": "Default",
+      "verify_tasks": [
+        "pypto:unit_tests_fast"
+      ]
+    },
+    {
+      "name": "NormalizeReturnOrder",
+      "order": 25,
+      "phase": "4_cross_core_scheduling",
+      "strategy": "Default",
+      "verify_tasks": [
+        "pypto:codegen_tests"
+      ]
+    },
+    {
+      "name": "SkewCrossCorePipeline",
+      "order": 26,
+      "phase": "4_cross_core_scheduling",
+      "strategy": "Default",
+      "verify_tasks": [
+        "pypto:unit_tests_fast"
+      ]
+    },
+    {
+      "name": "LowerPipelineLoops",
+      "order": 27,
+      "phase": "5_memory",
+      "strategy": "Default",
+      "verify_tasks": [
+        "pypto:unit_tests_fast"
+      ]
+    },
+    {
+      "name": "CanonicalizeIOOrder",
+      "order": 28,
+      "phase": "5_memory",
+      "strategy": "Default",
+      "verify_tasks": [
+        "pypto:unit_tests_fast"
+      ]
+    },
+    {
+      "name": "MaterializeTensorStrides",
+      "order": 29,
+      "phase": "5_memory",
+      "strategy": "Default",
+      "verify_tasks": [
+        "pypto:unit_tests_fast"
+      ]
+    },
+    {
+      "name": "InitMemRef",
+      "order": 30,
+      "phase": "5_memory",
+      "strategy": "Default",
+      "verify_tasks": [
+        "pypto:unit_tests_fast"
+      ]
+    },
+    {
+      "name": "MemoryReuse",
+      "order": 31,
+      "phase": "5_memory",
+      "strategy": "Default",
+      "verify_tasks": [
+        "pypto:unit_tests_fast"
+      ]
+    },
+    {
+      "name": "AllocateMemoryAddr",
+      "order": 32,
+      "phase": "5_memory",
+      "strategy": "Default",
+      "verify_tasks": [
+        "pypto:unit_tests_fast"
+      ]
+    },
+    {
+      "name": "FoldNoOpReshape",
+      "order": 33,
+      "phase": "6_codegen_finalization",
+      "strategy": "Default",
+      "verify_tasks": [
+        "pypto:unit_tests_fast"
+      ]
+    },
+    {
+      "name": "FuseCreateAssembleToSlice",
+      "order": 34,
+      "phase": "6_codegen_finalization",
+      "strategy": "Default",
+      "verify_tasks": [
+        "pypto:unit_tests_fast"
+      ]
+    },
+    {
+      "name": "DeriveCallDirections",
+      "order": 35,
+      "phase": "6_codegen_finalization",
+      "strategy": "Default",
+      "verify_tasks": [
+        "pypto:codegen_tests"
+      ]
+    },
+    {
+      "name": "AutoDeriveTaskDependencies",
+      "order": 36,
+      "phase": "6_codegen_finalization",
+      "strategy": "Default",
+      "verify_tasks": [
+        "pypto:codegen_tests"
+      ]
+    },
+    {
+      "name": "ExpandManualPhaseFence",
+      "order": 37,
+      "phase": "6_codegen_finalization",
+      "strategy": "Default",
+      "verify_tasks": [
+        "pypto:unit_tests_fast"
+      ]
+    },
+    {
+      "name": "MaterializeCommDomainScopes",
+      "order": 38,
+      "phase": "6_codegen_finalization",
+      "strategy": "Default",
+      "verify_tasks": [
+        "pypto:system_tests_sim"
+      ]
+    },
+    {
+      "name": "LowerHostTensorCollectives",
+      "order": 39,
+      "phase": "6_codegen_finalization",
+      "strategy": "Default",
+      "verify_tasks": [
+        "pypto:system_tests_sim"
+      ]
+    },
+    {
+      "name": "MaterializeRuntimeScopes",
+      "order": 40,
+      "phase": "6_codegen_finalization",
+      "strategy": "Default",
+      "verify_tasks": [
+        "pypto:codegen_tests"
+      ]
+    }
+  ]
+}

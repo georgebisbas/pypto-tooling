@@ -362,10 +362,12 @@ def _run_simpler_once(case: EquivalenceCase, extra_flags: list[str] | None = Non
             f"simpler supports only count=256 (hardcoded ALLREDUCE_COUNT); "
             f"got {case.count}. Use 'hccl' stack for size sweeps."
         ), [], 0.0, {}
+    script = simpler_root() / "examples" / "workers" / "l3" / "allreduce_distributed" / "main.py"
+    mode_flags: list[str] = []
     if case.variant == "ring":
-        script = simpler_root() / "examples" / "workers" / "l3" / "allreduce_ring_distributed" / "main.py"
-    else:
-        script = simpler_root() / "examples" / "workers" / "l3" / "allreduce_distributed" / "main.py"
+        mode_flags = ["--mode", "ring"]
+    elif case.variant == "twophase":
+        mode_flags = ["--mode", "twophase"]
     if not script.is_file():
         return False, f"simpler script not found: {script}", [], 0.0, {}
 
@@ -373,7 +375,7 @@ def _run_simpler_once(case: EquivalenceCase, extra_flags: list[str] | None = Non
         sys.executable, str(script),
         "-p", case.platform,
         "-d", _devices_dash(case.device_ids),
-    ] + (extra_flags or [])
+    ] + mode_flags + (extra_flags or [])
     return _run_with_phases(
         cmd, str(simpler_root()),
         {**os.environ, "PYTHONUNBUFFERED": "1"},

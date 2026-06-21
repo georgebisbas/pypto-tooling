@@ -15,12 +15,12 @@ A local Model Context Protocol (MCP) server for full-stack compiler development 
 ## Daily workflow (recommended)
 
 1. Start MCP server (see Setup below).
-2. Invoke MCP prompt **`start_compiler_work`** (or **`start_distributed_work`** for collectives/L3, or **`start_ascend_work`** for Ascend architecture/tuning/HCCL).
-3. Read resources `hw-native-sys://overview/ecosystem` and `hw-native-sys://agent/invariants`.
-4. Call **`route_task`** with your task type (e.g. `pass_change`, `codegen_orch`, `distributed`).
-5. Call **`repository_health`** with `include_clean=false`.
-6. Use **`explain_abstraction`** / **`search_abstractions`** for stack concepts.
-7. Implement, then run **`verify_tasks`** from `route_task` via **`run_task`**.
+2. Invoke MCP prompt **`start_compiler_work`** (or **`start_distributed_work`** / **`start_ascend_work`**).
+3. Call **`bootstrap_session`** with your task type — returns route metadata, `read_plan`, health, and program hints in one call.
+4. Follow `read_plan`; use **`read_doc(path, section=...)`** for large enriched notes.
+5. Use **`explain_pass`** / **`explain_abstraction`** / **`trace_contract`** for stack concepts.
+6. Call **`program_status`** for open PRs and blockers.
+7. Implement, then run **`verify_ladder(changed_paths)`** or **`agent_verify_tasks`** via **`run_task`**.
 
 A workspace Cursor rule at `.cursor/rules/hw-native-sys-mcp.md` reminds agents to bootstrap via MCP before editing.
 
@@ -31,8 +31,9 @@ A workspace Cursor rule at `.cursor/rules/hw-native-sys-mcp.md` reminds agents t
 | Tool | Purpose |
 |------|---------|
 | `list_repositories` | Repos, paths, architecture metadata |
-| `repository_health` | Branch, dirty state, ahead/behind |
-| `search_code` | Ripgrep across repos |
+| `repository_health` | Branch, dirty state, ahead/behind, `active_program_hints` from `config/programs.json` |
+| `search_code` | Ripgrep (`mode=locations` default; `mode=context` opt-in; `group_by_file`) |
+| `bootstrap_session` | Single-call bootstrap: route + read_plan + health + program hints |
 | `list_tasks` | Named tasks for a repo |
 | `run_task` | Run configured task |
 | `run_command` | Ad-hoc shell in a repo |
@@ -43,12 +44,14 @@ A workspace Cursor rule at `.cursor/rules/hw-native-sys-mcp.md` reminds agents t
 | Tool | Purpose |
 |------|---------|
 | `route_task` | Read-first docs, rules, entrypoints, verify tasks by workflow |
-| `list_knowledge_topics` | Discover task types, resources, prompts |
-| `read_doc` | Read workspace doc with tier label (canonical/enriched) |
+| `read_doc` | Read workspace doc with tier label; optional `section` for markdown heading extraction |
+| `explain_pass` | Pass pipeline card: order, phase, neighbors, verify tasks |
 | `explain_abstraction` | Concept card (IR, passes, codegen, ISA, runtime) |
-| `search_abstractions` | Keyword search over abstraction index |
-| `find_entrypoints` | Code paths per repo/area |
-| `trace_in_stack` | Where a symbol/path sits in the pipeline (+ Ascend arch notes) |
+| `search_abstractions` | Keyword search (`fields=summary` default) |
+| `trace_in_stack` / `trace_contract` | Stack position + dependency triangle contracts |
+| `verify_ladder` | Minimal verify tasks for changed file paths |
+| `program_status` | Structured open PRs, blockers, plan cross-index |
+| `summarize_profile` | Summarize `pypto-tooling/profiling/` campaign directories |
 | `knowledge_health` | Missing paths, stale enriched docs, Ascend corpus checks |
 | `ascend_env_check` | Read-only NPU/CANN/HCCL environment diagnosis |
 | `generate_verify_handoff` | Markdown handoff for developer NPU container verify |
@@ -135,6 +138,9 @@ Register stdio MCP server:
 | `config/entrypoints.json` | Per-repo code entrypoints |
 | `config/abstractions.json` | Compiler/stack concept cards (~40) |
 | `config/ascend_abstractions.json` | Ascend hardware, arch, HCCL concept cards |
+| `config/passes_index.json` | Default pipeline pass order (from `build_knowledge_index.py`) |
+| `config/programs.json` | Branch → active program hints (route, verify, blockers) |
+| `config/program_status.json` | Structured PR status (from `sync_status_to_json.py`) |
 | `content/ascend/*.md` | MCP-owned decision trees (platform, alignment, HCCL) |
 
 ### Maintain knowledge config
@@ -143,8 +149,11 @@ Register stdio MCP server:
 # Verify all referenced paths exist
 python tools/verify_knowledge_config.py
 
-# Scan codebase for index suggestions (updates .index_build_time marker)
+# Scan codebase for index suggestions (passes_index.json + .index_build_time)
 python tools/build_knowledge_index.py
+
+# Sync status_prs.md → program_status.json for agents
+python tools/sync_status_to_json.py
 ```
 
 ## Task profile (operations)

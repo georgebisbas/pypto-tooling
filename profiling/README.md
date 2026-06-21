@@ -159,5 +159,5 @@ pytest tests/st/distributed/test_l3_allreduce.py -v --platform a2a3 -d 0-1
 
 cd "$SIMPLER_ROOT"
 python examples/workers/l3/allreduce_distributed/main.py -p a2a3 -d 0-1
-python examples/workers/l3/allreduce_ring_distributed/main.py -p a2a3 -d 0-3
+python examples/workers/l3/allreduce_distributed/main.py -p a2a3 -d 0-3 --mode ring
 ```

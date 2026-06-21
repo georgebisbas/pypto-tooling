@@ -38,6 +38,7 @@
   "IRProperty": {
     "layer": "pypto/passes",
     "kind": "pass_framework",
+    "one_liner": "Bitset of IR invariants; passes declare/consume properties",
     "repos": ["pypto"],
     "paths": ["pypto/include/pypto/ir/transforms/passes.h"],
     "docs_canonical": ["pypto/docs/en/dev/passes/00-pass_manager.md"],
@@ -134,6 +135,7 @@
   "LowerHostTensorCollectives": {
     "layer": "pypto/passes",
     "kind": "pass",
+    "one_liner": "Lowers pld.tensor collectives in host_orch to builtin.tensor.* × P",
     "repos": ["pypto"],
     "paths": ["pypto/src/ir/transforms/lower_host_tensor_collectives_pass.cpp"],
     "docs_canonical": ["pypto/docs/en/dev/passes/38-lower_host_tensor_collectives.md"],

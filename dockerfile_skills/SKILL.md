@@ -41,6 +41,7 @@ Task starts
 | `Dockerfile.hw-native-sys.cann9.0` | pypto + simpler + pto-isa + ptoas | `docker build -t img - < Dockerfile...` | Yes (a2a3) |
 | `Dockerfile.simpler.cann9.0` | simpler + pto-isa only | `docker build -t img - < Dockerfile...` | Yes (a2a3) |
 | `Dockerfile.hw-native-sys.sim.ubuntu22.04` | pypto + pto-isa (sim mode) | `docker build -t img -f Dockerfile... .` | No |
+| `Dockerfile.simpler.sim.ubuntu22.04` | simpler + pto-isa (sim mode) | `docker build -t img -f Dockerfile... .` | No |
 | `Dockerfile.pytorch-hccl-tests.cann9.0` | HCCL benchmarks | `docker build -t img - < Dockerfile...` | Yes (a2a3) |
 | `Dockerfile.server.cann:9.0` | pypto dev workspace | `docker build -t img -f Dockerfile... .` | Yes (a2a3) |
 
@@ -80,6 +81,16 @@ Note: No PTOAS or pypto dependencies — simpler-only image.
 | 3 | PTOAS x86_64 version/SHA256 changed? | `grep -E 'PTOAS_VERSION\|PTOAS_SHA256' pypto/.github/workflows/ci.yml` — use the **x86_64** SHA256 from `system-tests-a5sim` job | `ARG PTOAS_VERSION` + `ARG PTOAS_SHA256` (x86_64 binary) |
 
 Note: Uses **x86_64** `ptoas-bin-x86_64.tar.gz` with a **different SHA256** than the aarch64 binary used in hw-native-sys.
+
+### `Dockerfile.simpler.sim.ubuntu22.04` — simpler + pto-isa (x86_64 sim)
+
+| # | Check | Command | What to update if drifted |
+|---|-------|---------|--------------------------|
+| 1 | simpler `origin/main` ahead of `SIMPLER_COMMIT`? | `git -C /path/to/simpler rev-list --count ${SIMPLER_COMMIT}..origin/main` | `ARG SIMPLER_COMMIT` + header comment |
+| 2 | pto-isa commit in simpler's CI changed? | `grep -oP 'PTO_ISA_COMMIT:\s*\K[a-f0-9]+' simpler/.github/workflows/ci.yml \| head -1` | `ARG PTO_ISA_COMMIT` (simpler CI format) |
+| 3 | L3 sim pytest flags match `st-sim-a2a3`? | Compare `ci.yml` `pytest examples tests/st --platform a2a3sim` with `scripts/run-simpler-l3-sim.sh` | Update script + Dockerfile header |
+
+Note: No pypto, CANN, or ptoas — simpler-only sim image. Build context must include `scripts/run-simpler-l3-sim.sh` (build from `pypto-tooling/`).
 
 ### `Dockerfile.pytorch-hccl-tests.cann9.0` — HCCL benchmarks only
 

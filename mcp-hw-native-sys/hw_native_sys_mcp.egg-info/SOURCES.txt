@@ -1,0 +1,10 @@
+README.md
+pyproject.toml
+hw_native_sys_mcp.egg-info/PKG-INFO
+hw_native_sys_mcp.egg-info/SOURCES.txt
+hw_native_sys_mcp.egg-info/dependency_links.txt
+hw_native_sys_mcp.egg-info/entry_points.txt
+hw_native_sys_mcp.egg-info/requires.txt
+hw_native_sys_mcp.egg-info/top_level.txt
+mcp_hwnative_sys/__init__.py
+mcp_hwnative_sys/server.py

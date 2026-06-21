@@ -1,0 +1,33 @@
+{
+  "programs": [
+    {
+      "id": "host_collectives_program",
+      "repo": "pypto",
+      "branch_pattern": "feat/host-collectives-builtin",
+      "route_task": "host_collectives_program",
+      "plan": "pypto-3.0-notes/pr_plans/33-pypto-host-collectives-builtin-program.md",
+      "memory": "pypto-3.0-notes/memories/host_collectives.md",
+      "agent_verify": "pypto-tooling:host_collectives_ut_sim",
+      "developer_verify": "pypto:host_collectives_st_npu",
+      "blockers": ["#1782"]
+    },
+    {
+      "id": "composite_collectives",
+      "repo": "pypto",
+      "branch_pattern": "feat/composite-collectives",
+      "route_task": "distributed_collectives",
+      "plan": "pypto-3.0-notes/pr_plans/29-pypto-allgather-composite-intrinsic.md",
+      "agent_verify": "pypto:system_tests_sim",
+      "blockers": []
+    },
+    {
+      "id": "codegen_iterarg_refactor",
+      "repo": "pypto",
+      "branch_pattern": "refactor/extract-iterarg-carry-analyzer",
+      "route_task": "codegen_orch",
+      "plan": "pypto-3.0-notes/pr_plans/23-extract-iterarg-carry-analyzer.md",
+      "agent_verify": "pypto:codegen_tests",
+      "blockers": []
+    }
+  ]
+}

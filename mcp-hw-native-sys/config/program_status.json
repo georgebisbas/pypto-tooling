@@ -1,0 +1,261 @@
+{
+  "last_verified": "2026-06-20 (manual audit; `sync_status_prs.sh` needs `gh auth login`)",
+  "dashboard": {
+    "open": 3,
+    "merged_all": 15,
+    "merged_90d": 15,
+    "closed": 10
+  },
+  "open_prs": [
+    {
+      "pr": "#1782",
+      "title": "feat(distributed): add pld.tensor.barrier, broadcast...",
+      "branch": "feat/composite-collectives",
+      "ci": "\ud83d\udfe1",
+      "notes": "[1782_notes](../pull_requests/1782_notes.md)",
+      "repo": "pypto"
+    },
+    {
+      "pr": "#1813",
+      "title": "refactor(codegen): extract IterArgCarryAnalyzer from Fo...",
+      "branch": "refactor/extract-iterarg-carry-analyzer",
+      "ci": "\ud83d\udfe1",
+      "notes": "sim UT only; no distributed ST",
+      "repo": "pypto"
+    },
+    {
+      "pr": "#1059",
+      "title": "perf(l3): remove useless exchange buffer from ring a...",
+      "branch": "feat/simpler/l3-ring-allreduce-v2",
+      "ci": "\u2705",
+      "notes": "[1782_notes](../pull_requests/1782_notes.md)",
+      "repo": "simpler"
+    },
+    {
+      "pr": "#1092",
+      "title": "feat(l3): consolidate allreduce variants with --mode ...",
+      "branch": "feat/l3-allreduce-variants-consolidation",
+      "ci": "\u2705",
+      "notes": "[simpler-1092](../pull_requests/simpler-1092-allreduce-consolidation.md)",
+      "repo": "simpler"
+    }
+  ],
+  "fork_wip": [
+    {
+      "repo": "pypto",
+      "branch": "docs/collective-api-landscape-audit",
+      "sha": "e77e0eca",
+      "plan": "[plan 16](16-pypto-collective-api-phasing-rfc-alignment.md)",
+      "npu": "\u2014",
+      "blocker": "docs-only; open upstream PR"
+    },
+    {
+      "repo": "pypto",
+      "branch": "feat/host-collectives-builtin",
+      "sha": "eeea306e",
+      "plan": "[plan 33](33-pypto-host-collectives-builtin-program.md)",
+      "npu": "NPU pending",
+      "blocker": "sim UT green; blocked on #1782 merge for clean upstream story \u2014 [memories/host_collectives.md](../memories/host_collectives.md)"
+    }
+  ],
+  "blockers": [
+    {
+      "branch": "feat/host-collectives-builtin",
+      "blocker": "sim UT green; blocked on #1782 merge for clean upstream story \u2014 [memories/host_collectives.md](../memories/host_collectives.md)"
+    }
+  ],
+  "plan_cross_index": [
+    {
+      "plan": "01",
+      "repo": "pypto",
+      "prs": "[#1631](https://github.com/hw-native-sys/pypto/pull/1631)",
+      "title": "[PyPTO L3 broadcast ST](01-pypto-l3-broadcast-st.md)"
+    },
+    {
+      "plan": "02",
+      "repo": "pypto",
+      "prs": "[#1632](https://github.com/hw-native-sys/pypto/pull/1632)",
+      "title": "[Notify/wait doc hygiene](02-pypto-notify-wait-hygiene.md)"
+    },
+    {
+      "plan": "05",
+      "repo": "pypto-lib",
+      "prs": "\u2014",
+      "title": "[EP inventory + v4/distributed layout](05-pypto-lib-ep-orch-callsite-doc.md)"
+    },
+    {
+      "plan": "10",
+      "repo": "pypto-lib",
+      "prs": "[#439](https://github.com/hw-native-sys/pypto-lib/pull/439)",
+      "title": "[moe_ep deploy hardening](10-pypto-lib-moe-ep-deploy-hardening.md)"
+    },
+    {
+      "plan": "06",
+      "repo": "pypto",
+      "prs": "[#1646](https://github.com/hw-native-sys/pypto/pull/1646)",
+      "title": "[AllReduce P=4 mesh ST](06-pypto-allreduce-p4.md)"
+    },
+    {
+      "plan": "07",
+      "repo": "simpler",
+      "prs": "[#975](https://github.com/hw-native-sys/simpler/pull/975)",
+      "title": "[Ring AllReduce skeleton](07-simpler-ring-allreduce-skeleton.md)"
+    },
+    {
+      "plan": "11",
+      "repo": "pypto",
+      "prs": "[#1778](https://github.com/hw-native-sys/pypto/pull/1778)",
+      "title": "[PyPTO ring allreduce ST](11-pypto-ring-allreduce-st.md)"
+    },
+    {
+      "plan": "08",
+      "repo": "pypto",
+      "prs": "\u2014",
+      "title": "[FFN TP ST port](08-pypto-ffn-tp-st-port.md)"
+    },
+    {
+      "plan": "09",
+      "repo": "pypto",
+      "prs": "\u2014",
+      "title": "[Unskip put/get STs](09-pypto-unskip-put-get.md)"
+    },
+    {
+      "plan": "12",
+      "repo": "simpler",
+      "prs": "[#1059](https://github.com/hw-native-sys/simpler/pull/1059)",
+      "title": "[simpler ring allreduce cleanup](12-simpler-ring-allreduce-cleanup.md)"
+    },
+    {
+      "plan": "12",
+      "repo": "pypto",
+      "prs": "[#1668](https://github.com/hw-native-sys/pypto/pull/1668)",
+      "title": "[AllReduce dynamic NR + codegen](12-pypto-allreduce-dynamic-nr-codegen.md)"
+    },
+    {
+      "plan": "13",
+      "repo": "pypto",
+      "prs": "[#1781](https://github.com/hw-native-sys/pypto/pull/1781)",
+      "title": "[AllGather dynamic NR parity](13-pypto-allgather-dynamic-nr-parity.md)"
+    },
+    {
+      "plan": "14",
+      "repo": "pypto",
+      "prs": "[#1781](https://github.com/hw-native-sys/pypto/pull/1781)",
+      "title": "[ReduceScatter + Broadcast dynamic NR parity](14-pypto-reduce-scatter-broadcast-dynamic-nr-parity.md)"
+    },
+    {
+      "plan": "15",
+      "repo": "pypto",
+      "prs": "[#1781](https://github.com/hw-native-sys/pypto/pull/1781)",
+      "title": "[Loop-bound index-cast UT pack](15-pypto-loop-bound-index-cast-ut-pack.md)"
+    },
+    {
+      "plan": "16",
+      "repo": "pypto",
+      "prs": "\u2014",
+      "title": "[Collective API landscape audit](16-pypto-collective-api-phasing-rfc-alignment.md)"
+    },
+    {
+      "plan": "17",
+      "repo": "pypto",
+      "prs": "\u2014",
+      "title": "[Multi-group semantics hardening](17-pypto-multigroup-semantics-hardening.md)"
+    },
+    {
+      "plan": "18",
+      "repo": "pypto",
+      "prs": "[#1700](https://github.com/hw-native-sys/pypto/pull/1700)",
+      "title": "[Elevate LOG_WARN to INTERNAL_CHECK](18-codegen-fallback-to-check.md)"
+    },
+    {
+      "plan": "19",
+      "repo": "pypto",
+      "prs": "\u2014",
+      "title": "[Add pre-verification barrier](19-pre-verification-barrier.md)"
+    },
+    {
+      "plan": "20",
+      "repo": "pypto",
+      "prs": "\u2014",
+      "title": "[Op predicates extraction](20-codegen-op-predicates.md)"
+    },
+    {
+      "plan": "21",
+      "repo": "pypto",
+      "prs": "\u2014",
+      "title": "[OrchestrationResult \u2192 class](21-orch-result-proper-class.md)"
+    },
+    {
+      "plan": "22",
+      "repo": "pypto",
+      "prs": "\u2014",
+      "title": "[Use CodeEmitter in orch](22-orch-use-codeemitter.md)"
+    },
+    {
+      "plan": "23",
+      "repo": "pypto",
+      "prs": "[#1813](https://github.com/hw-native-sys/pypto/pull/1813)",
+      "title": "[Extract IterArgCarryAnalyzer](23-extract-iterarg-carry-analyzer.md)"
+    },
+    {
+      "plan": "24",
+      "repo": "pypto",
+      "prs": "[#1795](https://github.com/hw-native-sys/pypto/pull/1795)",
+      "title": "[Extract AliasingNodeCollector](24-extract-aliasing-collector.md)"
+    },
+    {
+      "plan": "25",
+      "repo": "pypto",
+      "prs": "\u2014",
+      "title": "[Split CodegenBase](25-split-codegen-base.md)"
+    },
+    {
+      "plan": "26",
+      "repo": "pypto",
+      "prs": "\u2014",
+      "title": "[OrchestrationCodegen class](26-orch-codegen-class.md)"
+    },
+    {
+      "plan": "27",
+      "repo": "pypto",
+      "prs": "\u2014",
+      "title": "[Error-path codegen tests](27-codegen-error-tests.md)"
+    },
+    {
+      "plan": "28",
+      "repo": "pypto",
+      "prs": "[#1758](https://github.com/hw-native-sys/pypto/pull/1758)",
+      "title": "[Scalar __rfloordiv__ / __rtruediv__ + DSL tests](28-pypto-scalar-rfloordiv-rtruediv.md)"
+    },
+    {
+      "plan": "29",
+      "repo": "pypto",
+      "prs": "[#1782](https://github.com/hw-native-sys/pypto/pull/1782)",
+      "title": "[allgather composite intrinsic](29-pypto-allgather-composite-intrinsic.md)"
+    },
+    {
+      "plan": "30",
+      "repo": "pypto",
+      "prs": "[#1782](https://github.com/hw-native-sys/pypto/pull/1782)",
+      "title": "[reduce_scatter composite intrinsic](30-pypto-reduce-scatter-composite-intrinsic.md)"
+    },
+    {
+      "plan": "31",
+      "repo": "pypto",
+      "prs": "[#1782](https://github.com/hw-native-sys/pypto/pull/1782)",
+      "title": "[broadcast composite intrinsic](31-pypto-broadcast-composite-intrinsic.md)"
+    },
+    {
+      "plan": "32",
+      "repo": "pypto",
+      "prs": "[#1782](https://github.com/hw-native-sys/pypto/pull/1782)",
+      "title": "[barrier composite intrinsic](32-pypto-barrier-composite-intrinsic.md)"
+    },
+    {
+      "plan": "33",
+      "repo": "pypto",
+      "prs": "\u2014",
+      "title": "[Host collectives builtin program](33-pypto-host-collectives-builtin-program.md)"
+    }
+  ]
+}

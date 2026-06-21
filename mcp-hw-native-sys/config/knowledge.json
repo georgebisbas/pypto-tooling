@@ -47,6 +47,11 @@
       ],
       "max_chars": 6000
     },
+    "simpler/l3_distributed_collectives": {
+      "path": "content/simpler/l3_distributed_collectives.md",
+      "max_chars": 6000,
+      "tier": "mcp-owned"
+    },
     "pypto-lib/overview": {
       "paths": [
         "pypto-lib/README.md",
@@ -324,7 +329,7 @@
       ],
       "entrypoint_areas": ["simpler:comm", "simpler:worker"],
       "verify_tasks": ["simpler:test_sim"],
-      "resources": ["simpler/overview", "flows/distributed_allreduce", "ascend/hccl_runtime"]
+      "resources": ["simpler/overview", "simpler/l3_distributed_collectives", "flows/distributed_allreduce", "ascend/hccl_runtime"]
     },
     "large_model_inference": {
       "description": "pypto-lib models, golden harness, inference paths",

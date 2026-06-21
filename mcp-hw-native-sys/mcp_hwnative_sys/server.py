@@ -9,6 +9,7 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 
 from mcp_hwnative_sys.knowledge import get_repository_meta, register_knowledge
+from mcp_hwnative_sys.programs import match_program_hints
 from mcp_hwnative_sys.paths import (
     load_repos_config,
     safe_relpath,
@@ -401,17 +402,11 @@ def repository_health(include_clean: bool = True) -> dict[str, Any]:
         commit_result = _git(repo.path, ["log", "-1", "--pretty=%h %cr %s"])
         row["last_commit"] = commit_result.stdout.strip() if commit_result.returncode == 0 else "unknown"
 
-        if repo.name == "pypto" and row.get("branch") == "feat/host-collectives-builtin":
-            row["active_program_hints"] = [
-                {
-                    "program": "host_collectives_program",
-                    "plan": "pypto-3.0-notes/pr_plans/33-pypto-host-collectives-builtin-program.md",
-                    "memory": "pypto-3.0-notes/memories/host_collectives.md",
-                    "agent_verify": "pypto-tooling:host_collectives_ut_sim",
-                    "developer_verify": "pypto:host_collectives_st_npu",
-                    "route_task": "host_collectives_program",
-                }
-            ]
+        branch = row.get("branch", "")
+        if branch and branch != "unknown":
+            hints = match_program_hints(repo.name, branch)
+            if hints:
+                row["active_program_hints"] = hints
 
         if include_clean or not row["clean"]:
             output.append(row)
@@ -429,12 +424,17 @@ def search_code(
     file_glob: str = "*",
     max_results: int = 200,
     use_regex: bool = False,
+    mode: str = "locations",
+    context_lines: int = 2,
+    group_by_file: bool = False,
 ) -> dict[str, Any]:
-    """Search code across one repo or all repos with ripgrep."""
+    """Search code across repos. mode=locations (default) omits line text; mode=context includes context."""
     if not query.strip():
         raise ValueError("query cannot be empty")
     if max_results < 1 or max_results > 2000:
         raise ValueError("max_results must be between 1 and 2000")
+    if mode not in ("locations", "context"):
+        raise ValueError("mode must be 'locations' or 'context'")
 
     rg_path = shutil.which("rg")
     if rg_path is None:
@@ -453,7 +453,7 @@ def search_code(
                 targets.append(repo_item)
 
     if not targets:
-        return {"match_count": 0, "matches": []}
+        return {"match_count": 0, "matches": [], "files": {}}
 
     command = [
         rg_path,
@@ -462,6 +462,8 @@ def search_code(
         "--color",
         "never",
     ]
+    if mode == "context" and context_lines > 0:
+        command.extend(["-C", str(context_lines)])
     if not use_regex:
         command.append("--fixed-strings")
     if file_glob and file_glob != "*":
@@ -474,9 +476,13 @@ def search_code(
         raise RuntimeError(proc.stderr.strip() or "search failed")
 
     matches: list[dict[str, Any]] = []
+    file_counts: dict[str, int] = {}
     target_by_path = sorted(targets, key=lambda item: len(str(item.path)), reverse=True)
 
     for raw_line in proc.stdout.splitlines():
+        if mode == "context" and raw_line.startswith("--"):
+            continue
+
         parts = raw_line.split(":", 2)
         if len(parts) != 3:
             continue
@@ -497,23 +503,33 @@ def search_code(
             except ValueError:
                 continue
 
-        matches.append(
-            {
-                "repo": repo_name,
-                "file": safe_relpath(file_path, root),
-                "line": line_number,
-                "text": text,
-            }
-        )
+        rel_file = safe_relpath(file_path, root)
+        file_counts[rel_file] = file_counts.get(rel_file, 0) + 1
+
+        entry: dict[str, Any] = {
+            "repo": repo_name,
+            "file": rel_file,
+            "line": line_number,
+        }
+        if mode == "context":
+            entry["text"] = text
+        matches.append(entry)
 
         if len(matches) >= max_results:
             break
 
-    return {
+    result: dict[str, Any] = {
         "match_count": len(matches),
         "truncated": len(proc.stdout.splitlines()) > len(matches),
+        "mode": mode,
         "matches": matches,
     }
+    if group_by_file:
+        result["files"] = [
+            {"file": path, "match_count": count}
+            for path, count in sorted(file_counts.items(), key=lambda x: -x[1])
+        ]
+    return result
 
 
 @mcp.tool()
@@ -619,6 +635,26 @@ def explain_task(task: str, repo: str = "pypto") -> dict[str, Any]:
 
 
 register_knowledge(mcp)
+
+
+@mcp.tool()
+def bootstrap_session(
+    task_type: str,
+    detail: str = "",
+    include_health: bool = True,
+) -> dict[str, Any]:
+    """Single-call session bootstrap: route metadata, read_plan, health, program hints."""
+    from mcp_hwnative_sys.bootstrap import bootstrap_session_impl
+
+    def _health() -> dict[str, Any]:
+        return repository_health(include_clean=False)
+
+    return bootstrap_session_impl(
+        task_type,
+        detail,
+        include_health=include_health,
+        health_fetcher=_health if include_health else None,
+    )
 
 
 def main() -> None:

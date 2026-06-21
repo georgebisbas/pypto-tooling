@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Suggest abstractions index entries from codebase scans."""
+"""Build knowledge indexes: passes_index.json and abstraction suggestions."""
 
 from __future__ import annotations
 
@@ -15,6 +15,7 @@ CONFIG_DIR = PROJECT_ROOT / "config"
 
 sys.path.insert(0, str(PROJECT_ROOT))
 
+from mcp_hwnative_sys.passes_index import build_passes_index  # noqa: E402
 from mcp_hwnative_sys.paths import workspace_root  # noqa: E402
 
 
@@ -52,6 +53,10 @@ def main() -> int:
     if existing_path.exists():
         existing = json.loads(existing_path.read_text(encoding="utf-8"))
 
+    passes_index = build_passes_index()
+    passes_path = CONFIG_DIR / "passes_index.json"
+    passes_path.write_text(json.dumps(passes_index, indent=2) + "\n", encoding="utf-8")
+
     suggestions = {
         "pass_manager_passes": _scan_pass_manager(root),
         "ir_header_classes": _scan_ir_headers(root)[:50],
@@ -63,6 +68,7 @@ def main() -> int:
     report = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "existing_abstractions": len(existing),
+        "passes_index_count": passes_index.get("pass_count", 0),
         "suggested_missing_passes": missing_passes[:30],
         "sample_ir_classes": suggestions["ir_header_classes"][:20],
         "sample_pto_isa_ops": suggestions["pto_isa_instructions"][:20],
@@ -72,7 +78,8 @@ def main() -> int:
 
     marker = CONFIG_DIR / ".index_build_time"
     marker.write_text(report["generated_at"], encoding="utf-8")
-    print(f"\nWrote build marker: {marker}")
+    print(f"\nWrote passes_index: {passes_path}")
+    print(f"Wrote build marker: {marker}")
     return 0
 
 

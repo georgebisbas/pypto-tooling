@@ -27,9 +27,12 @@ One backend handler covers both A2 (910B) and A3 (910_93 / 910C) on the a2a3 cod
 
 ## When real NPU is required
 
-- Multi-rank HCCL / distributed `tests/st/distributed/`
+- PyPTO `tests/st/distributed/` multi-rank HCCL (separate from simpler `examples/`)
 - Performance tuning with PMU / Insight
 - pypto-lib model scripts with `-p a2a3 -d <id>`
+
+**Note:** Simpler L3 `examples/workers/l3/*_distributed/` STs **do run on `a2a3sim`**
+in CI (`st-sim-a2a3`). See `hw-native-sys://simpler/l3_distributed_collectives`.
 
 ## CANN / SocVersion (AscendC layer)
 
@@ -56,4 +59,5 @@ Need HCCL multi-rank?
 
 - `hw-native-sys://ascend/arch_families` — handler diffs, block_dim limits
 - `hw-native-sys://ascend/alignment_rules` — GM alignment per arch
+- `hw-native-sys://simpler/l3_distributed_collectives` — L3 collective ST hardware requirement
 - `route_task` with `npu_tuning` or `ascend_arch`

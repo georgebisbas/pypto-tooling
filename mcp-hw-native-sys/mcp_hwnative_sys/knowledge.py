@@ -8,6 +8,7 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
+from mcp_hwnative_sys.doc_sections import build_section_toc, extract_section
 from mcp_hwnative_sys.paths import (
     abstractions_config_path,
     ascend_abstractions_config_path,
@@ -23,126 +24,6 @@ from mcp_hwnative_sys.paths import (
 
 EPHEMERAL_PREFIXES = ("pypto-3.0-notes/pr_plans/", "pypto-3.0-notes/pull_requests/")
 NOTES_FRESHNESS_PATH = "pypto-3.0-notes/NOTES_FRESHNESS.md"
-
-_STACK_TRACE_RULES: list[tuple[str, str, str, str, list[str], list[str], list[str]]] = [
-    (
-        "pypto/src/ir/transforms/",
-        "pypto",
-        "passes",
-        "IR transformation passes (before codegen)",
-        ["pypto", "PTOAS", "pto-isa", "simpler"],
-        ["codegen"],
-        [],
-    ),
-    (
-        "pypto/src/codegen/pto/",
-        "pypto",
-        "codegen_pto",
-        "InCore PTO codegen → .pto MLIR",
-        ["pypto"],
-        ["PTOAS", "pto-isa", "AICore"],
-        ["A2A3 mixed kernels may inject GM pipe buffer (RequiresGMPipeBuffer); A5 uses on-chip fractal path"],
-    ),
-    (
-        "pypto/include/pypto/backend/910B/",
-        "pypto",
-        "backend_a2a3",
-        "Ascend910B backend handler — A2/A3 alignment and mixed-kernel policy",
-        ["pypto codegen"],
-        ["AICore launch"],
-        ["512B GM granularity; dual-AIV for unsplit mixed kernels; L0C 128KiB"],
-    ),
-    (
-        "pypto/include/pypto/backend/950/",
-        "pypto",
-        "backend_a5",
-        "Ascend950 backend handler — A5 fractal and alignment policy",
-        ["pypto codegen"],
-        ["AICore launch"],
-        ["128B min GM granularity; V2C fractal adapter; L0C 256KiB"],
-    ),
-    (
-        "pypto/src/codegen/orchestration/",
-        "pypto",
-        "codegen_orch",
-        "Orchestration codegen → PTO2 runtime C++",
-        ["pypto"],
-        ["simpler", "AICPU"],
-        [],
-    ),
-    (
-        "pypto/src/codegen/distributed/",
-        "pypto",
-        "codegen_dist",
-        "Distributed codegen → multi-rank orchestration",
-        ["pypto"],
-        ["simpler", "comm-domain"],
-        [],
-    ),
-    (
-        "pypto/src/ir/op/distributed/",
-        "pypto",
-        "distributed_ops",
-        "Distributed IR ops and collectives",
-        ["pypto"],
-        ["distributed_codegen", "pto-isa comm", "simpler"],
-        ["HCCL windows; signal [NR,1]; notify/wait lowered to TNOTIFY/TWAIT"],
-    ),
-    (
-        "PTOAS/",
-        "PTOAS",
-        "assembler",
-        ".pto MLIR assembler and optimizer",
-        ["pypto"],
-        ["pto-isa", "AICore binaries"],
-        [],
-    ),
-    (
-        "pto-isa/include/",
-        "pto-isa",
-        "isa",
-        "Virtual tile ISA C++ implementations",
-        ["PTOAS", "pypto"],
-        ["AICore execution"],
-        ["MTE pipes bridge GM/L1/L0; cube vs vector instruction families"],
-    ),
-    (
-        "simpler/src/common/worker/",
-        "simpler",
-        "runtime",
-        "Device worker execution",
-        ["pypto orchestration codegen"],
-        ["Ascend AICPU/AICore"],
-        [],
-    ),
-    (
-        "simpler/src/common/comm/",
-        "simpler",
-        "runtime_comm",
-        "Comm-domain and distributed runtime",
-        ["pypto distributed codegen"],
-        ["multi-chip execution"],
-        ["HCCL window layout; CommRemotePtr peer addressing; LD_PRELOAD for comm_init"],
-    ),
-    (
-        "pypto-lib/golden/",
-        "pypto-lib",
-        "validation",
-        "Golden test harness",
-        ["pypto"],
-        ["device validation"],
-        [],
-    ),
-    (
-        "pypto-lib/models/",
-        "pypto-lib",
-        "models",
-        "End-to-end LLM model kernels",
-        ["pypto", "pypto-lib"],
-        ["training/inference workloads"],
-        [],
-    ),
-]
 
 
 def _load_json(path: Path) -> dict[str, Any]:
@@ -254,17 +135,38 @@ def _truncate_slice(text: str, max_chars: int, relative_path: str) -> str:
     return f"{truncated}\n\n... (truncated — read full file at {relative_path})"
 
 
-def read_doc_slice(relative_path: str, max_chars: int = 8000) -> str:
+def read_doc_slice(
+    relative_path: str,
+    max_chars: int = 8000,
+    section: str | None = None,
+) -> str:
     resolved = resolve_doc_path(relative_path)
     if not resolved.exists():
         raise FileNotFoundError(f"Document not found: {relative_path}")
 
     content = resolved.read_text(encoding="utf-8", errors="replace")
-    body = _truncate_slice(content, max_chars, relative_path)
+    if section:
+        extracted = extract_section(content, section)
+        if extracted is None:
+            toc = build_section_toc(content, max_entries=20)
+            body = (
+                f"Section '{section}' not found in {relative_path}.\n\n"
+                f"{toc}\n\n"
+                f"... (falling back to document head)\n\n"
+                f"{_truncate_slice(content, max_chars, relative_path)}"
+            )
+        else:
+            body = _truncate_slice(extracted, max_chars, relative_path)
+    else:
+        body = _truncate_slice(content, max_chars, relative_path)
     return _doc_front_matter(relative_path) + body
 
 
-def read_multiple_docs(paths: list[str], max_chars: int = 8000) -> str:
+def read_multiple_docs(
+    paths: list[str],
+    max_chars: int = 8000,
+    sections: list[str | None] | None = None,
+) -> str:
     if not paths:
         raise ValueError("paths cannot be empty")
 
@@ -274,14 +176,17 @@ def read_multiple_docs(paths: list[str], max_chars: int = 8000) -> str:
         if remaining <= 0:
             parts.append(f"\n... (additional docs omitted: {', '.join(paths[index:])})")
             break
-        slice_text = read_doc_slice(path, max_chars=remaining)
+        section = None
+        if sections and index < len(sections):
+            section = sections[index]
+        slice_text = read_doc_slice(path, max_chars=remaining, section=section)
         parts.append(slice_text)
         remaining = max_chars - sum(len(part) for part in parts)
 
     return "\n\n".join(parts)
 
 
-def read_doc_payload(path: str, max_chars: int = 12000) -> dict[str, Any]:
+def read_doc_payload(path: str, max_chars: int = 12000, section: str = "") -> dict[str, Any]:
     if max_chars < 500 or max_chars > 50000:
         raise ValueError("max_chars must be between 500 and 50000")
 
@@ -290,11 +195,13 @@ def read_doc_payload(path: str, max_chars: int = 12000) -> dict[str, Any]:
         raise ValueError(f"Refusing to serve ephemeral-tier doc via read_doc: {path}")
 
     exists = resolve_doc_path(path).exists()
-    content = read_doc_slice(path, max_chars=max_chars) if exists else ""
+    section_arg = section.strip() or None
+    content = read_doc_slice(path, max_chars=max_chars, section=section_arg) if exists else ""
     return {
         "path": path,
         "tier": tier,
         "exists": exists,
+        "section": section_arg,
         "content": content,
     }
 
@@ -433,7 +340,11 @@ def explain_abstraction_impl(name: str) -> dict[str, Any]:
     }
 
 
-def search_abstractions_impl(query: str, max_results: int = 20) -> dict[str, Any]:
+def search_abstractions_impl(
+    query: str,
+    max_results: int = 20,
+    fields: str = "summary",
+) -> dict[str, Any]:
     if not query.strip():
         raise ValueError("query cannot be empty")
     if max_results < 1 or max_results > 100:
@@ -449,6 +360,7 @@ def search_abstractions_impl(query: str, max_results: int = 20) -> dict[str, Any
                 name,
                 str(card.get("layer", "")),
                 str(card.get("kind", "")),
+                str(card.get("one_liner", "")),
                 " ".join(card.get("tags", [])),
                 " ".join(card.get("arch_families", [])),
                 " ".join(card.get("repos", [])),
@@ -457,16 +369,25 @@ def search_abstractions_impl(query: str, max_results: int = 20) -> dict[str, Any
             ]
         ).lower()
         if needle in haystack or needle in name.lower():
-            matches.append(
-                {
-                    "name": name,
-                    "layer": card.get("layer"),
-                    "kind": card.get("kind"),
-                    "tags": card.get("tags", []),
-                    "arch_families": card.get("arch_families", []),
-                    "repos": card.get("repos", []),
-                }
-            )
+            if fields == "full":
+                matches.append(
+                    {
+                        "name": name,
+                        "layer": card.get("layer"),
+                        "kind": card.get("kind"),
+                        "tags": card.get("tags", []),
+                        "arch_families": card.get("arch_families", []),
+                        "repos": card.get("repos", []),
+                    }
+                )
+            else:
+                matches.append(
+                    {
+                        "name": name,
+                        "layer": card.get("layer"),
+                        "one_liner": card.get("one_liner") or card.get("kind", ""),
+                    }
+                )
         if len(matches) >= max_results:
             break
 
@@ -491,49 +412,9 @@ def find_entrypoints_impl(repo: str, area: str = "") -> dict[str, Any]:
 
 
 def trace_in_stack_impl(symbol_or_path: str) -> dict[str, Any]:
-    if not symbol_or_path.strip():
-        raise ValueError("symbol_or_path cannot be empty")
+    from mcp_hwnative_sys.contract_trace import trace_contract_impl
 
-    token = symbol_or_path.strip().replace("\\", "/")
-
-    # Try abstraction index first
-    abstractions = load_abstractions()
-    abs_key = next((k for k in abstractions if k.lower() == token.lower()), None)
-    if abs_key:
-        card = abstractions[abs_key]
-        return {
-            "input": symbol_or_path,
-            "matched_as": "abstraction",
-            "name": abs_key,
-            "layer": card.get("layer"),
-            "repos": card.get("repos", []),
-            "paths": card.get("paths", []),
-            "upstream": card.get("related", []),
-            "downstream": card.get("downstream", []),
-            "verify_tasks": card.get("verify_tasks", []),
-        }
-
-    # Path-prefix heuristics
-    for prefix, repo, stage, description, upstream, downstream, arch_notes in _STACK_TRACE_RULES:
-        if token.startswith(prefix) or prefix.rstrip("/") in token:
-            result: dict[str, Any] = {
-                "input": symbol_or_path,
-                "matched_as": "path_prefix",
-                "repo": repo,
-                "pipeline_stage": stage,
-                "description": description,
-                "upstream": upstream,
-                "downstream": downstream,
-            }
-            if arch_notes:
-                result["arch_implications"] = arch_notes
-            return result
-
-    return {
-        "input": symbol_or_path,
-        "matched_as": "none",
-        "hint": "Use explain_abstraction or search_abstractions for concepts; pass a repo-relative path for heuristics.",
-    }
+    return trace_contract_impl(symbol_or_path)
 
 
 def _path_exists(relative_path: str) -> bool:
@@ -658,13 +539,19 @@ def render_resource(uri_suffix: str) -> str:
         raise ValueError(f"Unknown resource '{uri_suffix}'. Available: {available}")
 
     paths = resource.get("paths")
+    section_hint = resource.get("section_hint")
     if paths:
-        return read_multiple_docs(paths, max_chars=resource.get("max_chars", 8000))
+        sections = [section_hint if index == 0 else None for index in range(len(paths))]
+        return read_multiple_docs(paths, max_chars=resource.get("max_chars", 8000), sections=sections)
 
     path = resource.get("path")
     if not path:
         raise ValueError(f"Resource '{uri_suffix}' has no path configured")
-    return read_doc_slice(path, max_chars=resource.get("max_chars", 8000))
+    return read_doc_slice(
+        path,
+        max_chars=resource.get("max_chars", 8000),
+        section=section_hint,
+    )
 
 
 def get_repository_meta() -> dict[str, Any]:
@@ -713,9 +600,9 @@ def register_knowledge(mcp: FastMCP) -> None:
         return list_knowledge_topics_impl()
 
     @mcp.tool()
-    def read_doc(path: str, max_chars: int = 12000) -> dict[str, Any]:
-        """Read a workspace document with tier labeling (canonical or enriched only)."""
-        return read_doc_payload(path, max_chars)
+    def read_doc(path: str, max_chars: int = 12000, section: str = "") -> dict[str, Any]:
+        """Read a workspace document with tier labeling. Optional section extracts a markdown heading."""
+        return read_doc_payload(path, max_chars, section)
 
     @mcp.tool()
     def explain_abstraction(name: str) -> dict[str, Any]:
@@ -723,9 +610,44 @@ def register_knowledge(mcp: FastMCP) -> None:
         return explain_abstraction_impl(name)
 
     @mcp.tool()
-    def search_abstractions(query: str, max_results: int = 20) -> dict[str, Any]:
-        """Search the abstraction index by keyword."""
-        return search_abstractions_impl(query, max_results)
+    def search_abstractions(query: str, max_results: int = 20, fields: str = "summary") -> dict[str, Any]:
+        """Search the abstraction index by keyword. fields=summary (default) or full."""
+        return search_abstractions_impl(query, max_results, fields)
+
+    @mcp.tool()
+    def explain_pass(name: str) -> dict[str, Any]:
+        """Explain a pass in the Default pipeline: order, phase, neighbors, verify tasks."""
+        from mcp_hwnative_sys.passes_index import explain_pass_impl
+
+        return explain_pass_impl(name)
+
+    @mcp.tool()
+    def program_status() -> dict[str, Any]:
+        """Structured PR/plan status from status_prs.md (open PRs, blockers, plan cross-index)."""
+        from mcp_hwnative_sys.program_status import program_status_impl
+
+        return program_status_impl()
+
+    @mcp.tool()
+    def verify_ladder(changed_paths: list[str]) -> dict[str, Any]:
+        """Suggest minimal verify tasks for a set of changed file paths."""
+        from mcp_hwnative_sys.verify_ladder import verify_ladder_impl
+
+        return verify_ladder_impl(changed_paths)
+
+    @mcp.tool()
+    def summarize_profile(run_dir: str) -> dict[str, Any]:
+        """Summarize a pypto-tooling profiling campaign directory (results.json, anomalies)."""
+        from mcp_hwnative_sys.profiling_summarize import summarize_profile_impl
+
+        return summarize_profile_impl(run_dir)
+
+    @mcp.tool()
+    def trace_contract(symbol_or_path: str) -> dict[str, Any]:
+        """Trace symbol through dependency triangle with contract artifacts and cross-layer verify."""
+        from mcp_hwnative_sys.contract_trace import trace_contract_impl
+
+        return trace_contract_impl(symbol_or_path)
 
     @mcp.tool()
     def find_entrypoints(repo: str, area: str = "") -> dict[str, Any]:
@@ -777,15 +699,12 @@ def register_knowledge(mcp: FastMCP) -> None:
         return f"""You are working on the hw-native-sys compiler stack for Ascend NPUs.
 
 Before editing any code:
-1. Read MCP resources: hw-native-sys://overview/ecosystem and hw-native-sys://agent/invariants
-2. Call route_task with task_type="{area}"
-3. Call repository_health with include_clean=false
-4. For specific concepts, use explain_abstraction or search_abstractions
-5. Run the verify_tasks from route_task before claiming work is done
+1. Call bootstrap_session with task_type="{area}" (single-call bootstrap)
+2. Follow read_plan from bootstrap_session; use read_doc(path, section=...) for large enriched notes
+3. Use explain_pass / explain_abstraction for specific concepts
+4. Run agent_verify_tasks from route before claiming work is done
 
-Stack: pypto (compiler) → PTOAS (assembler) → pto-isa (tile ISA) → simpler (runtime). pypto-lib is the model/harness layer on top.
-
-Canonical docs are authoritative. Enriched notes (pypto-3.0-notes) are secondary — check tier labels."""
+Stack: pypto → PTOAS → pto-isa → simpler. pypto-lib is the model/harness layer."""
 
     @mcp.prompt(title="Start distributed / large-scale work")
     def start_distributed_work(focus: str = "collectives") -> str:
@@ -800,19 +719,12 @@ Canonical docs are authoritative. Enriched notes (pypto-3.0-notes) are secondary
         return f"""You are working on distributed / large-scale training or inference on Ascend NPUs.
 
 Before editing any code:
-1. Read MCP resources: hw-native-sys://pypto/distributed, hw-native-sys://agent/distributed_work_policy, hw-native-sys://flows/distributed_allreduce
-2. Call route_task with task_type="{focus_route}" (use host_collectives_program for plan 33 host builtins)
-3. Call explain_abstraction for relevant concepts (e.g. host_collectives_program, LowerHostTensorCollectives)
-4. Call repository_health with include_clean=false — check active_program_hints on pypto
-5. Read notes topic host_collectives when resuming fork work (hw-native-sys://notes/host_collectives)
+1. Call bootstrap_session with task_type="{focus_route}"
+2. Check program_status for open PRs and blockers (e.g. plan 33 → #1782)
+3. Use trace_contract for collectives/pass symbols (LowerHostTensorCollectives, pld.tensor.*)
+4. Run agent_verify_tasks only — not developer_verify_tasks
 
-Verification split (George / gbisbas workflow):
-- **Agent gate:** run agent_verify_tasks from route_task via run_task — for host collectives use pypto-tooling:host_collectives_ut_sim (sim Docker, not bare-metal pytest).
-- **Developer gate:** pypto:host_collectives_st_npu on NPU — agents must NOT run this or open upstream PRs unless asked.
-- **Do not commit** pypto/runtime submodule pointer changes unless the plan explicitly scopes runtime.
-- Push only to fork-gbisbas; record git rev-parse HEAD in pypto-3.0-notes/memories/ when handing off.
-
-Distinguish compiler layer (pypto distributed ops/codegen) from runtime layer (simpler comm-domain, L3 worker)."""
+Agent gate: sim Docker UT. Developer gate: NPU ST. Push to fork-gbisbas only."""
 
     @mcp.prompt(title="Start Ascend architecture / NPU work")
     def start_ascend_work(focus: str = "arch") -> str:
@@ -824,21 +736,14 @@ Distinguish compiler layer (pypto distributed ops/codegen) from runtime layer (s
             "verify": "npu_verify_handoff",
         }.get(focus, "ascend_arch")
 
-        return f"""You are working on Huawei Ascend NPU architecture, tuning, or distributed runtime topics.
+        return f"""You are working on Huawei Ascend NPU architecture, tuning, or distributed runtime.
 
 Before editing any code:
-1. Read MCP resources: hw-native-sys://ascend/hardware, hw-native-sys://ascend/arch_families
-2. Call route_task with task_type="{focus_route}"
-3. Call explain_abstraction for hardware concepts (AIC, AIV, MTE, HCCLWindow, BackendHandler910B, etc.)
-4. Call ascend_env_check when on or handing off to an NPU host/container
-5. For developer NPU verify: generate_verify_handoff — agents must NOT open upstream PRs
+1. Call bootstrap_session with task_type="{focus_route}"
+2. Use explain_abstraction for hardware concepts (AIC, AIV, HCCLWindow, etc.)
+3. Call ascend_env_check on NPU hosts; generate_verify_handoff for developer verify
 
-Ascend expertise layers:
-- **Hardware:** AIC (cube), AIV (vector), AICPU scheduler, GM/L1/L0/UB (see ascend/memory_hierarchy)
-- **Arch families:** A2A3 (910B/910C) vs A5 (950) — hw-native-sys://ascend/arch_families
-- **Distributed:** HCCL windows, signal buffers [NR,1], container checklist — ascend/hccl_container_checklist
-
-Canonical docs are authoritative. Enriched notes (pypto-3.0-notes) are secondary — check tier labels."""
+Canonical docs are authoritative. Enriched notes are secondary."""
 
     @mcp.prompt(title="Start NPU container verification (developer gate)")
     def start_npu_verify() -> str:
