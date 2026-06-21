@@ -45,6 +45,16 @@
 #   cd /opt/pypto && pytest tests/st/runtime/cross_core/test_cross_core.py -v --forked --platform=a2a3sim --pto-isa-commit=016396b57e2c17093f1194e6acd89bb112b0ab24
 #   cd /opt/pypto && pytest tests/st -v --forked --platform=a2a3sim,a5sim --pto-isa-commit=016396b57e2c17093f1194e6acd89bb112b0ab24
 #
+# DISTRIBUTED SIM (L3 multi-rank collectives — requires --shm-size=4g at docker run time):
+#   docker run --rm -it --shm-size=4g pypto3-hw-native-sys:sim
+#   cd /opt/pypto && pytest tests/st/distributed/ -v --forked --platform=a2a3sim --device=0,1 --pto-isa-commit=016396b57e2c17093f1194e6acd89bb112b0ab24
+#   cd /opt/pypto && pytest tests/st/distributed/ -v --forked --platform=a2a3sim --device=0,1,2,3 --pto-isa-commit=016396b57e2c17093f1194e6acd89bb112b0ab24
+#
+# DISTRIBUTED SIM RESULTS (2026-06-21, local workspace mount, device=0,1,2,3):
+#   43/45 pass; 1 skip (PTOAS atomic-add ordering known bug); 1 xpass (stale xfail annotation).
+#   simpler comm backend uses malloc+shm in sim — no HCCL, no NPU required.
+#   The Docker default RUN (without --shm-size) only provides 64 MB shared memory; pass --shm-size=4g.
+#
 # SIM SPECIAL CASES (expected):
 #   - a5sim cross-core: test_explicit_slot_num is currently xfail in upstream tests.
 #   - a5sim CI subset keeps -k "not TestMscatter" due known simulator/pto-isa mismatch.
