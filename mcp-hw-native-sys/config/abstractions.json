@@ -29,11 +29,12 @@
     "repos": ["pypto"],
     "paths": ["pypto/include/pypto/ir/scalar_expr.h"],
     "docs_canonical": ["pypto/docs/en/dev/ir/02-types.md"],
-    "docs_enriched": ["pypto-3.0-notes/pull_requests/1726-new-knowlwedge.md"],
-    "rules": ["pypto/.claude/rules/ir-kind-traits.md"],
-    "related": ["RegisterShapeExprVars", "ConvertToSSA"],
-    "downstream": ["pto_codegen", "distributed_codegen"],
-    "verify_tasks": ["pypto:unit_tests_fast"]
+    "docs_enriched": ["pypto-3.0-notes/pull_requests/1726-new-knowledge.md"],
+    "rules": [],
+    "related": [],
+    "downstream": [],
+    "verify_tasks": [],
+    "_status": "ARCHIVAL — PRs #1726, #1781 closed without merge; DimExpr does not exist on main"
   },
   "IRProperty": {
     "layer": "pypto/passes",
@@ -525,5 +526,32 @@
       "Single batched fork branch OK despite multi-PR plan",
       "HOST allgather uses pld.tensor.allgather_staged (2-arg)"
     ]
+  },
+  "AbstractionsCatalog": {
+    "layer": "notes/meta",
+    "kind": "cross_repo_catalog",
+    "one_liner": "Master index and per-repo catalogs of every abstraction surface in hw-native-sys",
+    "repos": ["pypto", "simpler", "pto-isa", "PTOAS"],
+    "paths": [
+      "pypto-3.0-notes/abstractions/README.md",
+      "pypto-3.0-notes/abstractions/pypto-abstractions.md",
+      "pypto-3.0-notes/abstractions/simpler-abstractions.md",
+      "pypto-3.0-notes/abstractions/pto-isa-abstractions.md",
+      "pypto-3.0-notes/abstractions/PTOAS-abstractions.md"
+    ],
+    "docs_canonical": [
+      "pypto-3.0-notes/abstractions/README.md"
+    ],
+    "docs_enriched": [
+      "pypto-3.0-notes/abstractions/pypto-abstractions.md",
+      "pypto-3.0-notes/abstractions/simpler-abstractions.md",
+      "pypto-3.0-notes/abstractions/pto-isa-abstractions.md",
+      "pypto-3.0-notes/abstractions/PTOAS-abstractions.md"
+    ],
+    "rules": [],
+    "related": ["NOTES_FRESHNESS"],
+    "downstream": [],
+    "verify_tasks": [],
+    "_note": "Created 2026-06-24. Covers: pypto (IR ops, 41 passes, DSL, codegen), simpler (workers, task interface, L3 collectives, DFX, HW), pto-isa (~74 tile ops, 11 comm ops, sync), PTOAS (~30 PTO IR ops, types, passes)"
   }
 }

@@ -159,9 +159,14 @@
     "dependency_triangle": "pypto-3.0-notes/dependency_triangle.md",
     "notes_simpler": "pypto-3.0-notes/notes_simpler.md",
     "kernel_orchestration": "pypto-3.0-notes/kernel_orchestration.md",
-    "stack_availability": "pypto-3.0-notes/allreduce_benchmark_variants/stack_availability.md",
+    "stack_availability": "pypto-3.0-notes/collectives_benchmarking/stack_availability.md",
     "host_collectives": "pypto-3.0-notes/memories/host_collectives.md",
-    "distributed_work_policy": "pypto-3.0-notes/agent/distributed_work_policy.md"
+    "distributed_work_policy": "pypto-3.0-notes/agent/distributed_work_policy.md",
+    "abstractions_master": "pypto-3.0-notes/abstractions/README.md",
+    "pypto_abstractions": "pypto-3.0-notes/abstractions/pypto-abstractions.md",
+    "simpler_abstractions": "pypto-3.0-notes/abstractions/simpler-abstractions.md",
+    "ptoisa_abstractions": "pypto-3.0-notes/abstractions/pto-isa-abstractions.md",
+    "ptoas_abstractions": "pypto-3.0-notes/abstractions/PTOAS-abstractions.md"
   },
   "routes": {
     "stack_overview": {
