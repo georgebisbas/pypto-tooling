@@ -151,6 +151,41 @@
       "path": "content/ascend/hccl_container_checklist.md",
       "max_chars": 8000,
       "tier": "mcp-owned"
+    },
+    "notes/freshness": {
+      "path": "pypto-3.0-notes/NOTES_FRESHNESS.md",
+      "max_chars": 8000,
+      "tier": "enriched"
+    },
+    "notes/stack_availability": {
+      "path": "pypto-3.0-notes/collectives_benchmarking/stack_availability.md",
+      "max_chars": 8000,
+      "tier": "enriched"
+    },
+    "notes/abstractions_master": {
+      "path": "pypto-3.0-notes/abstractions/README.md",
+      "max_chars": 4000,
+      "tier": "enriched"
+    },
+    "notes/pypto_abstractions": {
+      "path": "pypto-3.0-notes/abstractions/pypto-abstractions.md",
+      "max_chars": 10000,
+      "tier": "enriched"
+    },
+    "notes/simpler_abstractions": {
+      "path": "pypto-3.0-notes/abstractions/simpler-abstractions.md",
+      "max_chars": 8000,
+      "tier": "enriched"
+    },
+    "notes/ptoisa_abstractions": {
+      "path": "pypto-3.0-notes/abstractions/pto-isa-abstractions.md",
+      "max_chars": 8000,
+      "tier": "enriched"
+    },
+    "notes/ptoas_abstractions": {
+      "path": "pypto-3.0-notes/abstractions/PTOAS-abstractions.md",
+      "max_chars": 8000,
+      "tier": "enriched"
     }
   },
   "notes_topics": {

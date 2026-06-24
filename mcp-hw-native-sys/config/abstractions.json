@@ -2,504 +2,1141 @@
   "Submit": {
     "layer": "pypto/ir",
     "kind": "ir_node",
-    "repos": ["pypto"],
-    "paths": ["pypto/include/pypto/ir/stmt.h"],
-    "docs_canonical": ["pypto/docs/en/dev/ir/01-hierarchy.md"],
+    "repos": [
+      "pypto"
+    ],
+    "paths": [
+      "pypto/include/pypto/ir/stmt.h"
+    ],
+    "docs_canonical": [
+      "pypto/docs/en/dev/ir/01-hierarchy.md"
+    ],
     "docs_enriched": [],
-    "rules": ["pypto/.claude/rules/pass-submit-awareness.md"],
-    "related": ["Call", "AutoDeriveTaskDependencies", "ManualDepsOnSubmitOnly"],
-    "downstream": ["orchestration_codegen", "simpler task-flow"],
-    "verify_tasks": ["pypto:unit_tests_fast"]
+    "rules": [
+      "pypto/.claude/rules/pass-submit-awareness.md"
+    ],
+    "related": [
+      "Call",
+      "AutoDeriveTaskDependencies",
+      "ManualDepsOnSubmitOnly"
+    ],
+    "downstream": [
+      "orchestration_codegen",
+      "simpler task-flow"
+    ],
+    "verify_tasks": [
+      "pypto:unit_tests_fast"
+    ]
   },
   "Call": {
     "layer": "pypto/ir",
     "kind": "ir_node",
-    "repos": ["pypto"],
-    "paths": ["pypto/include/pypto/ir/stmt.h"],
-    "docs_canonical": ["pypto/docs/en/dev/ir/01-hierarchy.md"],
+    "repos": [
+      "pypto"
+    ],
+    "paths": [
+      "pypto/include/pypto/ir/stmt.h"
+    ],
+    "docs_canonical": [
+      "pypto/docs/en/dev/ir/01-hierarchy.md"
+    ],
     "docs_enriched": [],
-    "rules": ["pypto/.claude/rules/pass-submit-awareness.md"],
-    "related": ["Submit", "CallableHandle"],
-    "downstream": ["orchestration_codegen"],
-    "verify_tasks": ["pypto:unit_tests_fast"]
+    "rules": [
+      "pypto/.claude/rules/pass-submit-awareness.md"
+    ],
+    "related": [
+      "Submit",
+      "CallableHandle"
+    ],
+    "downstream": [
+      "orchestration_codegen"
+    ],
+    "verify_tasks": [
+      "pypto:unit_tests_fast"
+    ]
   },
   "DimExpr": {
     "layer": "pypto/ir",
     "kind": "ir_node",
-    "repos": ["pypto"],
-    "paths": ["pypto/include/pypto/ir/scalar_expr.h"],
-    "docs_canonical": ["pypto/docs/en/dev/ir/02-types.md"],
-    "docs_enriched": ["pypto-3.0-notes/pull_requests/1726-new-knowledge.md"],
+    "repos": [
+      "pypto"
+    ],
+    "paths": [
+      "pypto/include/pypto/ir/scalar_expr.h"
+    ],
+    "docs_canonical": [
+      "pypto/docs/en/dev/ir/02-types.md"
+    ],
+    "docs_enriched": [
+      "pypto-3.0-notes/pull_requests/1726-new-knowledge.md"
+    ],
     "rules": [],
     "related": [],
     "downstream": [],
     "verify_tasks": [],
-    "_status": "ARCHIVAL — PRs #1726, #1781 closed without merge; DimExpr does not exist on main"
+    "_status": "ARCHIVAL \u2014 PRs #1726, #1781 closed without merge; DimExpr does not exist on main"
   },
   "IRProperty": {
     "layer": "pypto/passes",
     "kind": "pass_framework",
     "one_liner": "Bitset of IR invariants; passes declare/consume properties",
-    "repos": ["pypto"],
-    "paths": ["pypto/include/pypto/ir/transforms/passes.h"],
-    "docs_canonical": ["pypto/docs/en/dev/passes/00-pass_manager.md"],
-    "docs_enriched": ["pypto-3.0-notes/pass_infrastructure.md"],
-    "rules": ["pypto/.claude/rules/pass-complexity.md"],
-    "related": ["PassContext", "VerificationInstrument"],
-    "downstream": ["all passes"],
-    "verify_tasks": ["pypto:unit_tests_fast"]
+    "repos": [
+      "pypto"
+    ],
+    "paths": [
+      "pypto/include/pypto/ir/transforms/passes.h"
+    ],
+    "docs_canonical": [
+      "pypto/docs/en/dev/passes/00-pass_manager.md"
+    ],
+    "docs_enriched": [
+      "pypto-3.0-notes/pass_infrastructure.md"
+    ],
+    "rules": [
+      "pypto/.claude/rules/pass-complexity.md"
+    ],
+    "related": [
+      "PassContext",
+      "VerificationInstrument"
+    ],
+    "downstream": [
+      "all passes"
+    ],
+    "verify_tasks": [
+      "pypto:unit_tests_fast"
+    ]
   },
   "PassContext": {
     "layer": "pypto/passes",
     "kind": "pass_framework",
-    "repos": ["pypto"],
-    "paths": ["pypto/include/pypto/ir/transforms/pass_context.h"],
-    "docs_canonical": ["pypto/docs/en/dev/passes/00-pass_manager.md"],
-    "docs_enriched": ["pypto-3.0-notes/pass_infrastructure.md"],
-    "rules": ["pypto/.claude/rules/pass-context-config.md"],
-    "related": ["BackendHandler", "PassInstrument"],
-    "downstream": ["all passes"],
-    "verify_tasks": ["pypto:unit_tests_fast"]
+    "repos": [
+      "pypto"
+    ],
+    "paths": [
+      "pypto/include/pypto/ir/transforms/pass_context.h"
+    ],
+    "docs_canonical": [
+      "pypto/docs/en/dev/passes/00-pass_manager.md"
+    ],
+    "docs_enriched": [
+      "pypto-3.0-notes/pass_infrastructure.md"
+    ],
+    "rules": [
+      "pypto/.claude/rules/pass-context-config.md"
+    ],
+    "related": [
+      "BackendHandler",
+      "PassInstrument"
+    ],
+    "downstream": [
+      "all passes"
+    ],
+    "verify_tasks": [
+      "pypto:unit_tests_fast"
+    ]
   },
   "ForStmt": {
     "layer": "pypto/ir",
     "kind": "ir_node",
-    "repos": ["pypto"],
-    "paths": ["pypto/include/pypto/ir/stmt.h"],
-    "docs_canonical": ["pypto/docs/en/dev/ir/01-hierarchy.md"],
+    "repos": [
+      "pypto"
+    ],
+    "paths": [
+      "pypto/include/pypto/ir/stmt.h"
+    ],
+    "docs_canonical": [
+      "pypto/docs/en/dev/ir/01-hierarchy.md"
+    ],
     "docs_enriched": [],
     "rules": [],
-    "related": ["IterArg", "IterArgCarryAnalyzer"],
-    "downstream": ["orchestration_codegen"],
-    "verify_tasks": ["pypto:codegen_tests"]
+    "related": [
+      "IterArg",
+      "IterArgCarryAnalyzer"
+    ],
+    "downstream": [
+      "orchestration_codegen"
+    ],
+    "verify_tasks": [
+      "pypto:codegen_tests"
+    ]
   },
   "IterArg": {
     "layer": "pypto/ir",
     "kind": "ir_node",
-    "repos": ["pypto"],
-    "paths": ["pypto/include/pypto/ir/expr.h"],
-    "docs_canonical": ["pypto/docs/en/dev/ir/01-hierarchy.md"],
+    "repos": [
+      "pypto"
+    ],
+    "paths": [
+      "pypto/include/pypto/ir/expr.h"
+    ],
+    "docs_canonical": [
+      "pypto/docs/en/dev/ir/01-hierarchy.md"
+    ],
     "docs_enriched": [],
-    "rules": ["pypto/.claude/rules/ir-kind-traits.md"],
-    "related": ["ForStmt", "IterArgCarryAnalyzer"],
-    "downstream": ["orchestration_codegen"],
-    "verify_tasks": ["pypto:codegen_tests"]
+    "rules": [
+      "pypto/.claude/rules/ir-kind-traits.md"
+    ],
+    "related": [
+      "ForStmt",
+      "IterArgCarryAnalyzer"
+    ],
+    "downstream": [
+      "orchestration_codegen"
+    ],
+    "verify_tasks": [
+      "pypto:codegen_tests"
+    ]
   },
   "DistributedTensorType": {
     "layer": "pypto/ir",
     "kind": "ir_type",
-    "repos": ["pypto"],
-    "paths": ["pypto/include/pypto/ir/type.h"],
-    "docs_canonical": ["pypto/docs/en/dev/distributed_ops.md", "pypto/docs/en/dev/ir/02-types.md"],
-    "docs_enriched": ["pypto-3.0-notes/pypto-3.0-distributed_support.md"],
+    "repos": [
+      "pypto"
+    ],
+    "paths": [
+      "pypto/include/pypto/ir/type.h"
+    ],
+    "docs_canonical": [
+      "pypto/docs/en/dev/distributed_ops.md",
+      "pypto/docs/en/dev/ir/02-types.md"
+    ],
+    "docs_enriched": [
+      "pypto-3.0-notes/pypto-3.0-distributed_support.md"
+    ],
     "rules": [],
-    "related": ["CommDomainScopeStmt", "pld.tensor.allreduce"],
-    "downstream": ["distributed_codegen"],
-    "verify_tasks": ["pypto:system_tests_sim"]
+    "related": [
+      "CommDomainScopeStmt",
+      "pld.tensor.allreduce"
+    ],
+    "downstream": [
+      "distributed_codegen"
+    ],
+    "verify_tasks": [
+      "pypto:system_tests_sim"
+    ]
   },
   "CommDomainScopeStmt": {
     "layer": "pypto/ir",
     "kind": "ir_node",
-    "repos": ["pypto"],
-    "paths": ["pypto/include/pypto/ir/stmt.h"],
-    "docs_canonical": ["pypto/docs/en/dev/passes/37-materialize_comm_domain_scopes.md"],
-    "docs_enriched": ["pypto-3.0-notes/pypto-3.0-distributed_support.md"],
+    "repos": [
+      "pypto"
+    ],
+    "paths": [
+      "pypto/include/pypto/ir/stmt.h"
+    ],
+    "docs_canonical": [
+      "pypto/docs/en/dev/passes/37-materialize_comm_domain_scopes.md"
+    ],
+    "docs_enriched": [
+      "pypto-3.0-notes/pypto-3.0-distributed_support.md"
+    ],
     "rules": [],
-    "related": ["ChipDomainContext", "MaterializeCommDomainScopes"],
-    "downstream": ["distributed_codegen", "simpler comm-domain"],
-    "verify_tasks": ["pypto:system_tests_sim"]
+    "related": [
+      "ChipDomainContext",
+      "MaterializeCommDomainScopes"
+    ],
+    "downstream": [
+      "distributed_codegen",
+      "simpler comm-domain"
+    ],
+    "verify_tasks": [
+      "pypto:system_tests_sim"
+    ]
   },
   "NormalizeReturnOrder": {
     "layer": "pypto/passes",
     "kind": "pass",
-    "repos": ["pypto"],
-    "paths": ["pypto/src/ir/transforms/normalize_return_order_pass.cpp"],
-    "docs_canonical": ["pypto/docs/en/dev/passes/24-normalize_return_order.md"],
-    "docs_enriched": ["pypto-3.0-notes/codegen_infrastructure.md"],
-    "rules": ["pypto/.claude/rules/first-principles.md"],
-    "related": ["OrchestrationCodegen", "CodegenBase"],
-    "downstream": ["orchestration_codegen"],
-    "verify_tasks": ["pypto:codegen_tests"]
+    "repos": [
+      "pypto"
+    ],
+    "paths": [
+      "pypto/src/ir/transforms/normalize_return_order_pass.cpp"
+    ],
+    "docs_canonical": [
+      "pypto/docs/en/dev/passes/24-normalize_return_order.md"
+    ],
+    "docs_enriched": [
+      "pypto-3.0-notes/codegen_infrastructure.md"
+    ],
+    "rules": [
+      "pypto/.claude/rules/first-principles.md"
+    ],
+    "related": [
+      "OrchestrationCodegen",
+      "CodegenBase"
+    ],
+    "downstream": [
+      "orchestration_codegen"
+    ],
+    "verify_tasks": [
+      "pypto:codegen_tests"
+    ]
   },
   "OutlineIncoreScopes": {
     "layer": "pypto/passes",
     "kind": "pass",
-    "repos": ["pypto"],
-    "paths": ["pypto/src/ir/transforms/outline_incore_scopes_pass.cpp"],
-    "docs_canonical": ["pypto/docs/en/dev/passes/00-pass_manager.md"],
-    "docs_enriched": ["pypto-3.0-notes/pass_infrastructure.md"],
+    "repos": [
+      "pypto"
+    ],
+    "paths": [
+      "pypto/src/ir/transforms/outline_incore_scopes_pass.cpp"
+    ],
+    "docs_canonical": [
+      "pypto/docs/en/dev/passes/00-pass_manager.md"
+    ],
+    "docs_enriched": [
+      "pypto-3.0-notes/pass_infrastructure.md"
+    ],
     "rules": [],
-    "related": ["PTOCodegen", "InCore functions"],
-    "downstream": ["pto_codegen"],
-    "verify_tasks": ["pypto:unit_tests_fast"]
+    "related": [
+      "PTOCodegen",
+      "InCore functions"
+    ],
+    "downstream": [
+      "pto_codegen"
+    ],
+    "verify_tasks": [
+      "pypto:unit_tests_fast"
+    ]
   },
   "LowerHostTensorCollectives": {
     "layer": "pypto/passes",
     "kind": "pass",
-    "one_liner": "Lowers pld.tensor collectives in host_orch to builtin.tensor.* × P",
-    "repos": ["pypto"],
-    "paths": ["pypto/src/ir/transforms/lower_host_tensor_collectives_pass.cpp"],
-    "docs_canonical": ["pypto/docs/en/dev/passes/38-lower_host_tensor_collectives.md"],
+    "one_liner": "Lowers pld.tensor collectives in host_orch to builtin.tensor.* \u00d7 P",
+    "repos": [
+      "pypto"
+    ],
+    "paths": [
+      "pypto/src/ir/transforms/lower_host_tensor_collectives_pass.cpp"
+    ],
+    "docs_canonical": [
+      "pypto/docs/en/dev/passes/38-lower_host_tensor_collectives.md"
+    ],
     "docs_enriched": [
       "pypto-3.0-notes/memories/host_collectives.md",
       "pypto-3.0-notes/agent/distributed_work_policy.md"
     ],
     "rules": [],
-    "related": ["MaterializeCommDomainScopes", "DistributedCodegen", "host_collectives_program"],
-    "downstream": ["distributed_codegen", "builtin.tensor.*"],
-    "verify_tasks": ["pypto-tooling:host_collectives_ut_sim"],
-    "agent_verify_tasks": ["pypto-tooling:host_collectives_ut_sim"],
-    "developer_verify_tasks": ["pypto:host_collectives_st_npu"]
+    "related": [
+      "MaterializeCommDomainScopes",
+      "DistributedCodegen",
+      "host_collectives_program"
+    ],
+    "downstream": [
+      "distributed_codegen",
+      "builtin.tensor.*"
+    ],
+    "verify_tasks": [
+      "pypto-tooling:host_collectives_ut_sim"
+    ],
+    "agent_verify_tasks": [
+      "pypto-tooling:host_collectives_ut_sim"
+    ],
+    "developer_verify_tasks": [
+      "pypto:host_collectives_st_npu"
+    ]
   },
   "PTOCodegen": {
     "layer": "pypto/codegen",
     "kind": "codegen_backend",
-    "repos": ["pypto"],
-    "paths": ["pypto/src/codegen/pto/pto_codegen.cpp"],
-    "docs_canonical": ["pypto/docs/en/dev/codegen/00-pto_codegen.md"],
-    "docs_enriched": ["pypto-3.0-notes/codegen_infrastructure.md"],
-    "rules": ["pypto/.claude/rules/cross-layer-sync.md"],
-    "related": ["CodegenBase", "BackendHandler", "ptoas"],
-    "downstream": ["PTOAS", "pto-isa", "AICore"],
-    "verify_tasks": ["pypto:codegen_tests"]
+    "repos": [
+      "pypto"
+    ],
+    "paths": [
+      "pypto/src/codegen/pto/pto_codegen.cpp"
+    ],
+    "docs_canonical": [
+      "pypto/docs/en/dev/codegen/00-pto_codegen.md"
+    ],
+    "docs_enriched": [
+      "pypto-3.0-notes/codegen_infrastructure.md"
+    ],
+    "rules": [
+      "pypto/.claude/rules/cross-layer-sync.md"
+    ],
+    "related": [
+      "CodegenBase",
+      "BackendHandler",
+      "ptoas"
+    ],
+    "downstream": [
+      "PTOAS",
+      "pto-isa",
+      "AICore"
+    ],
+    "verify_tasks": [
+      "pypto:codegen_tests"
+    ]
   },
   "OrchestrationCodegen": {
     "layer": "pypto/codegen",
     "kind": "codegen_backend",
-    "repos": ["pypto"],
-    "paths": ["pypto/src/codegen/orchestration/orchestration_codegen.cpp"],
-    "docs_canonical": ["pypto/docs/en/dev/codegen/01-orchestration_codegen.md"],
-    "docs_enriched": ["pypto-3.0-notes/kernel_orchestration.md"],
-    "rules": ["pypto/.claude/rules/cross-layer-sync.md"],
-    "related": ["CodegenBase", "IterArgCarryAnalyzer", "PTO2 runtime API"],
-    "downstream": ["simpler", "AICPU"],
-    "verify_tasks": ["pypto:codegen_tests"]
+    "repos": [
+      "pypto"
+    ],
+    "paths": [
+      "pypto/src/codegen/orchestration/orchestration_codegen.cpp"
+    ],
+    "docs_canonical": [
+      "pypto/docs/en/dev/codegen/01-orchestration_codegen.md"
+    ],
+    "docs_enriched": [
+      "pypto-3.0-notes/kernel_orchestration.md"
+    ],
+    "rules": [
+      "pypto/.claude/rules/cross-layer-sync.md"
+    ],
+    "related": [
+      "CodegenBase",
+      "IterArgCarryAnalyzer",
+      "PTO2 runtime API"
+    ],
+    "downstream": [
+      "simpler",
+      "AICPU"
+    ],
+    "verify_tasks": [
+      "pypto:codegen_tests"
+    ]
   },
   "CodegenBase": {
     "layer": "pypto/codegen",
     "kind": "codegen_framework",
-    "repos": ["pypto"],
-    "paths": ["pypto/src/codegen/codegen_base.cpp"],
-    "docs_canonical": ["pypto/docs/en/dev/codegen/00-pto_codegen.md"],
-    "docs_enriched": ["pypto-3.0-notes/codegen_infrastructure.md"],
-    "rules": ["pypto/.claude/rules/first-principles.md"],
-    "related": ["PTOCodegen", "OrchestrationCodegen"],
-    "downstream": [".pto", "orchestration C++"],
-    "verify_tasks": ["pypto:codegen_tests"]
+    "repos": [
+      "pypto"
+    ],
+    "paths": [
+      "pypto/src/codegen/codegen_base.cpp"
+    ],
+    "docs_canonical": [
+      "pypto/docs/en/dev/codegen/00-pto_codegen.md"
+    ],
+    "docs_enriched": [
+      "pypto-3.0-notes/codegen_infrastructure.md"
+    ],
+    "rules": [
+      "pypto/.claude/rules/first-principles.md"
+    ],
+    "related": [
+      "PTOCodegen",
+      "OrchestrationCodegen"
+    ],
+    "downstream": [
+      ".pto",
+      "orchestration C++"
+    ],
+    "verify_tasks": [
+      "pypto:codegen_tests"
+    ]
   },
   "IterArgCarryAnalyzer": {
     "layer": "pypto/codegen",
     "kind": "codegen_component",
-    "repos": ["pypto"],
+    "repos": [
+      "pypto"
+    ],
     "paths": [
       "pypto/src/codegen/orchestration/iter_arg_carry_analyzer.cpp",
       "pypto/include/pypto/codegen/orchestration/iter_arg_carry_analyzer.h"
     ],
-    "docs_canonical": ["pypto/docs/en/dev/codegen/01-orchestration_codegen.md"],
-    "docs_enriched": ["pypto-3.0-notes/pr_plans/23-extract-iterarg-carry-analyzer.md"],
+    "docs_canonical": [
+      "pypto/docs/en/dev/codegen/01-orchestration_codegen.md"
+    ],
+    "docs_enriched": [
+      "pypto-3.0-notes/pr_plans/23-extract-iterarg-carry-analyzer.md"
+    ],
     "rules": [],
-    "related": ["ForStmt", "IterArg", "OrchestrationCodegen"],
-    "downstream": ["orchestration C++"],
-    "verify_tasks": ["pypto:codegen_tests"]
+    "related": [
+      "ForStmt",
+      "IterArg",
+      "OrchestrationCodegen"
+    ],
+    "downstream": [
+      "orchestration C++"
+    ],
+    "verify_tasks": [
+      "pypto:codegen_tests"
+    ]
   },
   "BackendHandler": {
     "layer": "pypto/backend",
     "kind": "backend_dispatch",
-    "repos": ["pypto"],
-    "paths": ["pypto/src/backend/", "pypto/include/pypto/backend/"],
-    "docs_canonical": ["pypto/docs/en/dev/backend/00-backend_handler.md"],
+    "repos": [
+      "pypto"
+    ],
+    "paths": [
+      "pypto/src/backend/",
+      "pypto/include/pypto/backend/"
+    ],
+    "docs_canonical": [
+      "pypto/docs/en/dev/backend/00-backend_handler.md"
+    ],
     "docs_enriched": [],
-    "rules": ["pypto/.claude/rules/pass-context-config.md"],
-    "related": ["910B", "950", "PTOCodegen"],
-    "downstream": ["pto_codegen op dispatch"],
-    "verify_tasks": ["pypto:unit_tests_fast"]
+    "rules": [
+      "pypto/.claude/rules/pass-context-config.md"
+    ],
+    "related": [
+      "910B",
+      "950",
+      "PTOCodegen"
+    ],
+    "downstream": [
+      "pto_codegen op dispatch"
+    ],
+    "verify_tasks": [
+      "pypto:unit_tests_fast"
+    ]
   },
   "pto.tile": {
     "layer": "ptoas/ir",
     "kind": "mlir_dialect",
-    "repos": ["PTOAS"],
-    "paths": ["PTOAS/include/PTO/IR/"],
-    "docs_canonical": ["PTOAS/docs/PTO_IR_manual.md"],
-    "docs_enriched": ["pypto-3.0-notes/PTOAS.md", "pypto-3.0-notes/pto_SSA.md"],
-    "rules": ["PTOAS/.claude/rules/cross-layer-sync.md"],
-    "related": ["pto.tile_buf", "ptoas CLI"],
-    "downstream": ["kernel C++"],
-    "verify_tasks": ["PTOAS:ir_smoke"]
+    "repos": [
+      "PTOAS"
+    ],
+    "paths": [
+      "PTOAS/include/PTO/IR/"
+    ],
+    "docs_canonical": [
+      "PTOAS/docs/PTO_IR_manual.md"
+    ],
+    "docs_enriched": [
+      "pypto-3.0-notes/PTOAS.md",
+      "pypto-3.0-notes/pto_SSA.md"
+    ],
+    "rules": [
+      "PTOAS/.claude/rules/cross-layer-sync.md"
+    ],
+    "related": [
+      "pto.tile_buf",
+      "ptoas CLI"
+    ],
+    "downstream": [
+      "kernel C++"
+    ],
+    "verify_tasks": [
+      "PTOAS:ir_smoke"
+    ]
   },
   "pto.tile_buf": {
     "layer": "ptoas/ir",
     "kind": "mlir_dialect",
-    "repos": ["PTOAS"],
-    "paths": ["PTOAS/include/PTO/IR/"],
-    "docs_canonical": ["PTOAS/docs/PTO_IR_manual.md"],
-    "docs_enriched": ["pypto-3.0-notes/pto_SSA.md"],
+    "repos": [
+      "PTOAS"
+    ],
+    "paths": [
+      "PTOAS/include/PTO/IR/"
+    ],
+    "docs_canonical": [
+      "PTOAS/docs/PTO_IR_manual.md"
+    ],
+    "docs_enriched": [
+      "pypto-3.0-notes/pto_SSA.md"
+    ],
     "rules": [],
-    "related": ["pto.tile", "insert-sync"],
-    "downstream": ["kernel C++"],
-    "verify_tasks": ["PTOAS:ir_smoke"]
+    "related": [
+      "pto.tile",
+      "insert-sync"
+    ],
+    "downstream": [
+      "kernel C++"
+    ],
+    "verify_tasks": [
+      "PTOAS:ir_smoke"
+    ]
   },
   "ptoas": {
     "layer": "ptoas/tool",
     "kind": "cli",
-    "repos": ["PTOAS"],
-    "paths": ["PTOAS/tools/ptoas/ptoas.cpp"],
-    "docs_canonical": ["PTOAS/README_en.md"],
-    "docs_enriched": ["pypto-3.0-notes/PTOAS.md"],
+    "repos": [
+      "PTOAS"
+    ],
+    "paths": [
+      "PTOAS/tools/ptoas/ptoas.cpp"
+    ],
+    "docs_canonical": [
+      "PTOAS/README_en.md"
+    ],
+    "docs_enriched": [
+      "pypto-3.0-notes/PTOAS.md"
+    ],
     "rules": [],
-    "related": ["PTOCodegen", "pto-isa"],
-    "downstream": ["AICore binaries"],
-    "verify_tasks": ["PTOAS:ir_smoke"]
+    "related": [
+      "PTOCodegen",
+      "pto-isa"
+    ],
+    "downstream": [
+      "AICore binaries"
+    ],
+    "verify_tasks": [
+      "PTOAS:ir_smoke"
+    ]
   },
   "TLOAD": {
     "layer": "pto-isa/instruction",
     "kind": "tile_op",
-    "repos": ["pto-isa"],
-    "paths": ["pto-isa/include/pto/", "pto-isa/docs/isa/"],
-    "docs_canonical": ["pto-isa/docs/isa/"],
-    "docs_enriched": ["pypto-3.0-notes/overview_pto-isa.md"],
+    "repos": [
+      "pto-isa"
+    ],
+    "paths": [
+      "pto-isa/include/pto/",
+      "pto-isa/docs/isa/"
+    ],
+    "docs_canonical": [
+      "pto-isa/docs/isa/"
+    ],
+    "docs_enriched": [
+      "pypto-3.0-notes/overview_pto-isa.md"
+    ],
     "rules": [],
-    "related": ["TSTORE", "tile.load"],
-    "downstream": ["AICore execution"],
-    "verify_tasks": ["pto-isa:cpu_smoke"]
+    "related": [
+      "TSTORE",
+      "tile.load"
+    ],
+    "downstream": [
+      "AICore execution"
+    ],
+    "verify_tasks": [
+      "pto-isa:cpu_smoke"
+    ]
   },
   "TSTORE": {
     "layer": "pto-isa/instruction",
     "kind": "tile_op",
-    "repos": ["pto-isa"],
-    "paths": ["pto-isa/include/pto/"],
-    "docs_canonical": ["pto-isa/docs/isa/"],
+    "repos": [
+      "pto-isa"
+    ],
+    "paths": [
+      "pto-isa/include/pto/"
+    ],
+    "docs_canonical": [
+      "pto-isa/docs/isa/"
+    ],
     "docs_enriched": [],
     "rules": [],
-    "related": ["TLOAD", "tile.store"],
-    "downstream": ["AICore execution"],
-    "verify_tasks": ["pto-isa:cpu_smoke"]
+    "related": [
+      "TLOAD",
+      "tile.store"
+    ],
+    "downstream": [
+      "AICore execution"
+    ],
+    "verify_tasks": [
+      "pto-isa:cpu_smoke"
+    ]
   },
   "TMATMUL": {
     "layer": "pto-isa/instruction",
     "kind": "tile_op",
-    "repos": ["pto-isa"],
-    "paths": ["pto-isa/include/pto/"],
-    "docs_canonical": ["pto-isa/docs/isa/"],
+    "repos": [
+      "pto-isa"
+    ],
+    "paths": [
+      "pto-isa/include/pto/"
+    ],
+    "docs_canonical": [
+      "pto-isa/docs/isa/"
+    ],
     "docs_enriched": [],
     "rules": [],
-    "related": ["cube", "AIC"],
-    "downstream": ["AICore cube execution"],
-    "verify_tasks": ["pto-isa:demo_gemm"]
+    "related": [
+      "cube",
+      "AIC"
+    ],
+    "downstream": [
+      "AICore cube execution"
+    ],
+    "verify_tasks": [
+      "pto-isa:demo_gemm"
+    ]
   },
   "TPUSH": {
     "layer": "pto-isa/instruction",
     "kind": "comm_op",
-    "repos": ["pto-isa"],
-    "paths": ["pto-isa/docs/isa/comm/TPUT.md"],
-    "docs_canonical": ["pto-isa/docs/isa/comm/"],
-    "docs_enriched": ["pypto-3.0-notes/abstractions/TPUT.md"],
+    "repos": [
+      "pto-isa"
+    ],
+    "paths": [
+      "pto-isa/docs/isa/comm/TPUT.md"
+    ],
+    "docs_canonical": [
+      "pto-isa/docs/isa/comm/"
+    ],
+    "docs_enriched": [
+      "pypto-3.0-notes/abstractions/TPUT.md"
+    ],
     "rules": [],
-    "related": ["TPOP", "TGET", "distributed"],
-    "downstream": ["multi-chip comm"],
-    "verify_tasks": ["pto-isa:cpu_smoke"]
+    "related": [
+      "TPOP",
+      "TGET",
+      "distributed"
+    ],
+    "downstream": [
+      "multi-chip comm"
+    ],
+    "verify_tasks": [
+      "pto-isa:cpu_smoke"
+    ]
   },
   "TPOP": {
     "layer": "pto-isa/instruction",
     "kind": "comm_op",
-    "repos": ["pto-isa"],
-    "paths": ["pto-isa/docs/isa/comm/"],
-    "docs_canonical": ["pto-isa/docs/isa/comm/"],
-    "docs_enriched": ["pypto-3.0-notes/abstractions/TPUT.md"],
+    "repos": [
+      "pto-isa"
+    ],
+    "paths": [
+      "pto-isa/docs/isa/comm/"
+    ],
+    "docs_canonical": [
+      "pto-isa/docs/isa/comm/"
+    ],
+    "docs_enriched": [
+      "pypto-3.0-notes/abstractions/TPUT.md"
+    ],
     "rules": [],
-    "related": ["TPUSH", "TGET"],
-    "downstream": ["multi-chip comm"],
-    "verify_tasks": ["pto-isa:cpu_smoke"]
+    "related": [
+      "TPUSH",
+      "TGET"
+    ],
+    "downstream": [
+      "multi-chip comm"
+    ],
+    "verify_tasks": [
+      "pto-isa:cpu_smoke"
+    ]
   },
   "TREDUCE": {
     "layer": "pto-isa/instruction",
     "kind": "comm_op",
-    "repos": ["pto-isa", "PTOAS"],
-    "paths": ["pto-isa/docs/isa/comm/TREDUCE.md"],
-    "docs_canonical": ["pto-isa/docs/isa/comm/TREDUCE.md"],
-    "docs_enriched": ["pypto-3.0-notes/treduce.md"],
+    "repos": [
+      "pto-isa",
+      "PTOAS"
+    ],
+    "paths": [
+      "pto-isa/docs/isa/comm/TREDUCE.md"
+    ],
+    "docs_canonical": [
+      "pto-isa/docs/isa/comm/TREDUCE.md"
+    ],
+    "docs_enriched": [
+      "pypto-3.0-notes/treduce.md"
+    ],
     "rules": [],
-    "related": ["allreduce", "pld.tensor.allreduce"],
-    "downstream": ["collectives"],
-    "verify_tasks": ["pto-isa:cpu_smoke"]
+    "related": [
+      "allreduce",
+      "pld.tensor.allreduce"
+    ],
+    "downstream": [
+      "collectives"
+    ],
+    "verify_tasks": [
+      "pto-isa:cpu_smoke"
+    ]
   },
   "CallableHandle": {
     "layer": "simpler/runtime",
     "kind": "runtime_type",
-    "repos": ["simpler"],
-    "paths": ["simpler/src/common/task_interface/"],
-    "docs_canonical": ["simpler/docs/callable-identity-registration.md", "simpler/docs/task-flow.md"],
-    "docs_enriched": ["pypto-3.0-notes/notes_simpler.md"],
+    "repos": [
+      "simpler"
+    ],
+    "paths": [
+      "simpler/src/common/task_interface/"
+    ],
+    "docs_canonical": [
+      "simpler/docs/callable-identity-registration.md",
+      "simpler/docs/task-flow.md"
+    ],
+    "docs_enriched": [
+      "pypto-3.0-notes/notes_simpler.md"
+    ],
     "rules": [],
-    "related": ["CallConfig", "TaskArgs"],
-    "downstream": ["device execution"],
-    "verify_tasks": ["simpler:test_sim"]
+    "related": [
+      "CallConfig",
+      "TaskArgs"
+    ],
+    "downstream": [
+      "device execution"
+    ],
+    "verify_tasks": [
+      "simpler:test_sim"
+    ]
   },
   "CallConfig": {
     "layer": "simpler/runtime",
     "kind": "runtime_type",
-    "repos": ["simpler"],
-    "paths": ["simpler/src/common/task_interface/call_config.h"],
-    "docs_canonical": ["simpler/docs/task-flow.md", "pypto/docs/en/dev/05-runtime-ring-sizing.md"],
-    "docs_enriched": ["pypto-3.0-notes/notes_simpler.md"],
+    "repos": [
+      "simpler"
+    ],
+    "paths": [
+      "simpler/src/common/task_interface/call_config.h"
+    ],
+    "docs_canonical": [
+      "simpler/docs/task-flow.md",
+      "pypto/docs/en/dev/05-runtime-ring-sizing.md"
+    ],
+    "docs_enriched": [
+      "pypto-3.0-notes/notes_simpler.md"
+    ],
     "rules": [],
-    "related": ["RingBuffer", "RunConfig"],
-    "downstream": ["scheduler", "worker"],
-    "verify_tasks": ["simpler:test_sim"]
+    "related": [
+      "RingBuffer",
+      "RunConfig"
+    ],
+    "downstream": [
+      "scheduler",
+      "worker"
+    ],
+    "verify_tasks": [
+      "simpler:test_sim"
+    ]
   },
   "RingBuffer": {
     "layer": "simpler/runtime",
     "kind": "runtime_component",
-    "repos": ["simpler"],
-    "paths": ["simpler/src/a2a3/runtime/tensormap_and_ringbuffer/"],
-    "docs_canonical": ["simpler/docs/orchestrator.md"],
-    "docs_enriched": ["pypto-3.0-notes/notes_simpler.md"],
+    "repos": [
+      "simpler"
+    ],
+    "paths": [
+      "simpler/src/a2a3/runtime/tensormap_and_ringbuffer/"
+    ],
+    "docs_canonical": [
+      "simpler/docs/orchestrator.md"
+    ],
+    "docs_enriched": [
+      "pypto-3.0-notes/notes_simpler.md"
+    ],
     "rules": [],
-    "related": ["TensorMap", "CallConfig"],
-    "downstream": ["task dispatch"],
-    "verify_tasks": ["simpler:test_sim"]
+    "related": [
+      "TensorMap",
+      "CallConfig"
+    ],
+    "downstream": [
+      "task dispatch"
+    ],
+    "verify_tasks": [
+      "simpler:test_sim"
+    ]
   },
   "ChipDomainContext": {
     "layer": "simpler/runtime",
     "kind": "runtime_component",
-    "repos": ["simpler"],
-    "paths": ["simpler/python/simpler/task_interface.py"],
-    "docs_canonical": ["simpler/docs/comm-domain.md"],
-    "docs_enriched": ["pypto-3.0-notes/simpler_distributed_allreduce.md"],
-    "rules": ["simpler/.claude/rules/ascend.md"],
-    "related": ["CommDomainScopeStmt", "orch.allocate_domain"],
-    "downstream": ["distributed execution"],
-    "verify_tasks": ["simpler:test_sim"]
+    "repos": [
+      "simpler"
+    ],
+    "paths": [
+      "simpler/python/simpler/task_interface.py"
+    ],
+    "docs_canonical": [
+      "simpler/docs/comm-domain.md"
+    ],
+    "docs_enriched": [
+      "pypto-3.0-notes/simpler_distributed_allreduce.md"
+    ],
+    "rules": [
+      "simpler/.claude/rules/ascend.md"
+    ],
+    "related": [
+      "CommDomainScopeStmt",
+      "orch.allocate_domain"
+    ],
+    "downstream": [
+      "distributed execution"
+    ],
+    "verify_tasks": [
+      "simpler:test_sim"
+    ]
   },
   "ISchedulerLayer": {
     "layer": "simpler/runtime",
     "kind": "runtime_interface",
-    "repos": ["simpler"],
-    "paths": ["simpler/src/a2a3/runtime/tensormap_and_ringbuffer/runtime/scheduler/"],
-    "docs_canonical": ["simpler/docs/hierarchical_level_runtime.md", "simpler/docs/scheduler.md"],
+    "repos": [
+      "simpler"
+    ],
+    "paths": [
+      "simpler/src/a2a3/runtime/tensormap_and_ringbuffer/runtime/scheduler/"
+    ],
+    "docs_canonical": [
+      "simpler/docs/hierarchical_level_runtime.md",
+      "simpler/docs/scheduler.md"
+    ],
     "docs_enriched": [],
     "rules": [],
-    "related": ["Orchestrator", "WorkerManager"],
-    "downstream": ["multi-level execution"],
-    "verify_tasks": ["simpler:test_sim"]
+    "related": [
+      "Orchestrator",
+      "WorkerManager"
+    ],
+    "downstream": [
+      "multi-level execution"
+    ],
+    "verify_tasks": [
+      "simpler:test_sim"
+    ]
   },
   "pld.tensor.allreduce": {
     "layer": "pypto/distributed",
     "kind": "composite_intrinsic",
-    "repos": ["pypto"],
-    "paths": ["pypto/src/ir/op/distributed/"],
-    "docs_canonical": ["pypto/docs/en/dev/distributed_ops.md"],
-    "docs_enriched": ["pypto-3.0-notes/abstractions/allreduce.md", "pypto-3.0-notes/abstractions/composite_collectives.md"],
+    "repos": [
+      "pypto"
+    ],
+    "paths": [
+      "pypto/src/ir/op/distributed/"
+    ],
+    "docs_canonical": [
+      "pypto/docs/en/dev/distributed_ops.md"
+    ],
+    "docs_enriched": [
+      "pypto-3.0-notes/abstractions/allreduce.md",
+      "pypto-3.0-notes/abstractions/composite_collectives.md"
+    ],
     "rules": [],
-    "related": ["TREDUCE", "LowerHostTensorCollectives"],
-    "downstream": ["distributed_codegen", "pto-isa", "simpler"],
-    "verify_tasks": ["pypto:system_tests_sim"]
+    "related": [
+      "TREDUCE",
+      "LowerHostTensorCollectives"
+    ],
+    "downstream": [
+      "distributed_codegen",
+      "pto-isa",
+      "simpler"
+    ],
+    "verify_tasks": [
+      "pypto:system_tests_sim"
+    ]
   },
   "dependency_triangle": {
     "layer": "cross-stack",
     "kind": "architecture_contract",
-    "repos": ["pypto", "PTOAS", "pto-isa", "simpler"],
+    "repos": [
+      "pypto",
+      "PTOAS",
+      "pto-isa",
+      "simpler"
+    ],
     "paths": [],
-    "docs_canonical": ["pypto/docs/en/dev/00-ecosystem.md"],
-    "docs_enriched": ["pypto-3.0-notes/dependency_triangle.md"],
+    "docs_canonical": [
+      "pypto/docs/en/dev/00-ecosystem.md"
+    ],
+    "docs_enriched": [
+      "pypto-3.0-notes/dependency_triangle.md"
+    ],
     "rules": [],
-    "related": ["PTOCodegen", "ptoas", "CallableHandle"],
-    "downstream": ["full stack"],
-    "verify_tasks": ["pypto-lib:example_hello_sim"]
+    "related": [
+      "PTOCodegen",
+      "ptoas",
+      "CallableHandle"
+    ],
+    "downstream": [
+      "full stack"
+    ],
+    "verify_tasks": [
+      "pypto-lib:example_hello_sim"
+    ]
   },
   "golden.run": {
     "layer": "pypto-lib/harness",
     "kind": "test_harness",
-    "repos": ["pypto-lib"],
-    "paths": ["pypto-lib/golden/runner.py"],
-    "docs_canonical": ["pypto-lib/docs/compile-runtime-workflow.md"],
-    "docs_enriched": ["pypto-3.0-notes/pypto-lib-summary.md"],
-    "rules": ["pypto-lib/.claude/CLAUDE.md"],
-    "related": ["TensorSpec", "@pl.jit"],
-    "downstream": ["device validation"],
-    "verify_tasks": ["pypto-lib:tests_golden"]
+    "repos": [
+      "pypto-lib"
+    ],
+    "paths": [
+      "pypto-lib/golden/runner.py"
+    ],
+    "docs_canonical": [
+      "pypto-lib/docs/compile-runtime-workflow.md"
+    ],
+    "docs_enriched": [
+      "pypto-3.0-notes/pypto-lib-summary.md"
+    ],
+    "rules": [
+      "pypto-lib/.claude/CLAUDE.md"
+    ],
+    "related": [
+      "TensorSpec",
+      "@pl.jit"
+    ],
+    "downstream": [
+      "device validation"
+    ],
+    "verify_tasks": [
+      "pypto-lib:tests_golden"
+    ]
   },
   "@pl.jit": {
     "layer": "pypto-lib/dsl",
     "kind": "dsl_decorator",
-    "repos": ["pypto-lib", "pypto"],
-    "paths": ["pypto/python/pypto/language/"],
-    "docs_canonical": ["pypto-lib/docs/pypto-coding-style.md", "pypto/docs/en/user/01-language_guide.md"],
+    "repos": [
+      "pypto-lib",
+      "pypto"
+    ],
+    "paths": [
+      "pypto/python/pypto/language/"
+    ],
+    "docs_canonical": [
+      "pypto-lib/docs/pypto-coding-style.md",
+      "pypto/docs/en/user/01-language_guide.md"
+    ],
     "docs_enriched": [],
     "rules": [],
-    "related": ["@pl.program", "PassManager"],
-    "downstream": ["full compile pipeline"],
-    "verify_tasks": ["pypto-lib:example_hello_sim"]
+    "related": [
+      "@pl.program",
+      "PassManager"
+    ],
+    "downstream": [
+      "full compile pipeline"
+    ],
+    "verify_tasks": [
+      "pypto-lib:example_hello_sim"
+    ]
   },
   "@pl.program": {
     "layer": "pypto-lib/dsl",
     "kind": "dsl_decorator",
-    "repos": ["pypto-lib", "pypto"],
-    "paths": ["pypto/python/pypto/language/"],
-    "docs_canonical": ["pypto-lib/docs/pypto-coding-style.md"],
+    "repos": [
+      "pypto-lib",
+      "pypto"
+    ],
+    "paths": [
+      "pypto/python/pypto/language/"
+    ],
+    "docs_canonical": [
+      "pypto-lib/docs/pypto-coding-style.md"
+    ],
     "docs_enriched": [],
     "rules": [],
-    "related": ["@pl.function", "@pl.jit"],
-    "downstream": ["orchestration + incore split"],
-    "verify_tasks": ["pypto-lib:tests_golden"]
+    "related": [
+      "@pl.function",
+      "@pl.jit"
+    ],
+    "downstream": [
+      "orchestration + incore split"
+    ],
+    "verify_tasks": [
+      "pypto-lib:tests_golden"
+    ]
   },
   "TensorSpec": {
     "layer": "pypto-lib/harness",
     "kind": "test_type",
-    "repos": ["pypto-lib"],
-    "paths": ["pypto-lib/golden/"],
-    "docs_canonical": ["pypto-lib/docs/compile-runtime-workflow.md"],
+    "repos": [
+      "pypto-lib"
+    ],
+    "paths": [
+      "pypto-lib/golden/"
+    ],
+    "docs_canonical": [
+      "pypto-lib/docs/compile-runtime-workflow.md"
+    ],
     "docs_enriched": [],
     "rules": [],
-    "related": ["golden.run", "ScalarSpec"],
-    "downstream": ["validation"],
-    "verify_tasks": ["pypto-lib:tests_golden"]
+    "related": [
+      "golden.run",
+      "ScalarSpec"
+    ],
+    "downstream": [
+      "validation"
+    ],
+    "verify_tasks": [
+      "pypto-lib:tests_golden"
+    ]
   },
   "PassManager": {
     "layer": "pypto/passes",
     "kind": "pass_orchestrator",
-    "repos": ["pypto"],
-    "paths": ["pypto/python/pypto/ir/pass_manager.py"],
-    "docs_canonical": ["pypto/docs/en/dev/passes/00-pass_manager.md"],
-    "docs_enriched": ["pypto-3.0-notes/pass_infrastructure.md"],
-    "rules": ["pypto/.claude/rules/pass-doc-ordering.md"],
-    "related": ["IRProperty", "Default strategy"],
-    "downstream": ["codegen"],
-    "verify_tasks": ["pypto:unit_tests_fast"]
+    "repos": [
+      "pypto"
+    ],
+    "paths": [
+      "pypto/python/pypto/ir/pass_manager.py"
+    ],
+    "docs_canonical": [
+      "pypto/docs/en/dev/passes/00-pass_manager.md"
+    ],
+    "docs_enriched": [
+      "pypto-3.0-notes/pass_infrastructure.md"
+    ],
+    "rules": [
+      "pypto/.claude/rules/pass-doc-ordering.md"
+    ],
+    "related": [
+      "IRProperty",
+      "Default strategy"
+    ],
+    "downstream": [
+      "codegen"
+    ],
+    "verify_tasks": [
+      "pypto:unit_tests_fast"
+    ]
   },
   "AutoDeriveTaskDependencies": {
     "layer": "pypto/passes",
     "kind": "pass",
-    "repos": ["pypto"],
-    "paths": ["pypto/src/ir/transforms/auto_derive_task_dependencies_pass.cpp"],
-    "docs_canonical": ["pypto/docs/en/dev/passes/35-auto_derive_task_dependencies.md"],
+    "repos": [
+      "pypto"
+    ],
+    "paths": [
+      "pypto/src/ir/transforms/auto_derive_task_dependencies_pass.cpp"
+    ],
+    "docs_canonical": [
+      "pypto/docs/en/dev/passes/35-auto_derive_task_dependencies.md"
+    ],
     "docs_enriched": [],
-    "rules": ["pypto/.claude/rules/pass-submit-awareness.md"],
-    "related": ["Submit", "MANUAL scope", "AUTO scope"],
-    "downstream": ["orchestration_codegen"],
-    "verify_tasks": ["pypto:codegen_tests"]
+    "rules": [
+      "pypto/.claude/rules/pass-submit-awareness.md"
+    ],
+    "related": [
+      "Submit",
+      "MANUAL scope",
+      "AUTO scope"
+    ],
+    "downstream": [
+      "orchestration_codegen"
+    ],
+    "verify_tasks": [
+      "pypto:codegen_tests"
+    ]
   },
   "DistributedCodegen": {
     "layer": "pypto/codegen",
     "kind": "codegen_backend",
-    "repos": ["pypto"],
-    "paths": ["pypto/src/codegen/distributed/distributed_codegen.cpp"],
-    "docs_canonical": ["pypto/docs/en/dev/distributed_ops.md"],
-    "docs_enriched": ["pypto-3.0-notes/codegen_infrastructure.md"],
+    "repos": [
+      "pypto"
+    ],
+    "paths": [
+      "pypto/src/codegen/distributed/distributed_codegen.cpp"
+    ],
+    "docs_canonical": [
+      "pypto/docs/en/dev/distributed_ops.md"
+    ],
+    "docs_enriched": [
+      "pypto-3.0-notes/codegen_infrastructure.md"
+    ],
     "rules": [],
-    "related": ["CommDomainScopeStmt", "ChipDomainContext"],
-    "downstream": ["distributed_runner.py", "simpler L3"],
-    "verify_tasks": ["pypto:codegen_tests"]
+    "related": [
+      "CommDomainScopeStmt",
+      "ChipDomainContext"
+    ],
+    "downstream": [
+      "distributed_runner.py",
+      "simpler L3"
+    ],
+    "verify_tasks": [
+      "pypto:codegen_tests"
+    ]
   },
   "host_collectives_program": {
     "layer": "pypto/distributed",
     "kind": "program",
-    "repos": ["pypto", "pypto-3.0-notes"],
+    "repos": [
+      "pypto",
+      "pypto-3.0-notes"
+    ],
     "paths": [
       "pypto/src/ir/transforms/lower_host_tensor_collectives_pass.cpp",
       "pypto/src/codegen/distributed/distributed_ops_codegen.cpp",
       "pypto/python/pypto/runtime/builtins/collectives/"
     ],
-    "docs_canonical": ["pypto/docs/en/dev/distributed_ops.md"],
+    "docs_canonical": [
+      "pypto/docs/en/dev/distributed_ops.md"
+    ],
     "docs_enriched": [
       "pypto-3.0-notes/memories/host_collectives.md",
       "pypto-3.0-notes/agent/distributed_work_policy.md",
@@ -515,10 +1152,19 @@
       "builtin.tensor.reduce_scatter",
       "builtin.tensor.allgather"
     ],
-    "downstream": ["next_levels/builtin.tensor.*", "test_l3_host_tensor_*"],
-    "verify_tasks": ["pypto-tooling:host_collectives_ut_sim"],
-    "agent_verify_tasks": ["pypto-tooling:host_collectives_ut_sim"],
-    "developer_verify_tasks": ["pypto:host_collectives_st_npu"],
+    "downstream": [
+      "next_levels/builtin.tensor.*",
+      "test_l3_host_tensor_*"
+    ],
+    "verify_tasks": [
+      "pypto-tooling:host_collectives_ut_sim"
+    ],
+    "agent_verify_tasks": [
+      "pypto-tooling:host_collectives_ut_sim"
+    ],
+    "developer_verify_tasks": [
+      "pypto:host_collectives_st_npu"
+    ],
     "agent_policy": [
       "UT in sim Docker only; NPU STs are developer-only",
       "Push to fork-gbisbas only; do not open PR unless asked",
@@ -531,7 +1177,12 @@
     "layer": "notes/meta",
     "kind": "cross_repo_catalog",
     "one_liner": "Master index and per-repo catalogs of every abstraction surface in hw-native-sys",
-    "repos": ["pypto", "simpler", "pto-isa", "PTOAS"],
+    "repos": [
+      "pypto",
+      "simpler",
+      "pto-isa",
+      "PTOAS"
+    ],
     "paths": [
       "pypto-3.0-notes/abstractions/README.md",
       "pypto-3.0-notes/abstractions/pypto-abstractions.md",
@@ -549,9 +1200,466 @@
       "pypto-3.0-notes/abstractions/PTOAS-abstractions.md"
     ],
     "rules": [],
-    "related": ["NOTES_FRESHNESS"],
+    "related": [
+      "NOTES_FRESHNESS"
+    ],
     "downstream": [],
     "verify_tasks": [],
     "_note": "Created 2026-06-24. Covers: pypto (IR ops, 41 passes, DSL, codegen), simpler (workers, task interface, L3 collectives, DFX, HW), pto-isa (~74 tile ops, 11 comm ops, sync), PTOAS (~30 PTO IR ops, types, passes)"
+  },
+  "ConvertToSSA": {
+    "layer": "pypto/passes",
+    "kind": "pass",
+    "one_liner": "Pass 3: Convert IR to SSA form \u2014 single-definition variables, dominance-based phi placement",
+    "repos": [
+      "pypto"
+    ],
+    "paths": [
+      "pypto/src/ir/transforms/convert_to_ssa_pass.cpp"
+    ],
+    "docs_canonical": [
+      "pypto/docs/en/dev/passes/04-convert_to_ssa.md"
+    ],
+    "docs_enriched": [
+      "pypto-3.0-notes/pass_infrastructure.md",
+      "pypto-3.0-notes/pto_SSA.md"
+    ],
+    "rules": [],
+    "related": [
+      "InitMemRef",
+      "SSAForm",
+      "ForStmt",
+      "IterArg"
+    ],
+    "downstream": [
+      "all subsequent passes"
+    ],
+    "verify_tasks": [
+      "pypto:unit_tests_fast"
+    ]
+  },
+  "InitMemRef": {
+    "layer": "pypto/passes",
+    "kind": "pass",
+    "one_liner": "Pass 29: Initialize MemRef allocations \u2014 hoist tile.alloc to function-body head",
+    "repos": [
+      "pypto"
+    ],
+    "paths": [
+      "pypto/src/ir/transforms/init_mem_ref_pass.cpp"
+    ],
+    "docs_canonical": [
+      "pypto/docs/en/dev/passes/29-init_memref.md"
+    ],
+    "docs_enriched": [
+      "pypto-3.0-notes/pass_infrastructure.md"
+    ],
+    "rules": [],
+    "related": [
+      "MemoryReuse",
+      "MemRef",
+      "tile.alloc"
+    ],
+    "downstream": [
+      "MemoryReuse",
+      "AllocateMemoryAddr"
+    ],
+    "verify_tasks": [
+      "pypto:unit_tests_fast"
+    ]
+  },
+  "MemoryReuse": {
+    "layer": "pypto/passes",
+    "kind": "pass",
+    "one_liner": "Pass 30: Global largest-first packing for tile buffer reuse (#1805)",
+    "repos": [
+      "pypto"
+    ],
+    "paths": [
+      "pypto/src/ir/transforms/memory_reuse_pass.cpp"
+    ],
+    "docs_canonical": [
+      "pypto/docs/en/dev/passes/30-memory_reuse.md"
+    ],
+    "docs_enriched": [
+      "pypto-3.0-notes/pass_infrastructure.md"
+    ],
+    "rules": [],
+    "related": [
+      "InitMemRef",
+      "Ascend910B hazard",
+      "tile.alloc"
+    ],
+    "downstream": [
+      "AllocateMemoryAddr"
+    ],
+    "verify_tasks": [
+      "pypto:unit_tests_fast"
+    ]
+  },
+  "LowerCompositeOps": {
+    "layer": "pypto/passes",
+    "kind": "pass",
+    "one_liner": "Pass 14: Decompose composite ops (sin, cos, allreduce) into primitives",
+    "repos": [
+      "pypto"
+    ],
+    "paths": [
+      "pypto/src/ir/transforms/lower_composite_ops_pass.cpp"
+    ],
+    "docs_canonical": [
+      "pypto/docs/en/dev/passes/14-lower_composite_ops.md"
+    ],
+    "docs_enriched": [
+      "pypto-3.0-notes/abstractions/allreduce.md"
+    ],
+    "rules": [],
+    "related": [
+      "pld.tensor.allreduce",
+      "LoweringBuilder",
+      "tile.sin",
+      "tile.cos"
+    ],
+    "downstream": [
+      "ConvertTensorToTileOps"
+    ],
+    "verify_tasks": [
+      "pypto:system_tests_sim"
+    ]
+  },
+  "MaterializeCommDomainScopes": {
+    "layer": "pypto/passes",
+    "kind": "pass",
+    "one_liner": "Pass 37: Trace alloc\u2192window\u2192dispatch chain, wrap in CommDomainScopeStmt",
+    "repos": [
+      "pypto"
+    ],
+    "paths": [
+      "pypto/src/ir/transforms/materialize_comm_domain_scopes_pass.cpp"
+    ],
+    "docs_canonical": [
+      "pypto/docs/en/dev/passes/37-materialize_comm_domain_scopes.md"
+    ],
+    "docs_enriched": [
+      "pypto-3.0-notes/pass_infrastructure.md",
+      "pypto-3.0-notes/pypto-3.0-distributed_support.md"
+    ],
+    "rules": [],
+    "related": [
+      "CommDomainScopeStmt",
+      "DistributedTensorType",
+      "LowerHostTensorCollectives"
+    ],
+    "downstream": [
+      "distributed_codegen"
+    ],
+    "verify_tasks": [
+      "pypto:system_tests_sim"
+    ]
+  },
+  "ConvertTensorToTileOps": {
+    "layer": "pypto/passes",
+    "kind": "pass",
+    "one_liner": "Pass 12: Lower tensor ops to tile ops (TLOAD, TSTORE, TMATMUL, etc.)",
+    "repos": [
+      "pypto"
+    ],
+    "paths": [
+      "pypto/src/ir/transforms/convert_tensor_to_tile_ops_pass.cpp"
+    ],
+    "docs_canonical": [
+      "pypto/docs/en/dev/passes/12-convert_tensor_to_tile_ops.md"
+    ],
+    "docs_enriched": [
+      "pypto-3.0-notes/pass_infrastructure.md"
+    ],
+    "rules": [],
+    "related": [
+      "LowerCompositeOps",
+      "tile.load",
+      "tile.store",
+      "tile.matmul"
+    ],
+    "downstream": [
+      "FlattenTileNdTo2D"
+    ],
+    "verify_tasks": [
+      "pypto:unit_tests_fast"
+    ]
+  },
+  "TNOTIFY": {
+    "layer": "pto-isa/comm",
+    "kind": "isa_instruction",
+    "one_liner": "Notify peer rank via HCCL signal cell (AtomicAdd or Set)",
+    "repos": [
+      "pto-isa",
+      "pypto",
+      "simpler"
+    ],
+    "paths": [
+      "pto-isa/docs/isa/comm/TNOTIFY.md"
+    ],
+    "docs_canonical": [
+      "pto-isa/docs/isa/comm/TNOTIFY.md"
+    ],
+    "docs_enriched": [
+      "pypto-3.0-notes/abstractions/pto-isa-abstractions.md"
+    ],
+    "rules": [],
+    "related": [
+      "TWAIT",
+      "TTEST",
+      "NotifyOp",
+      "pld.system.notify"
+    ],
+    "downstream": [
+      "HCCL window sync"
+    ],
+    "verify_tasks": [
+      "pto-isa:cpu_sim_tests"
+    ]
+  },
+  "TWAIT": {
+    "layer": "pto-isa/comm",
+    "kind": "isa_instruction",
+    "one_liner": "Wait for notification from peer rank (blocking until condition met)",
+    "repos": [
+      "pto-isa",
+      "pypto",
+      "simpler"
+    ],
+    "paths": [
+      "pto-isa/docs/isa/comm/TWAIT.md"
+    ],
+    "docs_canonical": [
+      "pto-isa/docs/isa/comm/TWAIT.md"
+    ],
+    "docs_enriched": [
+      "pypto-3.0-notes/abstractions/pto-isa-abstractions.md"
+    ],
+    "rules": [],
+    "related": [
+      "TNOTIFY",
+      "TTEST",
+      "WaitCmp",
+      "pld.system.wait"
+    ],
+    "downstream": [
+      "HCCL window sync"
+    ],
+    "verify_tasks": [
+      "pto-isa:cpu_sim_tests"
+    ]
+  },
+  "TPUT": {
+    "layer": "pto-isa/comm",
+    "kind": "isa_instruction",
+    "one_liner": "Put (remote store) data to peer NPU HCCL window",
+    "repos": [
+      "pto-isa",
+      "pypto",
+      "simpler"
+    ],
+    "paths": [
+      "pto-isa/docs/isa/comm/TPUT.md"
+    ],
+    "docs_canonical": [
+      "pto-isa/docs/isa/comm/TPUT.md"
+    ],
+    "docs_enriched": [
+      "pypto-3.0-notes/abstractions/TPUT.md",
+      "pypto-3.0-notes/abstractions/pto-isa-abstractions.md"
+    ],
+    "rules": [],
+    "related": [
+      "TGET",
+      "pld.tensor.put",
+      "AtomicType",
+      "HCCLWindow"
+    ],
+    "downstream": [
+      "HCCL window RDMA"
+    ],
+    "verify_tasks": [
+      "pto-isa:cpu_sim_tests"
+    ]
+  },
+  "TGET": {
+    "layer": "pto-isa/comm",
+    "kind": "isa_instruction",
+    "one_liner": "Get (remote load) data from peer NPU HCCL window",
+    "repos": [
+      "pto-isa",
+      "pypto",
+      "simpler"
+    ],
+    "paths": [
+      "pto-isa/docs/isa/comm/TGET.md"
+    ],
+    "docs_canonical": [
+      "pto-isa/docs/isa/comm/TGET.md"
+    ],
+    "docs_enriched": [
+      "pypto-3.0-notes/abstractions/pto-isa-abstractions.md"
+    ],
+    "rules": [],
+    "related": [
+      "TPUT",
+      "pld.tensor.get",
+      "HCCLWindow"
+    ],
+    "downstream": [
+      "HCCL window RDMA"
+    ],
+    "verify_tasks": [
+      "pto-isa:cpu_sim_tests"
+    ]
+  },
+  "HCCLWindow": {
+    "layer": "simpler/comm",
+    "kind": "runtime_concept",
+    "one_liner": "Hardware communication domain window for cross-chip RDMA between Ascend NPUs",
+    "repos": [
+      "simpler",
+      "pypto"
+    ],
+    "paths": [
+      "simpler/src/common/comm/"
+    ],
+    "docs_canonical": [
+      "simpler/docs/comm-domain.md"
+    ],
+    "docs_enriched": [
+      "pypto-3.0-notes/abstractions/simpler-abstractions.md",
+      "pypto-3.0-notes/simpler_distributed_allreduce.md"
+    ],
+    "rules": [],
+    "related": [
+      "CommDomain",
+      "CommContext",
+      "WindowBuffer",
+      "TPUT",
+      "TGET"
+    ],
+    "downstream": [
+      "L3 allreduce",
+      "L3 broadcast"
+    ],
+    "verify_tasks": [
+      "simpler:system_tests"
+    ]
+  },
+  "Worker_L3": {
+    "layer": "simpler/worker",
+    "kind": "runtime_concept",
+    "one_liner": "Multi-chip L3 Worker: host\u2192forked chip processes\u2192AICPU\u2192AICore dispatch",
+    "repos": [
+      "simpler"
+    ],
+    "paths": [
+      "simpler/src/common/worker/chip_worker.cpp"
+    ],
+    "docs_canonical": [
+      "simpler/docs/chip-level-arch.md"
+    ],
+    "docs_enriched": [
+      "pypto-3.0-notes/abstractions/simpler-abstractions.md",
+      "pypto-3.0-notes/notes_simpler.md"
+    ],
+    "rules": [],
+    "related": [
+      "TaskArgs",
+      "CallConfig",
+      "ChipCallable",
+      "HCCLWindow"
+    ],
+    "downstream": [
+      "L3 collectives"
+    ],
+    "verify_tasks": [
+      "simpler:system_tests"
+    ]
+  },
+  "pl.at": {
+    "layer": "pypto/dsl",
+    "kind": "dsl_primitive",
+    "one_liner": "Scope context manager: pl.at(level=CORE_GROUP, optimizations=[auto_chunk, split]) \u2014 #1819 unified form",
+    "repos": [
+      "pypto"
+    ],
+    "paths": [
+      "pypto/python/pypto/language/scope.py"
+    ],
+    "docs_canonical": [
+      "pypto/docs/en/user/01-language_guide.md"
+    ],
+    "docs_enriched": [
+      "pypto-3.0-notes/abstractions/pypto-abstractions.md",
+      "pypto-3.0-notes/kernel_orchestration.md"
+    ],
+    "rules": [],
+    "related": [
+      "OutlineIncoreScopes",
+      "SplitChunkedLoops",
+      "pl.auto_chunk"
+    ],
+    "downstream": [
+      "InCoreScopeStmt"
+    ],
+    "verify_tasks": [
+      "pypto:unit_tests_fast"
+    ]
+  },
+  "FreshnessRegistry": {
+    "layer": "notes/meta",
+    "kind": "notes_tooling",
+    "one_liner": "NOTES_FRESHNESS.md: per-file last_verified dates, canonical source links, update triggers for 30+ notes",
+    "repos": [
+      "pypto-3.0-notes"
+    ],
+    "paths": [
+      "pypto-3.0-notes/NOTES_FRESHNESS.md"
+    ],
+    "docs_canonical": [
+      "pypto-3.0-notes/NOTES_FRESHNESS.md"
+    ],
+    "docs_enriched": [
+      "pypto-3.0-notes/AGENTS.md"
+    ],
+    "rules": [],
+    "related": [
+      "verify_notes.sh",
+      "AbstractionsCatalog"
+    ],
+    "downstream": [
+      "all notes files"
+    ],
+    "verify_tasks": []
+  },
+  "StackAvailability": {
+    "layer": "notes/distributed",
+    "kind": "notes_tooling",
+    "one_liner": "collectives_benchmarking/stack_availability.md: central hub \u2014 what exists vs gaps across stack",
+    "repos": [
+      "pypto-3.0-notes"
+    ],
+    "paths": [
+      "pypto-3.0-notes/collectives_benchmarking/stack_availability.md"
+    ],
+    "docs_canonical": [
+      "pypto-3.0-notes/collectives_benchmarking/stack_availability.md"
+    ],
+    "docs_enriched": [
+      "pypto-3.0-notes/distributed/current_status.md"
+    ],
+    "rules": [],
+    "related": [
+      "traceability_matrix",
+      "collective_bench_variants_project"
+    ],
+    "downstream": [
+      "V4 planning"
+    ],
+    "verify_tasks": []
   }
 }
