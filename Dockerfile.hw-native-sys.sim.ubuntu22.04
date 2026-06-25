@@ -69,7 +69,7 @@ ARG UBUNTU_VERSION=22.04
 FROM ubuntu:${UBUNTU_VERSION}
 
 ARG INSTALL_PREFIX=/opt
-ARG PYPTO_COMMIT=b77b41fee7df8b700c6a6a8f0de12767d31be642
+ARG PYPTO_COMMIT=9b144026b3b193e6afbc8d6fb1617e97ee26d9a6
 # PTO_ISA_COMMIT defaults to empty — auto-derived from pypto ci.yml at build time.
 # Set via --build-arg to pin a specific commit.
 ARG PTO_ISA_COMMIT=
