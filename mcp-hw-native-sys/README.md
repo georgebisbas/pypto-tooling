@@ -92,7 +92,7 @@ Fixed URIs (read via MCP resource client):
 
 ## Task types (`route_task`)
 
-`stack_overview`, `ir_change`, `pass_change`, `codegen_pto`, `codegen_orch`, `distributed`, `distributed_collectives`, **`host_collectives_program`**, `distributed_codegen`, `distributed_runtime`, `large_model_inference`, `ptoas`, `pto_isa`, `runtime`, `pypto_lib`, `performance`, **`ascend_arch`**, **`ascend_runtime`**, **`npu_tuning`**, **`npu_verify_handoff`**
+`stack_overview`, `ir_change`, `pass_change`, `codegen_pto`, `codegen_orch`, `distributed`, `distributed_collectives`, **`host_collectives_program`**, `distributed_codegen`, `distributed_runtime`, `large_model_inference`, **`pypto_lib_building_blocks`**, `ptoas`, `pto_isa`, `runtime`, `pypto_lib`, `performance`, **`ascend_arch`**, **`ascend_runtime`**, **`npu_tuning`**, **`npu_verify_handoff`**
 
 `route_task` returns **`agent_verify_tasks`** (agent gate) and **`developer_verify_tasks`** (NPU/hardware — agent must not run) when configured.
 

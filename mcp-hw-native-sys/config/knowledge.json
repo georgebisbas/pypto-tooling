@@ -59,6 +59,36 @@
       ],
       "max_chars": 4000
     },
+    "pypto-lib/status": {
+      "path": "pypto-3.0-notes/pypto-lib-status/README.md",
+      "max_chars": 6000,
+      "tier": "enriched"
+    },
+    "pypto-lib/building_blocks": {
+      "path": "pypto-3.0-notes/pypto-lib-status/building-blocks.md",
+      "max_chars": 12000,
+      "tier": "enriched"
+    },
+    "pypto-lib/attention": {
+      "path": "pypto-3.0-notes/pypto-lib-status/attention.md",
+      "max_chars": 10000,
+      "tier": "enriched"
+    },
+    "pypto-lib/models": {
+      "path": "pypto-3.0-notes/pypto-lib-status/models.md",
+      "max_chars": 10000,
+      "tier": "enriched"
+    },
+    "pypto-lib/distributed_support": {
+      "path": "pypto-3.0-notes/pypto-lib-status/distributed-support.md",
+      "max_chars": 9000,
+      "tier": "enriched"
+    },
+    "pypto-lib/moe": {
+      "path": "pypto-3.0-notes/pypto-lib-status/moe.md",
+      "max_chars": 14000,
+      "tier": "enriched"
+    },
     "agent/invariants": {
       "paths": [
         "pypto/.claude/rules/first-principles.md",
@@ -189,6 +219,12 @@
     }
   },
   "notes_topics": {
+    "pypto_lib_status": "pypto-3.0-notes/pypto-lib-status/README.md",
+    "pypto_lib_building_blocks": "pypto-3.0-notes/pypto-lib-status/building-blocks.md",
+    "pypto_lib_attention": "pypto-3.0-notes/pypto-lib-status/attention.md",
+    "pypto_lib_models": "pypto-3.0-notes/pypto-lib-status/models.md",
+    "pypto_lib_distributed_support": "pypto-3.0-notes/pypto-lib-status/distributed-support.md",
+    "moe": "pypto-3.0-notes/pypto-lib-status/moe.md",
     "pass_infrastructure": "pypto-3.0-notes/pass_infrastructure.md",
     "codegen_infrastructure": "pypto-3.0-notes/codegen_infrastructure.md",
     "dependency_triangle": "pypto-3.0-notes/dependency_triangle.md",
@@ -289,7 +325,8 @@
         "pypto/docs/en/dev/passes/38-lower_host_tensor_collectives.md"
       ],
       "read_first_enriched": [
-        "pypto-3.0-notes/abstractions/composite_collectives.md"
+        "pypto-3.0-notes/abstractions/composite_collectives.md",
+        "pypto-3.0-notes/pypto-lib-status/distributed-support.md"
       ],
       "rules": [
         "pypto/.claude/rules/first-principles.md"
@@ -298,7 +335,7 @@
       "verify_tasks": ["pypto:codegen_tests"],
       "agent_verify_tasks": ["pypto:codegen_tests"],
       "developer_verify_tasks": ["pypto:host_collectives_st_npu"],
-      "resources": ["pypto/distributed", "flows/distributed_allreduce", "agent/distributed_work_policy"]
+      "resources": ["pypto/distributed", "flows/distributed_allreduce", "agent/distributed_work_policy", "pypto-lib/distributed_support"]
     },
     "distributed_collectives": {
       "description": "Composite collectives, ring vs mesh algorithms",
@@ -308,7 +345,7 @@
       "read_first_enriched": [
         "pypto-3.0-notes/abstractions/composite_collectives.md",
         "pypto-3.0-notes/abstractions/allreduce.md",
-        "pypto-3.0-notes/allreduce_benchmark_variants/stack_availability.md"
+        "pypto-3.0-notes/collectives_benchmarking/stack_availability.md"
       ],
       "rules": [],
       "entrypoint_areas": ["pypto:distributed_ops", "pypto:tests_st_distributed"],
@@ -379,14 +416,17 @@
         "pypto-lib/docs/debugging.md"
       ],
       "read_first_enriched": [
-        "pypto-3.0-notes/pypto-lib-summary.md"
+        "pypto-3.0-notes/pypto-lib-summary.md",
+        "pypto-3.0-notes/pypto-lib-status/README.md",
+        "pypto-3.0-notes/pypto-lib-status/models.md",
+        "pypto-3.0-notes/pypto-lib-status/building-blocks.md"
       ],
       "rules": [
         "pypto-lib/.claude/CLAUDE.md"
       ],
       "entrypoint_areas": ["pypto-lib:models", "pypto-lib:golden"],
       "verify_tasks": ["pypto-lib:tests_golden", "pypto-lib:example_hello_sim"],
-      "resources": ["pypto-lib/overview", "flows/compile_to_device"]
+      "resources": ["pypto-lib/overview", "pypto-lib/status", "pypto-lib/models", "pypto-lib/building_blocks", "pypto-lib/attention", "flows/compile_to_device"]
     },
     "ptoas": {
       "description": "PTO assembler and optimizer (.pto to C++)",
@@ -445,14 +485,35 @@
         "pypto-lib/docs/compile-runtime-workflow.md"
       ],
       "read_first_enriched": [
-        "pypto-3.0-notes/pypto-lib-summary.md"
+        "pypto-3.0-notes/pypto-lib-summary.md",
+        "pypto-3.0-notes/pypto-lib-status/README.md"
       ],
       "rules": [
         "pypto-lib/.claude/CLAUDE.md"
       ],
       "entrypoint_areas": ["pypto-lib:golden", "pypto-lib:examples"],
       "verify_tasks": ["pypto-lib:tests_golden"],
-      "resources": ["pypto-lib/overview"]
+      "resources": ["pypto-lib/overview", "pypto-lib/status", "pypto-lib/building_blocks"]
+    },
+    "pypto_lib_building_blocks": {
+      "description": "What building blocks / ops / models exist in pypto-lib and whether each is single-device or has distributed (multi-NPU) support",
+      "read_first_canonical": [
+        "pypto-lib/docs/pypto-coding-style.md"
+      ],
+      "read_first_enriched": [
+        "pypto-3.0-notes/pypto-lib-status/README.md",
+        "pypto-3.0-notes/pypto-lib-status/building-blocks.md",
+        "pypto-3.0-notes/pypto-lib-status/attention.md",
+        "pypto-3.0-notes/pypto-lib-status/models.md",
+        "pypto-3.0-notes/pypto-lib-status/distributed-support.md",
+        "pypto-3.0-notes/pypto-lib-status/moe.md"
+      ],
+      "rules": [
+        "pypto-lib/.claude/CLAUDE.md"
+      ],
+      "entrypoint_areas": ["pypto-lib:models", "pypto-lib:examples"],
+      "verify_tasks": ["pypto-lib:tests_golden", "pypto-lib:example_hello_sim"],
+      "resources": ["pypto-lib/status", "pypto-lib/building_blocks", "pypto-lib/attention", "pypto-lib/models", "pypto-lib/distributed_support", "pypto-lib/moe", "pypto-lib/overview"]
     },
     "performance": {
       "description": "Compile and runtime profiling for training/inference tuning",
@@ -491,7 +552,7 @@
       ],
       "read_first_enriched": [
         "pypto-3.0-notes/tools/docker-cann-pr-test-workflow.md",
-        "pypto-3.0-notes/allreduce_benchmark_variants/stack_availability.md"
+        "pypto-3.0-notes/collectives_benchmarking/stack_availability.md"
       ],
       "rules": [
         "simpler/.claude/rules/ascend.md"
