@@ -56,7 +56,7 @@ FROM quay.io/ascend/cann:${CANN_VERSION}-910b-ubuntu22.04-py3.12
 ARG CANN_VERSION=9.0.0
 ARG INSTALL_PREFIX=/opt
 ARG PT_HCCL_REPO_URL=https://github.com/georgebisbas/pytorch-hccl-tests.git
-ARG PT_HCCL_COMMIT=53a6734b085d9559fc069351747be2ca8663d6ff
+ARG PT_HCCL_COMMIT=master
 ARG PT_HCCL_INSTALL_TARGET=install-npu-arm
 
 ENV CANN_VERSION=${CANN_VERSION} \
@@ -103,6 +103,7 @@ RUN python3.10 -m venv "${PT_HCCL_VENV}" && \
     pip install pytest && \
     pip install -r requirements_plotting.txt && \
     make "${PT_HCCL_INSTALL_TARGET}" && \
+    pip install PyYAML && \
     python -c "import pytorch_hccl_tests; print('pytorch_hccl_tests ok')"
 
 # Remove set_env.sh auto-sourcing from ALL system/user startup files.
