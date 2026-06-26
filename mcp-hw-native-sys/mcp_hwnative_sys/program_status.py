@@ -162,17 +162,30 @@ def load_program_status() -> dict[str, Any]:
 
 def program_status_impl() -> dict[str, Any]:
     data = load_program_status()
-    # Highlight plan 33 / #1782 dependency for agents
     highlights: list[str] = []
+
+    # Collect PR numbers referenced as blockers so we can flag them in open_prs
+    blocker_pr_nums: set[str] = set()
     for item in data.get("fork_wip", []):
-        blocker = item.get("blocker", "")
-        if "#1782" in blocker or "1782" in blocker:
-            highlights.append(
-                f"Plan 33 ({item.get('branch')}) blocked on #1782 composite collectives merge"
-            )
+        blocker = item.get("blocker", "").strip()
+        if not blocker or "blocked" not in blocker.lower():
+            continue
+        branch = item.get("branch", "?")
+        plan = item.get("plan", "")
+        plan_label = f"Plan {plan} " if plan else ""
+        highlights.append(f"{plan_label}({branch}) blocked: {blocker}")
+        # Extract any #NNNN references from the blocker text
+        import re
+        for match in re.findall(r"#(\d+)", blocker):
+            blocker_pr_nums.add(f"#{match}")
+
     for pr in data.get("open_prs", []):
-        if pr.get("pr") == "#1782":
-            highlights.append(f"Blocking PR open: pypto #1782 ({pr.get('branch')})")
+        pr_num = pr.get("pr", "")
+        if pr_num in blocker_pr_nums:
+            highlights.append(
+                f"Blocking PR open: {pr.get('repo')} {pr_num} ({pr.get('branch')})"
+            )
+
     data["highlights"] = highlights
     data["source"] = "pypto-3.0-notes/pr_plans/status_prs.md (structured)"
     return data

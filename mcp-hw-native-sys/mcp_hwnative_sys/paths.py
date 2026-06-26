@@ -34,6 +34,10 @@ def ascend_abstractions_config_path() -> Path:
     return project_root() / "config" / "ascend_abstractions.json"
 
 
+def contract_artifacts_config_path() -> Path:
+    return project_root() / "config" / "contract_artifacts.json"
+
+
 def resolve_doc_path(relative_path: str) -> Path:
     """Resolve a document path — MCP-owned content/ lives under project_root."""
     normalized = relative_path.replace("\\", "/")
@@ -46,9 +50,15 @@ def resolve_doc_path(relative_path: str) -> Path:
     return resolve_workspace_path(relative_path)
 
 
+_repos_config_cache: dict[str, Any] | None = None
+
+
 def load_repos_config() -> dict[str, Any]:
-    with repos_config_path().open("r", encoding="utf-8") as handle:
-        return json.load(handle)
+    global _repos_config_cache
+    if _repos_config_cache is None:
+        with repos_config_path().open("r", encoding="utf-8") as handle:
+            _repos_config_cache = json.load(handle)
+    return _repos_config_cache
 
 
 def workspace_root(raw_config: dict[str, Any] | None = None) -> Path:

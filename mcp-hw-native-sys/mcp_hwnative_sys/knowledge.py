@@ -4,9 +4,10 @@ import json
 import re
 from datetime import date, datetime
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
 from mcp.server.fastmcp import FastMCP
+from pydantic import Field
 
 from mcp_hwnative_sys.doc_sections import build_section_toc, extract_section
 from mcp_hwnative_sys.paths import (
@@ -26,26 +27,40 @@ EPHEMERAL_PREFIXES = ("pypto-3.0-notes/pr_plans/", "pypto-3.0-notes/pull_request
 NOTES_FRESHNESS_PATH = "pypto-3.0-notes/NOTES_FRESHNESS.md"
 
 
+_knowledge_config_cache: dict[str, Any] | None = None
+_entrypoints_cache: dict[str, Any] | None = None
+_abstractions_cache: dict[str, Any] | None = None
+
+
 def _load_json(path: Path) -> dict[str, Any]:
     with path.open("r", encoding="utf-8") as handle:
         return json.load(handle)
 
 
 def load_knowledge_config() -> dict[str, Any]:
-    return _load_json(knowledge_config_path())
+    global _knowledge_config_cache
+    if _knowledge_config_cache is None:
+        _knowledge_config_cache = _load_json(knowledge_config_path())
+    return _knowledge_config_cache
 
 
 def load_entrypoints() -> dict[str, Any]:
-    return _load_json(entrypoints_config_path())
+    global _entrypoints_cache
+    if _entrypoints_cache is None:
+        _entrypoints_cache = _load_json(entrypoints_config_path())
+    return _entrypoints_cache
 
 
 def load_abstractions() -> dict[str, Any]:
-    merged = _load_json(abstractions_config_path())
-    ascend_path = ascend_abstractions_config_path()
-    if ascend_path.exists():
-        ascend_cards = _load_json(ascend_path)
-        merged.update(ascend_cards)
-    return merged
+    global _abstractions_cache
+    if _abstractions_cache is None:
+        merged = _load_json(abstractions_config_path())
+        ascend_path = ascend_abstractions_config_path()
+        if ascend_path.exists():
+            ascend_cards = _load_json(ascend_path)
+            merged.update(ascend_cards)
+        _abstractions_cache = merged
+    return _abstractions_cache
 
 
 _ABSTRACTION_ALIASES: dict[str, str] = {
@@ -340,6 +355,22 @@ def explain_abstraction_impl(name: str) -> dict[str, Any]:
     }
 
 
+def _abstraction_relevance(name: str, card: dict[str, Any], needle: str) -> int:
+    name_lower = name.lower()
+    if name_lower == needle:
+        return 4
+    if needle in name_lower:
+        return 3
+    tags = " ".join(card.get("tags", [])).lower()
+    if needle in tags:
+        return 2
+    layer = str(card.get("layer", "")).lower()
+    kind = str(card.get("kind", "")).lower()
+    if needle in layer or needle in kind:
+        return 1
+    return 0
+
+
 def search_abstractions_impl(
     query: str,
     max_results: int = 20,
@@ -352,7 +383,7 @@ def search_abstractions_impl(
 
     needle = query.strip().lower()
     abstractions = load_abstractions()
-    matches: list[dict[str, Any]] = []
+    scored: list[tuple[int, str, dict[str, Any]]] = []
 
     for name, card in abstractions.items():
         haystack = " ".join(
@@ -369,27 +400,30 @@ def search_abstractions_impl(
             ]
         ).lower()
         if needle in haystack or needle in name.lower():
-            if fields == "full":
-                matches.append(
-                    {
-                        "name": name,
-                        "layer": card.get("layer"),
-                        "kind": card.get("kind"),
-                        "tags": card.get("tags", []),
-                        "arch_families": card.get("arch_families", []),
-                        "repos": card.get("repos", []),
-                    }
-                )
-            else:
-                matches.append(
-                    {
-                        "name": name,
-                        "layer": card.get("layer"),
-                        "one_liner": card.get("one_liner") or card.get("kind", ""),
-                    }
-                )
-        if len(matches) >= max_results:
-            break
+            scored.append((_abstraction_relevance(name, card, needle), name, card))
+
+    scored.sort(key=lambda t: -t[0])
+    matches: list[dict[str, Any]] = []
+    for _, name, card in scored[:max_results]:
+        if fields == "full":
+            matches.append(
+                {
+                    "name": name,
+                    "layer": card.get("layer"),
+                    "kind": card.get("kind"),
+                    "tags": card.get("tags", []),
+                    "arch_families": card.get("arch_families", []),
+                    "repos": card.get("repos", []),
+                }
+            )
+        else:
+            matches.append(
+                {
+                    "name": name,
+                    "layer": card.get("layer"),
+                    "one_liner": card.get("one_liner") or card.get("kind", ""),
+                }
+            )
 
     return {"query": query, "match_count": len(matches), "matches": matches}
 
@@ -590,7 +624,20 @@ def register_knowledge(mcp: FastMCP) -> None:
         mcp.resource(f"hw-native-sys://notes/{topic}")(_make_notes_handler(topic))
 
     @mcp.tool()
-    def route_task(task_type: str, detail: str = "") -> dict[str, Any]:
+    def list_task_types() -> list[dict[str, str]]:
+        """Return all valid task_type values with one-line descriptions for use with bootstrap_session and route_task."""
+        config = load_knowledge_config()
+        routes = config.get("routes", {})
+        return [
+            {"task_type": key, "description": value.get("description", "")}
+            for key, value in sorted(routes.items())
+        ]
+
+    @mcp.tool()
+    def route_task(
+        task_type: Annotated[str, Field(description='Task type key — use list_task_types() to enumerate valid values, e.g. "distributed_codegen", "ascend_arch"')],
+        detail: Annotated[str, Field(description="Optional free-text context (e.g. symbol or feature name) passed through to the routing output")] = "",
+    ) -> dict[str, Any]:
         """Return read-first docs, rules, entrypoints, and verify tasks for a compiler workflow."""
         return route_task_impl(task_type, detail)
 
@@ -600,22 +647,34 @@ def register_knowledge(mcp: FastMCP) -> None:
         return list_knowledge_topics_impl()
 
     @mcp.tool()
-    def read_doc(path: str, max_chars: int = 12000, section: str = "") -> dict[str, Any]:
+    def read_doc(
+        path: Annotated[str, Field(description='Document path. Paths starting with "content/" are MCP-owned (project-relative). All others are workspace-relative (e.g. "pypto-3.0-notes/arch.md"). Use list_knowledge_topics() to discover registered paths.')],
+        max_chars: Annotated[int, Field(description="Maximum characters to return (500–50000)", ge=500, le=50000)] = 12000,
+        section: Annotated[str, Field(description='Extract a specific markdown section by exact heading text (case-sensitive). Leave empty to read from the top. Use read_doc with a bad section name to see the TOC.')] = "",
+    ) -> dict[str, Any]:
         """Read a workspace document with tier labeling. Optional section extracts a markdown heading."""
         return read_doc_payload(path, max_chars, section)
 
     @mcp.tool()
-    def explain_abstraction(name: str) -> dict[str, Any]:
+    def explain_abstraction(
+        name: Annotated[str, Field(description='Abstraction name or alias, e.g. "AIC", "HCCLWindow", "Ascend910B", "cube". Use search_abstractions() to discover names.')],
+    ) -> dict[str, Any]:
         """Explain a stack abstraction: IR/passes/codegen/ISA/runtime or Ascend hardware (AIC, HCCL, etc.)."""
         return explain_abstraction_impl(name)
 
     @mcp.tool()
-    def search_abstractions(query: str, max_results: int = 20, fields: str = "summary") -> dict[str, Any]:
-        """Search the abstraction index by keyword. fields=summary (default) or full."""
+    def search_abstractions(
+        query: Annotated[str, Field(description="Keyword to search across abstraction names, layers, kinds, tags, and related fields")],
+        max_results: Annotated[int, Field(description="Maximum results to return (1–100)", ge=1, le=100)] = 20,
+        fields: Annotated[str, Field(description='"summary" returns name+layer+one_liner; "full" adds tags, arch_families, repos')] = "summary",
+    ) -> dict[str, Any]:
+        """Search the abstraction index by keyword. Results are ranked by relevance (exact name > name-contains > tag > layer/kind)."""
         return search_abstractions_impl(query, max_results, fields)
 
     @mcp.tool()
-    def explain_pass(name: str) -> dict[str, Any]:
+    def explain_pass(
+        name: Annotated[str, Field(description="Pass name from the Default pipeline, e.g. LowerCompositeOps. Case-insensitive fallback is applied.")],
+    ) -> dict[str, Any]:
         """Explain a pass in the Default pipeline: order, phase, neighbors, verify tasks."""
         from mcp_hwnative_sys.passes_index import explain_pass_impl
 
@@ -629,33 +688,44 @@ def register_knowledge(mcp: FastMCP) -> None:
         return program_status_impl()
 
     @mcp.tool()
-    def verify_ladder(changed_paths: list[str]) -> dict[str, Any]:
+    def verify_ladder(
+        changed_paths: Annotated[list[str], Field(description='List of changed file paths (workspace-relative or repo-prefixed), e.g. ["pypto/src/codegen/pto/foo.cc", "simpler/src/common/comm/bar.cc"]. Used to derive minimal verify task set.')],
+    ) -> dict[str, Any]:
         """Suggest minimal verify tasks for a set of changed file paths."""
         from mcp_hwnative_sys.verify_ladder import verify_ladder_impl
 
         return verify_ladder_impl(changed_paths)
 
     @mcp.tool()
-    def summarize_profile(run_dir: str) -> dict[str, Any]:
+    def summarize_profile(
+        run_dir: Annotated[str, Field(description="Path to a profiling campaign directory containing results.json. Accepts workspace-relative or absolute paths.")],
+    ) -> dict[str, Any]:
         """Summarize a pypto-tooling profiling campaign directory (results.json, anomalies)."""
         from mcp_hwnative_sys.profiling_summarize import summarize_profile_impl
 
         return summarize_profile_impl(run_dir)
 
     @mcp.tool()
-    def trace_contract(symbol_or_path: str) -> dict[str, Any]:
+    def trace_contract(
+        symbol_or_path: Annotated[str, Field(description='Symbol name or path to trace through the stack (e.g. "LowerHostTensorCollectives", "pypto/src/codegen/distributed/foo.cc"). Matched against abstraction cards, path-prefix rules, and contract artifacts.')],
+    ) -> dict[str, Any]:
         """Trace symbol through dependency triangle with contract artifacts and cross-layer verify."""
         from mcp_hwnative_sys.contract_trace import trace_contract_impl
 
         return trace_contract_impl(symbol_or_path)
 
     @mcp.tool()
-    def find_entrypoints(repo: str, area: str = "") -> dict[str, Any]:
+    def find_entrypoints(
+        repo: Annotated[str, Field(description='Repository name from list_repositories(), e.g. "pypto", "simpler"')],
+        area: Annotated[str, Field(description='Optional sub-area key within the repo, e.g. "codegen_orch". Leave empty to list all areas for the repo.')] = "",
+    ) -> dict[str, Any]:
         """Find code entrypoints for a repo and optional area (e.g. pypto, codegen_orch)."""
         return find_entrypoints_impl(repo, area)
 
     @mcp.tool()
-    def trace_in_stack(symbol_or_path: str) -> dict[str, Any]:
+    def trace_in_stack(
+        symbol_or_path: Annotated[str, Field(description='Symbol name or file path to locate in the pypto→PTOAS→pto-isa→simpler stack. Path prefix matching is used for file paths; abstraction card matching for concept names.')],
+    ) -> dict[str, Any]:
         """Trace where a symbol or path sits in the pypto→PTOAS→pto-isa→simpler stack."""
         return trace_in_stack_impl(symbol_or_path)
 
@@ -673,13 +743,13 @@ def register_knowledge(mcp: FastMCP) -> None:
 
     @mcp.tool()
     def generate_verify_handoff(
-        repo: str,
-        branch: str,
-        sha: str = "",
-        task_type: str = "npu_verify_handoff",
-        device_ids: str = "0,1",
-        platform: str = "a2a3",
-        fork_remote: str = "fork-gbisbas",
+        repo: Annotated[str, Field(description='Repository name to verify, e.g. "pypto"')],
+        branch: Annotated[str, Field(description="Branch name to check out on the NPU host")],
+        sha: Annotated[str, Field(description='Git SHA to record in the handoff. Leave empty to use a placeholder (fill after checkout with git rev-parse HEAD).')] = "",
+        task_type: Annotated[str, Field(description='Route key for developer_verify_tasks. Default "npu_verify_handoff" covers the standard NPU gate.')] = "npu_verify_handoff",
+        device_ids: Annotated[str, Field(description='Comma-separated NPU device IDs to pass to pytest (e.g. "0,1")')] = "0,1",
+        platform: Annotated[str, Field(description='Target Ascend platform family for test flags, e.g. "a2a3" (Ascend910B) or "a3" (Ascend910C)')] = "a2a3",
+        fork_remote: Annotated[str, Field(description="Git remote name on the NPU host that has the branch to verify")] = "fork-gbisbas",
     ) -> dict[str, Any]:
         """Generate markdown handoff for developer NPU verification in a container."""
         from mcp_hwnative_sys.handoff import generate_verify_handoff_impl

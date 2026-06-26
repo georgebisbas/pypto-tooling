@@ -1,0 +1,35 @@
+{
+  "LowerHostTensorCollectives": {
+    "ir_layer": "pypto pass",
+    "pto_mlir": "builtin.tensor.* collective ops",
+    "orch_abi": "submit_next_level / distributed orchestration C++",
+    "runtime": "simpler L3 comm-domain worker",
+    "verify_tasks": ["pypto-tooling:host_collectives_ut_sim", "pypto:host_collectives_st_npu"]
+  },
+  "LowerCompositeOps": {
+    "ir_layer": "pypto pass",
+    "pto_mlir": "pld.tensor.* → lowered tile ops",
+    "pto_isa": "comm primitives (TNOTIFY, TWAIT, collective tiles)",
+    "runtime": "HCCL window + signal buffers",
+    "verify_tasks": ["pypto:system_tests_sim"]
+  },
+  "pld.tensor.allreduce": {
+    "ir_layer": "pypto distributed DSL",
+    "pto_mlir": "composite → tile collective lowering",
+    "pto_isa": "allreduce tile instructions",
+    "runtime": "simpler L3 ring/mesh allreduce",
+    "verify_tasks": ["pypto:system_tests_sim"]
+  },
+  "DeriveCallDirections": {
+    "ir_layer": "pypto pass",
+    "orch_abi": "arg_directions on Call nodes",
+    "runtime": "rt_submit_aiv_task parameter marshalling",
+    "verify_tasks": ["pypto:codegen_tests"]
+  },
+  "MaterializeRuntimeScopes": {
+    "ir_layer": "pypto pass",
+    "orch_abi": "PTO2_SCOPE wrappers in orchestration C++",
+    "runtime": "simpler AUTO-scope task tracking",
+    "verify_tasks": ["pypto:codegen_tests"]
+  }
+}

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from mcp_hwnative_sys.knowledge import load_abstractions
+from mcp_hwnative_sys.paths import contract_artifacts_config_path
 from mcp_hwnative_sys.program_status import program_status_impl
 
 # Path-prefix heuristics (moved from knowledge.py to avoid import cycles)
@@ -124,57 +126,35 @@ def _trace_stack_base(symbol_or_path: str) -> dict[str, Any]:
         "hint": "Use explain_abstraction or search_abstractions for concepts; pass a repo-relative path for heuristics.",
     }
 
-# Contract triangle mappings: IR concept → artifacts across stack layers
-_CONTRACT_ARTIFACTS: dict[str, dict[str, Any]] = {
-    "LowerHostTensorCollectives": {
-        "ir_layer": "pypto pass",
-        "pto_mlir": "builtin.tensor.* collective ops",
-        "orch_abi": "submit_next_level / distributed orchestration C++",
-        "runtime": "simpler L3 comm-domain worker",
-        "verify_tasks": ["pypto-tooling:host_collectives_ut_sim", "pypto:host_collectives_st_npu"],
-    },
-    "LowerCompositeOps": {
-        "ir_layer": "pypto pass",
-        "pto_mlir": "pld.tensor.* → lowered tile ops",
-        "pto_isa": "comm primitives (TNOTIFY, TWAIT, collective tiles)",
-        "runtime": "HCCL window + signal buffers",
-        "verify_tasks": ["pypto:system_tests_sim"],
-    },
-    "pld.tensor.allreduce": {
-        "ir_layer": "pypto distributed DSL",
-        "pto_mlir": "composite → tile collective lowering",
-        "pto_isa": "allreduce tile instructions",
-        "runtime": "simpler L3 ring/mesh allreduce",
-        "verify_tasks": ["pypto:system_tests_sim"],
-    },
-    "DeriveCallDirections": {
-        "ir_layer": "pypto pass",
-        "orch_abi": "arg_directions on Call nodes",
-        "runtime": "rt_submit_aiv_task parameter marshalling",
-        "verify_tasks": ["pypto:codegen_tests"],
-    },
-    "MaterializeRuntimeScopes": {
-        "ir_layer": "pypto pass",
-        "orch_abi": "PTO2_SCOPE wrappers in orchestration C++",
-        "runtime": "simpler AUTO-scope task tracking",
-        "verify_tasks": ["pypto:codegen_tests"],
-    },
-}
+_contract_artifacts_cache: dict[str, dict[str, Any]] | None = None
+
+
+def _load_contract_artifacts() -> dict[str, dict[str, Any]]:
+    global _contract_artifacts_cache
+    if _contract_artifacts_cache is None:
+        path = contract_artifacts_config_path()
+        if path.exists():
+            with path.open("r", encoding="utf-8") as fh:
+                _contract_artifacts_cache = json.load(fh)
+        else:
+            _contract_artifacts_cache = {}
+    return _contract_artifacts_cache
 
 
 def trace_contract_impl(symbol_or_path: str) -> dict[str, Any]:
     """Trace symbol through dependency triangle with contract artifacts."""
     base = _trace_stack_base(symbol_or_path)
     token = symbol_or_path.strip()
+    contract_artifacts = _load_contract_artifacts()
 
     # Match contract artifacts by exact or case-insensitive key
     contract_key = None
-    for key in _CONTRACT_ARTIFACTS:
+    for key in contract_artifacts:
         if key.lower() == token.lower() or key in token:
             contract_key = key
             break
 
-    artifacts = _CONTRACT_ARTIFACTS.get(contract_key, {}) if contract_key else {}
+    artifacts = contract_artifacts.get(contract_key, {}) if contract_key else {}
 
     # Enrich from abstraction card if present
     abstractions = load_abstractions()
@@ -196,19 +176,23 @@ def trace_contract_impl(symbol_or_path: str) -> dict[str, Any]:
         if token.lower() in title or (contract_key and contract_key.lower() in title):
             pr_links.append(f"{pr.get('repo')} {pr.get('pr')}: {pr.get('title')}")
 
+    triangle_raw = {
+        "pypto_ir": artifacts.get("ir_layer") or base.get("layer"),
+        "pto_mlir": artifacts.get("pto_mlir"),
+        "pto_isa": artifacts.get("pto_isa"),
+        "orch_abi": artifacts.get("orch_abi"),
+        "runtime": artifacts.get("runtime"),
+    }
+    contract_triangle = {k: v for k, v in triangle_raw.items() if v is not None}
+
     result: dict[str, Any] = {
         **base,
-        "contract_triangle": {
-            "pypto_ir": artifacts.get("ir_layer") or base.get("layer"),
-            "pto_mlir": artifacts.get("pto_mlir"),
-            "pto_isa": artifacts.get("pto_isa"),
-            "orch_abi": artifacts.get("orch_abi"),
-            "runtime": artifacts.get("runtime"),
-        },
         "cross_layer_verify": artifacts.get("verify_tasks", base.get("verify_tasks", [])),
         "active_pr_links": pr_links[:5],
         "program_highlights": status.get("highlights", [])[:5],
     }
+    if contract_triangle:
+        result["contract_triangle"] = contract_triangle
     if contract_key:
         result["matched_contract"] = contract_key
     return result

@@ -7,4 +7,16 @@ hw_native_sys_mcp.egg-info/entry_points.txt
 hw_native_sys_mcp.egg-info/requires.txt
 hw_native_sys_mcp.egg-info/top_level.txt
 mcp_hwnative_sys/__init__.py
+mcp_hwnative_sys/ascend_env.py
+mcp_hwnative_sys/bootstrap.py
+mcp_hwnative_sys/contract_trace.py
+mcp_hwnative_sys/doc_sections.py
+mcp_hwnative_sys/handoff.py
+mcp_hwnative_sys/knowledge.py
+mcp_hwnative_sys/passes_index.py
+mcp_hwnative_sys/paths.py
+mcp_hwnative_sys/profiling_summarize.py
+mcp_hwnative_sys/program_status.py
+mcp_hwnative_sys/programs.py
 mcp_hwnative_sys/server.py
+mcp_hwnative_sys/verify_ladder.py

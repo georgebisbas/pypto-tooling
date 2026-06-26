@@ -4,9 +4,10 @@ import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
 from mcp.server.fastmcp import FastMCP
+from pydantic import Field
 
 from mcp_hwnative_sys.knowledge import get_repository_meta, register_knowledge
 from mcp_hwnative_sys.programs import match_program_hints
@@ -348,7 +349,9 @@ def list_repositories() -> list[dict[str, Any]]:
 
 
 @mcp.tool()
-def repository_health(include_clean: bool = True) -> dict[str, Any]:
+def repository_health(
+    include_clean: Annotated[bool, Field(description="When True (default) all repos are returned; set False to show only dirty repos")] = True,
+) -> dict[str, Any]:
     """Get branch, dirty state, and ahead/behind for every configured repo."""
     root, repositories = _load_repositories()
     output: list[dict[str, Any]] = []
@@ -419,14 +422,14 @@ def repository_health(include_clean: bool = True) -> dict[str, Any]:
 
 @mcp.tool()
 def search_code(
-    query: str,
-    repo: str = "all",
-    file_glob: str = "*",
-    max_results: int = 200,
-    use_regex: bool = False,
-    mode: str = "locations",
-    context_lines: int = 2,
-    group_by_file: bool = False,
+    query: Annotated[str, Field(description="Search term. Treated as a fixed string unless use_regex=True")],
+    repo: Annotated[str, Field(description='Repo to search: "all" searches every configured repo; otherwise a single name or comma-separated list, e.g. "pypto,simpler"')] = "all",
+    file_glob: Annotated[str, Field(description='Filename glob filter, e.g. "*.py", "*.cc", "**/*.mlir". Default "*" matches all files.')] = "*",
+    max_results: Annotated[int, Field(description="Maximum number of match lines to return (1–2000)", ge=1, le=2000)] = 200,
+    use_regex: Annotated[bool, Field(description="Treat query as a regular expression (ripgrep syntax). Default False uses fixed-string matching.")] = False,
+    mode: Annotated[str, Field(description='"locations" (default) returns file+line number only; "context" also returns the matched line text and context_lines surrounding lines')] = "locations",
+    context_lines: Annotated[int, Field(description="Lines of context to include around each match. Only used when mode=context.", ge=0, le=10)] = 2,
+    group_by_file: Annotated[bool, Field(description="When True, include a files[] list sorted by match count")] = False,
 ) -> dict[str, Any]:
     """Search code across repos. mode=locations (default) omits line text; mode=context includes context."""
     if not query.strip():
@@ -533,7 +536,10 @@ def search_code(
 
 
 @mcp.tool()
-def list_tasks(repo: str, include_command: bool = True) -> dict[str, Any]:
+def list_tasks(
+    repo: Annotated[str, Field(description='Repository name from list_repositories(), e.g. "pypto", "simpler"')],
+    include_command: Annotated[bool, Field(description="When True (default) include the shell command string in each task entry")] = True,
+) -> dict[str, Any]:
     """List available named tasks for a repository, including metadata and warnings."""
     _, _ = _require_repo(repo)
     tasks = _tasks_for_repo(repo)
@@ -551,10 +557,10 @@ def list_tasks(repo: str, include_command: bool = True) -> dict[str, Any]:
 
 @mcp.tool()
 def run_task(
-    repo: str,
-    task: str,
-    extra_args: str = "",
-    timeout_seconds: int = 900,
+    repo: Annotated[str, Field(description='Repository name from list_repositories(), e.g. "pypto"')],
+    task: Annotated[str, Field(description='Named task key from list_tasks(). Use list_tasks(repo) to see available tasks and their metadata.')],
+    extra_args: Annotated[str, Field(description="Extra arguments appended verbatim to the task command string, e.g. '--verbose -k test_foo'")] = "",
+    timeout_seconds: Annotated[int, Field(description="Execution timeout in seconds (1–7200). Long-running tasks may need 1800+.", ge=1, le=7200)] = 900,
 ) -> dict[str, Any]:
     """Run a configured task in a repository."""
     if timeout_seconds < 1 or timeout_seconds > 7200:
@@ -592,15 +598,18 @@ def run_task(
 
 @mcp.tool()
 def run_command(
-    repo: str,
-    command: str,
-    timeout_seconds: int = 600,
+    repo: Annotated[str, Field(description='Repository name from list_repositories(). The command runs with cwd set to that repo\'s root.')],
+    command: Annotated[str, Field(description="Shell command to execute via bash. Destructive patterns (git reset --hard, rm -rf /) are blocked.")],
+    timeout_seconds: Annotated[int, Field(description="Execution timeout in seconds (1–7200)", ge=1, le=7200)] = 600,
 ) -> dict[str, Any]:
-    """Run an ad-hoc shell command in a repository."""
+    """Run an ad-hoc shell command in a repository. Prefer run_task for known tasks or git_log/git_diff/read_file for read-only operations."""
     if not command.strip():
         raise ValueError("command cannot be empty")
     if timeout_seconds < 1 or timeout_seconds > 7200:
         raise ValueError("timeout_seconds must be between 1 and 7200")
+    blocked = _blocked_pattern(command)
+    if blocked:
+        raise ValueError(f"Command contains blocked pattern: {blocked!r}")
 
     root, repo_cfg = _require_repo(repo)
     if not repo_cfg.path.exists():
@@ -618,7 +627,10 @@ def run_command(
 
 
 @mcp.tool()
-def explain_task(task: str, repo: str = "pypto") -> dict[str, Any]:
+def explain_task(
+    task: Annotated[str, Field(description="Named task key to inspect, e.g. unit_tests_fast")],
+    repo: Annotated[str, Field(description='Repository name from list_repositories(). Required — always specify to avoid querying the wrong repo.')],
+) -> dict[str, Any]:
     """Show the exact command and metadata configured for a named task."""
     _, _ = _require_repo(repo)
     tasks = _tasks_for_repo(repo)
@@ -634,14 +646,121 @@ def explain_task(task: str, repo: str = "pypto") -> dict[str, Any]:
     }
 
 
+@mcp.tool()
+def git_log(
+    repo: Annotated[str, Field(description='Repository name from list_repositories(), e.g. "pypto"')],
+    n: Annotated[int, Field(description="Number of commits to return (1–100)", ge=1, le=100)] = 10,
+    ref: Annotated[str, Field(description='Branch, tag, or SHA to start from (default: HEAD)')] = "HEAD",
+) -> dict[str, Any]:
+    """Return the last N commits for a repository as structured data (sha, author, date, message)."""
+    root, repo_cfg = _require_repo(repo)
+    if not repo_cfg.path.exists():
+        raise ValueError(f"Repository path does not exist: {repo_cfg.path}")
+
+    proc = _git(repo_cfg.path, ["log", f"-{n}", "--pretty=format:%H|%h|%an|%ar|%s", ref])
+    if proc.returncode != 0:
+        raise RuntimeError(proc.stderr.strip() or "git log failed")
+
+    commits: list[dict[str, Any]] = []
+    for line in proc.stdout.splitlines():
+        parts = line.split("|", 4)
+        if len(parts) == 5:
+            commits.append(
+                {
+                    "sha": parts[0],
+                    "short_sha": parts[1],
+                    "author": parts[2],
+                    "date": parts[3],
+                    "message": parts[4],
+                }
+            )
+
+    return {
+        "repo": repo,
+        "path": safe_relpath(repo_cfg.path, root),
+        "ref": ref,
+        "commits": commits,
+    }
+
+
+@mcp.tool()
+def git_diff(
+    repo: Annotated[str, Field(description='Repository name from list_repositories(), e.g. "pypto"')],
+    ref: Annotated[str, Field(description='Diff target ref or range. Examples: "HEAD~1" (last commit), "main...HEAD" (branch diff), "abc123"')] = "HEAD~1",
+    path: Annotated[str, Field(description="Repo-relative file path to limit the diff scope (optional). Leave empty for the full diff.")] = "",
+    stat_only: Annotated[bool, Field(description="When True return only file-level statistics (no patch text). Useful for large diffs.")] = False,
+) -> dict[str, Any]:
+    """Return the git diff for a repository (stat + optional patch). Prefer stat_only=True for orientation."""
+    root, repo_cfg = _require_repo(repo)
+    if not repo_cfg.path.exists():
+        raise ValueError(f"Repository path does not exist: {repo_cfg.path}")
+
+    stat_args = ["diff", "--stat", ref]
+    if path.strip():
+        stat_args.extend(["--", path.strip()])
+    stat_proc = _git(repo_cfg.path, stat_args)
+
+    result: dict[str, Any] = {
+        "repo": repo,
+        "path": safe_relpath(repo_cfg.path, root),
+        "ref": ref,
+        "stat": _truncate_text(stat_proc.stdout) if stat_proc.returncode == 0 else "",
+    }
+
+    if not stat_only:
+        patch_args = ["diff", ref]
+        if path.strip():
+            patch_args.extend(["--", path.strip()])
+        patch_proc = _git(repo_cfg.path, patch_args, timeout_seconds=30)
+        if patch_proc.returncode == 0:
+            result["patch"] = _truncate_text(patch_proc.stdout, max_lines=500, max_chars=40000)
+
+    return result
+
+
+@mcp.tool()
+def read_file(
+    repo: Annotated[str, Field(description='Repository name from list_repositories(), e.g. "pypto"')],
+    path: Annotated[str, Field(description="Repo-relative file path, e.g. src/ir/pass_manager.py or python/pypto/ir/ops.py")],
+    max_lines: Annotated[int, Field(description="Maximum lines to return (1–2000)", ge=1, le=2000)] = 200,
+    offset: Annotated[int, Field(description="Zero-indexed line to start reading from (for pagination)", ge=0)] = 0,
+) -> dict[str, Any]:
+    """Read an arbitrary source file from a repository without shelling out."""
+    _, repo_cfg = _require_repo(repo)
+    if not repo_cfg.path.exists():
+        raise ValueError(f"Repository path does not exist: {repo_cfg.path}")
+
+    file_path = (repo_cfg.path / path).resolve()
+    if not str(file_path).startswith(str(repo_cfg.path.resolve())):
+        raise ValueError(f"Path escapes repository root: {path}")
+    if not file_path.exists():
+        raise FileNotFoundError(f"File not found: {path}")
+    if not file_path.is_file():
+        raise ValueError(f"Path is not a regular file: {path}")
+
+    lines = file_path.read_text(encoding="utf-8", errors="replace").splitlines()
+    total_lines = len(lines)
+    sliced = lines[offset : offset + max_lines]
+
+    return {
+        "repo": repo,
+        "path": path,
+        "total_lines": total_lines,
+        "offset": offset,
+        "returned_lines": len(sliced),
+        "truncated": total_lines > offset + max_lines,
+        "content": "\n".join(sliced),
+    }
+
+
 register_knowledge(mcp)
 
 
 @mcp.tool()
 def bootstrap_session(
-    task_type: str,
-    detail: str = "",
-    include_health: bool = True,
+    task_type: Annotated[str, Field(description='Task type key — use list_task_types() to see valid values, e.g. "distributed_codegen", "ascend_arch", "npu_verify_handoff"')],
+    detail: Annotated[str, Field(description="Optional free-text context (e.g. symbol, feature, or PR title) used to seed abstraction search")] = "",
+    include_health: Annotated[bool, Field(description="When True (default) include repository health summary (branch, dirty state) in the response")] = True,
 ) -> dict[str, Any]:
     """Single-call session bootstrap: route metadata, read_plan, health, program hints."""
     from mcp_hwnative_sys.bootstrap import bootstrap_session_impl
