@@ -48,26 +48,41 @@
 #   WORLD_SIZE=4 make allreduce DEVICE=npu
 
 ARG CANN_VERSION=9.0.0
+# TODO(reproducibility): the tag is mutable — pin by digest. Get it with:
+#   skopeo inspect docker://quay.io/ascend/cann:${CANN_VERSION}-910b-ubuntu22.04-py3.12 | jq -r .Digest
+# then append @sha256:<digest> to the FROM line below (keep the ARG-based tag for traceability).
 FROM quay.io/ascend/cann:${CANN_VERSION}-910b-ubuntu22.04-py3.12
 
 ARG CANN_VERSION=9.0.0
 ARG INSTALL_PREFIX=/opt
 ARG PT_HCCL_REPO_URL=https://github.com/georgebisbas/pytorch-hccl-tests.git
-ARG PT_HCCL_COMMIT=1f9cef9b47a40a91587d94b327b31e88405767f2
+ARG PT_HCCL_COMMIT=53a6734b085d9559fc069351747be2ca8663d6ff
 ARG PT_HCCL_INSTALL_TARGET=install-npu-arm
 
 ENV CANN_VERSION=${CANN_VERSION} \
     INSTALL_PREFIX=${INSTALL_PREFIX}
 
+# CANN_HOME and /usr/local/Ascend/ascend-toolkit/latest are two names for the
+# same toolkit ('latest' is a symlink to cann-${CANN_VERSION}). The libhccl.so
+# assertion further below validates CANN_HOME resolves at build time.
 ENV CANN_HOME=/usr/local/Ascend/cann-${CANN_VERSION}
 ENV PT_HCCL_DIR=${INSTALL_PREFIX}/pytorch-hccl-tests \
     PT_HCCL_VENV=${INSTALL_PREFIX}/venvs/pytorch-hccl-tests
 
+# Provenance: record the benchmark repo ref baked into this image.
+LABEL org.opencontainers.image.revision="${PT_HCCL_COMMIT}" \
+      org.opencontainers.image.source="${PT_HCCL_REPO_URL}"
+
+# PIP_NO_CACHE_DIR=1 disables the wheel cache for ALL pip invocations, including
+# the ones inside `make ${PT_HCCL_INSTALL_TARGET}` — keeps the venv layer lean.
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PIP_CACHE_DIR=/tmp/pip-cache
+    PIP_NO_CACHE_DIR=1
 
+# torch-npu 2.9.0 ships cp310 wheels only -> we run a Python 3.10 venv even
+# though the base image carries py3.12. Do NOT drop python3.10 without first
+# confirming a matching torch-npu wheel exists for the newer interpreter.
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
       git ca-certificates make python3.10 python3.10-venv && \
@@ -77,14 +92,15 @@ RUN git clone --filter=blob:none "${PT_HCCL_REPO_URL}" "${PT_HCCL_DIR}" && \
     if ! git -C "${PT_HCCL_DIR}" cat-file -e "${PT_HCCL_COMMIT}^{commit}" 2>/dev/null; then \
       git -C "${PT_HCCL_DIR}" fetch origin "${PT_HCCL_COMMIT}"; \
     fi && \
-    git -C "${PT_HCCL_DIR}" checkout "${PT_HCCL_COMMIT}"
+    git -C "${PT_HCCL_DIR}" checkout "${PT_HCCL_COMMIT}" && \
+    rm -rf "${PT_HCCL_DIR}/.git"
 
 WORKDIR ${PT_HCCL_DIR}
 
 RUN python3.10 -m venv "${PT_HCCL_VENV}" && \
     . "${PT_HCCL_VENV}/bin/activate" && \
     python -m pip install --upgrade pip && \
-    pip install -r requirements_dev.txt && \
+    pip install pytest && \
     pip install -r requirements_plotting.txt && \
     make "${PT_HCCL_INSTALL_TARGET}" && \
     python -c "import pytorch_hccl_tests; print('pytorch_hccl_tests ok')"
@@ -114,8 +130,14 @@ RUN test -f "${CANN_HOME}/aarch64-linux/lib64/libhccl.so" \
         && exit 1)
 # LD_PRELOAD is NOT set — this image uses torch_npu HCCL, not host_runtime.so weak symbols.
 
-ENV PYTHONPATH=${CANN_HOME}/python/site-packages:${CANN_HOME}/opp/built-in/op_impl/ai_core/tbe
-ENV PYTHONPATH=${PYTHONPATH}:/usr/local/Ascend/ascend-toolkit/latest/python/site-packages:/usr/local/Ascend/ascend-toolkit/latest/opp/built-in/op_impl/ai_core/tbe
+# torch_npu bundles its own HCCL/ACL bindings, so torchrun HCCL benchmarks only
+# need CANN's python/site-packages on PYTHONPATH. The opp/.../ai_core/tbe entries
+# are for on-device op COMPILATION (TBE), which these benchmarks do not perform —
+# dropped to slim the env and avoid shadowing. If you ever run a kernel-compiling
+# workload in this image, restore:
+#   :${CANN_HOME}/opp/built-in/op_impl/ai_core/tbe
+#   :/usr/local/Ascend/ascend-toolkit/latest/opp/built-in/op_impl/ai_core/tbe
+ENV PYTHONPATH=${CANN_HOME}/python/site-packages:/usr/local/Ascend/ascend-toolkit/latest/python/site-packages
 
 WORKDIR ${PT_HCCL_DIR}
 CMD ["bash"]
