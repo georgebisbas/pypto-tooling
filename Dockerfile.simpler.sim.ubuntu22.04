@@ -13,8 +13,8 @@
 #
 # BUILD (pinned commits):
 #   docker build \
-#     --build-arg SIMPLER_COMMIT=286aa7e4100dc9fc71b77a0f1b279fb5a2207afa \
-#     --build-arg PTO_ISA_COMMIT=ddafa8da9c760ecd13fe9fe2833d6ee55fb20bd8 \
+#     --build-arg SIMPLER_COMMIT=e264daa83e7e823f4ea6666e8039c92591f72955 \
+#     --build-arg PTO_ISA_COMMIT=e722679b6eb286de84ce0d668bd19e09eafee929 \
 #     -t simpler-hw-native-sys:sim \
 #     -f Dockerfile.simpler.sim.ubuntu22.04 .
 #
@@ -31,7 +31,7 @@
 #   pytest examples/workers/l3/allreduce_distributed \
 #     --platform a2a3sim --device 0-15 -v \
 #     --pto-session-timeout 600 \
-#     --pto-isa-commit ddafa8da9c760ecd13fe9fe2833d6ee55fb20bd8 \
+#     --pto-isa-commit e722679b6eb286de84ce0d668bd19e09eafee929 \
 #     --clone-protocol https --require-pto-isa
 #
 # Or use the helper script:
@@ -47,9 +47,9 @@ ARG UBUNTU_VERSION=22.04
 FROM ubuntu:${UBUNTU_VERSION}
 
 ARG INSTALL_PREFIX=/opt
-# PTO_ISA_COMMIT defaults to empty — auto-derived from simpler ci.yml at build time.
+# PTO_ISA_COMMIT defaults to empty — auto-derived from simpler's pto_isa.pin at build time.
 ARG PTO_ISA_COMMIT=
-ARG SIMPLER_COMMIT=286aa7e4100dc9fc71b77a0f1b279fb5a2207afa
+ARG SIMPLER_COMMIT=e264daa83e7e823f4ea6666e8039c92591f72955
 
 ENV INSTALL_PREFIX=${INSTALL_PREFIX}
 ENV SIMPLER_DIR=${INSTALL_PREFIX}/simpler \
@@ -105,13 +105,15 @@ RUN git clone --filter=blob:none https://github.com/hw-native-sys/simpler.git "$
 WORKDIR ${SIMPLER_DIR}
 
 # Pre-clone pto-isa to avoid first-run cloning during tests.
-# If PTO_ISA_COMMIT was not set via --build-arg, derive it from simpler's ci.yml.
+# If PTO_ISA_COMMIT was not set via --build-arg, derive it from simpler's
+# pto_isa.pin (the single source of truth; simpler CI reads it via
+# .github/actions/read-pto-isa).
 RUN if [ -z "${PTO_ISA_COMMIT}" ]; then \
-      PTO_ISA_COMMIT=$(grep -oP 'PTO_ISA_COMMIT:\s*\K[a-f0-9]+' .github/workflows/ci.yml | head -1); \
-      if [ -z "${PTO_ISA_COMMIT}" ]; then \
-        echo "ERROR: could not extract PTO_ISA_COMMIT from .github/workflows/ci.yml"; exit 1; \
+      PTO_ISA_COMMIT=$(tr -d '[:space:]' < pto_isa.pin); \
+      if ! printf '%s' "${PTO_ISA_COMMIT}" | grep -qE '^[0-9a-f]{40}$'; then \
+        echo "ERROR: pto_isa.pin missing or invalid (expected 40-char hex commit)"; exit 1; \
       fi; \
-      echo "Auto-derived PTO_ISA_COMMIT=${PTO_ISA_COMMIT} from ci.yml"; \
+      echo "Auto-derived PTO_ISA_COMMIT=${PTO_ISA_COMMIT} from pto_isa.pin"; \
     fi && \
     timeout 60 git clone https://github.com/hw-native-sys/pto-isa.git "${PTO_ISA_DIR}" \
       || { rm -rf "${PTO_ISA_DIR}"; timeout 300 git clone https://gitcode.com/luohuan40/pto-isa.git "${PTO_ISA_DIR}"; } && \

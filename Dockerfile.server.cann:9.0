@@ -79,10 +79,10 @@
 #   pytest tests/ut -v
 #
 #   # System tests (single-device, all 4 NPUs available to test runner):
-#   pytest tests/st -v --device="0,1,2,3" --precompile-workers=128 --pto-isa-commit=016396b57e2c17093f1194e6acd89bb112b0ab24 --ignore=tests/st/distributed
+#   pytest tests/st -v --device="0,1,2,3" --precompile-workers=128 --ignore=tests/st/distributed
 #
 #   # Distributed system tests (all 4 NPUs):
-#   pytest tests/st/distributed -v --device="0,1,2,3" --pto-isa-commit=016396b57e2c17093f1194e6acd89bb112b0ab24
+#   pytest tests/st/distributed -v --device="0,1,2,3"
 #
 # NOTES:
 # - CANN 9.0.0 is baked into the image. Do NOT mount /usr/local/Ascend from the host
@@ -124,7 +124,8 @@ WORKDIR /workspace/hw-native-sys/pypto
 # Keep the runtime submodule checked out on host.
 
 # Install PTO-ISA (required by system tests that call code_runner).
-# Keep this pinned to the commit used in ci.yml --pto-isa-commit.
+# Pinned to the commit from the runtime submodule's runtime/pto_isa.pin
+# (the single source of truth per pypto CI toolchain job; see PR #1851).
 ARG PTO_ISA_COMMIT=016396b57e2c17093f1194e6acd89bb112b0ab24
 RUN timeout 60 git clone https://github.com/hw-native-sys/pto-isa.git /opt/pto-isa \
       || { rm -rf /opt/pto-isa; timeout 300 git clone https://gitcode.com/luohuan40/pto-isa.git /opt/pto-isa; } && \

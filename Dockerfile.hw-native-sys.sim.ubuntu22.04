@@ -69,8 +69,9 @@ ARG UBUNTU_VERSION=22.04
 FROM ubuntu:${UBUNTU_VERSION}
 
 ARG INSTALL_PREFIX=/opt
-ARG PYPTO_COMMIT=9b144026b3b193e6afbc8d6fb1617e97ee26d9a6
-# PTO_ISA_COMMIT defaults to empty — auto-derived from pypto ci.yml at build time.
+ARG PYPTO_COMMIT=5ecff3f912f3ed93a2b33c40a75dbe87526fd4da
+# PTO_ISA_COMMIT defaults to empty — auto-derived from runtime/pto_isa.pin
+# (the single source of truth per pypto CI toolchain job; see PR #1851).
 # Set via --build-arg to pin a specific commit.
 ARG PTO_ISA_COMMIT=
 ARG PTOAS_VERSION=v0.45
@@ -134,13 +135,15 @@ RUN git clone --filter=blob:none https://github.com/hw-native-sys/pypto.git "${P
     done
 
 # Pre-clone pto-isa to avoid first-run cloning during tests.
-# If PTO_ISA_COMMIT was not set via --build-arg, derive it from pypto's ci.yml.
+# If PTO_ISA_COMMIT was not set via --build-arg, derive it from the runtime
+# submodule's runtime/pto_isa.pin (the single source of truth per pypto CI;
+# see toolchain job in .github/workflows/ci.yml and PR #1851).
 RUN if [ -z "${PTO_ISA_COMMIT}" ]; then \
-      PTO_ISA_COMMIT=$(grep -oP '(?<=--pto-isa-commit=)[a-f0-9]+' "${PYPTO_DIR}/.github/workflows/ci.yml" | head -1); \
-      if [ -z "${PTO_ISA_COMMIT}" ]; then \
-        echo "ERROR: could not extract --pto-isa-commit from ${PYPTO_DIR}/.github/workflows/ci.yml"; exit 1; \
+      PTO_ISA_COMMIT=$(tr -d '[:space:]' < "${PYPTO_DIR}/runtime/pto_isa.pin"); \
+      if ! printf '%s' "${PTO_ISA_COMMIT}" | grep -qE '^[0-9a-f]{40}$'; then \
+        echo "ERROR: ${PYPTO_DIR}/runtime/pto_isa.pin missing or invalid (expected 40-char hex commit)"; exit 1; \
       fi; \
-      echo "Auto-derived PTO_ISA_COMMIT=${PTO_ISA_COMMIT} from ci.yml"; \
+      echo "Auto-derived PTO_ISA_COMMIT=${PTO_ISA_COMMIT} from runtime/pto_isa.pin"; \
     fi && \
     timeout 60 git clone https://github.com/hw-native-sys/pto-isa.git "${PTO_ISA_DIR}" \
       || { rm -rf "${PTO_ISA_DIR}"; timeout 300 git clone https://gitcode.com/luohuan40/pto-isa.git "${PTO_ISA_DIR}"; } && \

@@ -7,7 +7,7 @@
 #   CANN_VERSION            (default: 9.0.0) — selects the base image tag and cann-* paths
 #   INSTALL_PREFIX          (default: /opt)  — root for the benchmark checkout and venv
 #   PT_HCCL_REPO_URL        (default: georgebisbas fork URL)
-#   PT_HCCL_COMMIT          (default: dfd5a7ed58e04d9de7ddb97fa8161b66f9252458) — benchmark repo ref to checkout
+#   PT_HCCL_COMMIT          (default: 53a6734b085d9559fc069351747be2ca8663d6ff) — benchmark repo ref to checkout
 #   PT_HCCL_INSTALL_TARGET  (default: install-npu-arm) — Makefile target to install deps into the venv
 #
 # REQUIREMENTS:
@@ -56,7 +56,7 @@ FROM quay.io/ascend/cann:${CANN_VERSION}-910b-ubuntu22.04-py3.12
 ARG CANN_VERSION=9.0.0
 ARG INSTALL_PREFIX=/opt
 ARG PT_HCCL_REPO_URL=https://github.com/georgebisbas/pytorch-hccl-tests.git
-ARG PT_HCCL_COMMIT=master
+ARG PT_HCCL_COMMIT=53a6734b085d9559fc069351747be2ca8663d6ff
 ARG PT_HCCL_INSTALL_TARGET=install-npu-arm
 
 ENV CANN_VERSION=${CANN_VERSION} \

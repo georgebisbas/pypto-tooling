@@ -159,6 +159,40 @@ Simulation image scope notes:
 - No `--privileged`, no `/dev` mount, and no `/usr/local/Ascend/driver` mount are required.
 - Do not use this image for onboard NPU execution (`a2a3`, `a5`); use the CANN-based Dockerfiles instead.
 
+### Sim Dev Iteration Workflow (local code changes)
+
+When iterating on C++/Python code changes, do **not** rebuild the image. Build it once, then bind-mount your workspace and reinstall:
+
+```bash
+# One-time: build the sim image (~15-30 min)
+docker build -t pypto3-hw-native-sys:sim -f Dockerfile.hw-native-sys.sim.ubuntu22.04 .
+
+# Every code change: mount workspace + pip install -e (~2-5 min)
+docker run --rm \
+  -v /home/gb4018/workspace/hw-native-sys/pypto:/opt/pypto \
+  pypto3-hw-native-sys:sim \
+  bash -c "pip install --no-build-isolation -e '/opt/pypto[dev]' 2>&1 | tail -1 && \
+           pytest tests/ut/codegen/test_orchestration_codegen.py -v"
+
+# Pre-commit checks (MUST run inside Docker — host may have root-owned cache):
+docker run --rm \
+  -v /home/gb4018/workspace/hw-native-sys/pypto:/opt/pypto \
+  pypto3-hw-native-sys:sim \
+  bash -c "ruff check ."
+
+# Full unit test suite (before pushing):
+docker run --rm \
+  -v /home/gb4018/workspace/hw-native-sys/pypto:/opt/pypto \
+  pypto3-hw-native-sys:sim \
+  bash -c "pip install --no-build-isolation -e '/opt/pypto[dev]' 2>&1 | tail -1 && \
+           pytest tests/ut -n auto --maxprocesses 8 -v"
+```
+
+Key rules:
+- **Never rebuild the image for code changes** — `-v` mount + `pip install -e` is the iteration loop.
+- **Always run ruff inside Docker** — the host `.ruff_cache` gets root-owned from previous Docker runs.
+- **Test targeted suites first, then full suite before pushing.**
+
 ### Simpler-only simulation (`Dockerfile.simpler.sim.ubuntu22.04`)
 
 ```bash
