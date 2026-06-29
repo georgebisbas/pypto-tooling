@@ -1,3 +1,7 @@
 {
-  "mcpServers": {}
+  "mcpServers": {
+    "hw-native-sys": {
+      "command": "/home/georgios/workspace/hw-native-sys/pypto-tooling/mcp-hw-native-sys/.venv/bin/hw-native-sys-mcp"
+    }
+  }
 }
