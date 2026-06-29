@@ -57,19 +57,19 @@
 #   python tests/lint/clang_tidy.py --jobs=$(nproc)
 #
 #   # --- system-tests (job: system-tests; NPU container in CI) ---
-#   pytest tests/st tests/st/codegen/torch/test_torch_codegen_paged_attention.py -v --device="0,1,2,3" --precompile-workers=128 --pto-isa-commit=016396b57e2c17093f1194e6acd89bb112b0ab24 --ignore=tests/st/distributed --ignore=tests/st/codegen
+#   pytest tests/st tests/st/codegen/torch/test_torch_codegen_paged_attention.py -v --device="0,1,2,3" --precompile-workers=128 --ignore=tests/st/distributed --ignore=tests/st/codegen
 #   # L2 multi-orch — separate pytest process (Worker level=2 poisons level=3 in the same process).
-#   pytest tests/st/distributed/test_l2_multi_orch.py -v --device="0,1,2,3" --pto-isa-commit=016396b57e2c17093f1194e6acd89bb112b0ab24
+#   pytest tests/st/distributed/test_l2_multi_orch.py -v --device="0,1,2,3"
 #   # Swimlane — single device, forked.
-#   pytest tests/st/runtime/framework_and_models/test_perf_swimlane.py -v --device=0 --platform=a2a3 --enable-l2-swimlane --forked --pto-isa-commit=016396b57e2c17093f1194e6acd89bb112b0ab24
+#   pytest tests/st/runtime/framework_and_models/test_perf_swimlane.py -v --device=0 --platform=a2a3 --enable-l2-swimlane --forked
 #   # Dump-tensor — single device, forked (older pto-isa pin per ci.yml).
-#   pytest tests/st/runtime/framework_and_models/test_dump_tag.py -v --device=0 --platform=a2a3 --dump-tensor --pto-isa-commit=2c607938 --forked
+#   pytest tests/st/runtime/framework_and_models/test_dump_tag.py -v --device=0 --platform=a2a3 --dump-tensor --forked
 #
 #   # --- dist-system-tests (job: dist-system-tests; HCCL, bare-metal in CI) ---
 #   # CI runs without a GHA container; in Docker use --pid=host (see RUN block).
 #   # Set LD_PRELOAD before running (not set image-wide — would break VS Code attach):
 #   export LD_PRELOAD=${CANN_HOME}/aarch64-linux/lib64/libhccl.so
-#   pytest tests/st/distributed -v --device="0,1,2,3" --pto-isa-commit=016396b57e2c17093f1194e6acd89bb112b0ab24 --ignore=tests/st/distributed/test_l2_multi_orch.py
+#   pytest tests/st/distributed -v --device="0,1,2,3" --ignore=tests/st/distributed/test_l2_multi_orch.py
 #
 #   # --- Not covered by this image / CI job mapping ---
 #   # pre-commit: pre-commit run --all-files  (job: pre-commit; needs .git checkout hooks)
@@ -81,12 +81,12 @@
 #   pip install --no-build-isolation .   # after editing runtime sources
 #   pytest tests/ut -m "not requires_hardware" -v --clone-protocol https
 #   pytest tests -m requires_hardware --platform a2a3 --device 0,1,2,3 -v --ignore=tests/ut/py/test_worker/test_dynamic_alloc_hw.py --ignore=tests/ut/py/test_worker/test_platform_comm.py
-#   pytest tests/st/a2a3/ -v --platform a2a3 --device 0,1,2,3 --pto-session-timeout 600 --clone-protocol https --require-pto-isa --pto-isa-commit 016396b57e2c17093f1194e6acd89bb112b0ab24
+#   pytest tests/st/a2a3/ -v --platform a2a3 --device 0,1,2,3 --pto-session-timeout 600 --clone-protocol https --require-pto-isa
 #   # HCCL UT + L3 examples — container MUST use --pid=host.
 #   # LD_PRELOAD is NOT set image-wide (would break VS Code attach). Set it in your shell first:
 #   export LD_PRELOAD=${CANN_HOME}/aarch64-linux/lib64/libhccl.so
 #   pytest tests/ut/py/test_worker/test_dynamic_alloc_hw.py tests/ut/py/test_worker/test_platform_comm.py -m requires_hardware --platform a2a3 --device 0,1,2,3 -v
-#   pytest examples/workers/l3/ examples/a2a3/tensormap_and_ringbuffer/deferred_notify_demo examples/a2a3/tensormap_and_ringbuffer/async_notify_demo examples/a2a3/tensormap_and_ringbuffer/sdma_async_completion_demo -v --platform a2a3 --device 0,1,2,3 --pto-session-timeout 600 --clone-protocol https --require-pto-isa --pto-isa-commit 016396b57e2c17093f1194e6acd89bb112b0ab24
+#   pytest examples/workers/l3/ examples/a2a3/tensormap_and_ringbuffer/deferred_notify_demo examples/a2a3/tensormap_and_ringbuffer/async_notify_demo examples/a2a3/tensormap_and_ringbuffer/sdma_async_completion_demo -v --platform a2a3 --device 0,1,2,3 --pto-session-timeout 600 --clone-protocol https --require-pto-isa
 
 # ARG before FROM: drives the base image tag.
 ARG CANN_VERSION=9.0.0

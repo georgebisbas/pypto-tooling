@@ -265,3 +265,82 @@ Mount only the host driver path at runtime:
 ```
 
 Do not mount /usr/local/Ascend from host, because it can shadow the image's baked CANN version.
+
+### HCCL Bandwidth Benchmarks (`pytorch-hccl-tests:cann9`)
+
+OSU-style micro-benchmarks measuring HCCL bandwidth via `torch_npu` directly (no
+pypto/simpler). Launch the container with the **multi-device / HCCL run** flags
+above (`--pid=host` is mandatory). This image uses torch HCCL and does **not**
+need `LD_PRELOAD`.
+
+Sanity-check the runtime first:
+
+```bash
+cd /opt/pytorch-hccl-tests
+npu-smi info                       # confirm visible chip count
+python -c "import torch_npu, torch.distributed as dist; \
+  print('torch_npu', torch_npu.__version__); print('hccl', dist.is_hccl_available())"
+```
+
+#### Bidirectional bandwidth (`bibw`)
+
+Point-to-point bidirectional bandwidth between two ranks — each rank sends and
+receives simultaneously, and the benchmark reports the **aggregate GB/s across
+both directions**. It is a 2-rank test (enforced internally), so always use
+`--nproc_per_node 2`:
+
+```bash
+# direct invocation
+torchrun --nnodes 1 --nproc_per_node 2 \
+  pytorch_hccl_tests/cli.py --benchmark bibw --device npu
+
+# Makefile shortcut
+make bidirectional-bw DEVICE=npu
+```
+
+Pin the exact pair of chips to measure a specific link (count must be 2):
+
+```bash
+ASCEND_RT_VISIBLE_DEVICES=0,1 torchrun --nnodes 1 --nproc_per_node 2 \
+  pytorch_hccl_tests/cli.py --benchmark bibw --device npu
+```
+
+Results print per message size as `Size (B)  Bandwidth (GB/s)` and are also
+written to a CSV in the working directory, e.g. `osu_bibw_gbps-npu-float16-2.csv`.
+
+Tunables (all optional): `--dtype` (default `float16`; e.g. `float32`,
+`bfloat16`), `--min` / `--max` to bound the message-size sweep in bytes,
+`--skip` warmup iterations, `--iterations` timed iterations:
+
+```bash
+torchrun --nnodes 1 --nproc_per_node 2 \
+  pytorch_hccl_tests/cli.py --benchmark bibw --device npu \
+  --dtype float32 --min 1024 --max 4194304 --skip 10 --iterations 100
+```
+
+For the unidirectional counterpart use `--benchmark bandwidth` (Makefile:
+`make bandwidth DEVICE=npu`); both are part of the `make p2p DEVICE=npu` suite.
+
+#### Collective bandwidth (allreduce, allgather, ...)
+
+Collective benchmarks scale with rank count — set `--nproc_per_node` to the
+number of chips (start at 2, scale to your visible count):
+
+```bash
+torchrun --nnodes 1 --nproc_per_node 4 \
+  pytorch_hccl_tests/cli.py --benchmark allreduce --device npu
+
+# Makefile shortcut (sets WORLD_SIZE for you)
+WORLD_SIZE=4 make allreduce DEVICE=npu
+```
+
+Enumerate every benchmark and flag in the pinned build (`bibw`, `bandwidth`,
+`latency`, `allreduce`, `allgather`, `alltoall`, `broadcast`, `reducescatter`,
+`barrier`, ...):
+
+```bash
+python pytorch_hccl_tests/cli.py --help
+```
+
+A CPU smoke test (`--device cpu`) validates the harness without NPUs but does not
+measure NPU bandwidth.

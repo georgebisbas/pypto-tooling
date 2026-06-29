@@ -23,8 +23,8 @@
 #   python -c "import pypto; print('pypto ok')"
 #   which ptoas && ptoas --version
 #   pytest tests/ut -n auto --maxprocesses 8 -v
-#   pytest tests/st/runtime/cross_core/test_cross_core.py -v --forked --platform=a2a3sim --pto-isa-commit=016396b57e2c17093f1194e6acd89bb112b0ab24
-#   pytest tests/st/runtime/cross_core/test_cross_core.py -v --forked --platform=a5sim --pto-isa-commit=016396b57e2c17093f1194e6acd89bb112b0ab24
+#   pytest tests/st/runtime/cross_core/test_cross_core.py -v --forked --platform=a2a3sim
+#   pytest tests/st/runtime/cross_core/test_cross_core.py -v --forked --platform=a5sim
 #
 # EXAMPLES (inside container, copy/paste one-liners):
 #   cd /opt/pypto && python examples/hello_world.py
@@ -40,15 +40,15 @@
 #   cd /opt/pypto && pytest tests/ut -n auto --maxprocesses 8 -v
 #   cd /opt/pypto && pytest tests/st/codegen -v --codegen-only --ignore=tests/st/codegen/torch/test_torch_codegen_paged_attention.py
 #   cd /opt/pypto && python tests/lint/clang_tidy.py --jobs=$(nproc)
-#   cd /opt/pypto && pytest tests/st/runtime/ops/test_assemble.py tests/st/runtime/ops/test_mscatter.py tests/st/runtime/framework_and_models/test_qwen3_decode_scope3_mixed.py tests/st/runtime/control_flow/test_dyn_orch_shape.py::TestDynOrchShapeOperations::test_dyn_orch_paged_attention -v --platform=a5sim --forked --pto-isa-commit=016396b57e2c17093f1194e6acd89bb112b0ab24 -k "not TestMscatter"
-#   cd /opt/pypto && pytest tests/st/runtime/cross_core/test_cross_core.py -v --forked --platform=a5sim --pto-isa-commit=016396b57e2c17093f1194e6acd89bb112b0ab24
-#   cd /opt/pypto && pytest tests/st/runtime/cross_core/test_cross_core.py -v --forked --platform=a2a3sim --pto-isa-commit=016396b57e2c17093f1194e6acd89bb112b0ab24
-#   cd /opt/pypto && pytest tests/st -v --forked --platform=a2a3sim,a5sim --pto-isa-commit=016396b57e2c17093f1194e6acd89bb112b0ab24
+#   cd /opt/pypto && pytest tests/st/runtime/ops/test_assemble.py tests/st/runtime/ops/test_mscatter.py tests/st/runtime/framework_and_models/test_qwen3_decode_scope3_mixed.py tests/st/runtime/control_flow/test_dyn_orch_shape.py::TestDynOrchShapeOperations::test_dyn_orch_paged_attention -v --platform=a5sim --forked -k "not TestMscatter"
+#   cd /opt/pypto && pytest tests/st/runtime/cross_core/test_cross_core.py -v --forked --platform=a5sim
+#   cd /opt/pypto && pytest tests/st/runtime/cross_core/test_cross_core.py -v --forked --platform=a2a3sim
+#   cd /opt/pypto && pytest tests/st -v --forked --platform=a2a3sim,a5sim
 #
 # DISTRIBUTED SIM (L3 multi-rank collectives — requires --shm-size=4g at docker run time):
 #   docker run --rm -it --shm-size=4g pypto3-hw-native-sys:sim
-#   cd /opt/pypto && pytest tests/st/distributed/ -v --forked --platform=a2a3sim --device=0,1 --pto-isa-commit=016396b57e2c17093f1194e6acd89bb112b0ab24
-#   cd /opt/pypto && pytest tests/st/distributed/ -v --forked --platform=a2a3sim --device=0,1,2,3 --pto-isa-commit=016396b57e2c17093f1194e6acd89bb112b0ab24
+#   cd /opt/pypto && pytest tests/st/distributed/ -v --forked --platform=a2a3sim --device=0,1
+#   cd /opt/pypto && pytest tests/st/distributed/ -v --forked --platform=a2a3sim --device=0,1,2,3
 #
 # DISTRIBUTED SIM RESULTS (2026-06-21, local workspace mount, device=0,1,2,3):
 #   43/45 pass; 1 skip (PTOAS atomic-add ordering known bug); 1 xpass (stale xfail annotation).

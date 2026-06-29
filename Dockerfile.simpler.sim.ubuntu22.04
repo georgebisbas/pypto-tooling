@@ -31,7 +31,6 @@
 #   pytest examples/workers/l3/allreduce_distributed \
 #     --platform a2a3sim --device 0-15 -v \
 #     --pto-session-timeout 600 \
-#     --pto-isa-commit e722679b6eb286de84ce0d668bd19e09eafee929 \
 #     --clone-protocol https --require-pto-isa
 #
 # Or use the helper script:

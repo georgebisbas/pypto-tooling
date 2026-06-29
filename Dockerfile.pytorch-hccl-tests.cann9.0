@@ -88,12 +88,16 @@ RUN apt-get update && \
       git ca-certificates make python3.10 python3.10-venv && \
     rm -rf /var/lib/apt/lists/*
 
-RUN git clone --filter=blob:none "${PT_HCCL_REPO_URL}" "${PT_HCCL_DIR}" && \
+# Full clone (with .git) so the checkout is a usable, fully-offline git repo
+# inside the container: git status/log/diff over complete history, and a real
+# `master` branch you can edit and `git pull` to advance. The local master is
+# pinned to PT_HCCL_COMMIT for build reproducibility (so it matches the OCI
+# revision LABEL below); advance it later with `git pull origin master`.
+RUN git clone "${PT_HCCL_REPO_URL}" "${PT_HCCL_DIR}" && \
     if ! git -C "${PT_HCCL_DIR}" cat-file -e "${PT_HCCL_COMMIT}^{commit}" 2>/dev/null; then \
       git -C "${PT_HCCL_DIR}" fetch origin "${PT_HCCL_COMMIT}"; \
     fi && \
-    git -C "${PT_HCCL_DIR}" checkout "${PT_HCCL_COMMIT}" && \
-    rm -rf "${PT_HCCL_DIR}/.git"
+    git -C "${PT_HCCL_DIR}" checkout -B master "${PT_HCCL_COMMIT}"
 
 WORKDIR ${PT_HCCL_DIR}
 
