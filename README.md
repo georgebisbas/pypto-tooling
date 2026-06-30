@@ -330,9 +330,13 @@ number of chips (start at 2, scale to your visible count):
 torchrun --nnodes 1 --nproc_per_node 4 \
   pytorch_hccl_tests/cli.py --benchmark allreduce --device npu
 
-# Makefile shortcut (sets WORLD_SIZE for you)
-WORLD_SIZE=4 make allreduce DEVICE=npu
+# Makefile shortcut — pass WORLD_SIZE as a make ARGUMENT, not an env prefix
+make allreduce WORLD_SIZE=4 DEVICE=npu
 ```
+
+> The Makefile sets `export WORLD_SIZE = 2`, which **shadows** an environment
+> prefix. `WORLD_SIZE=4 make allreduce …` is silently ignored (stays at 2); pass
+> it as a make argument (`make allreduce WORLD_SIZE=4 …`) or use `make -e`.
 
 Enumerate every benchmark and flag in the pinned build (`bibw`, `bandwidth`,
 `latency`, `allreduce`, `allgather`, `alltoall`, `broadcast`, `reducescatter`,
@@ -344,3 +348,17 @@ python pytorch_hccl_tests/cli.py --help
 
 A CPU smoke test (`--device cpu`) validates the harness without NPUs but does not
 measure NPU bandwidth.
+
+#### Multi-pair bandwidth (`mbw-mr`)
+
+The container ships an **editable** checkout on `master`, so switching branches
+takes effect with no reinstall. The multi-pair bandwidth / message-rate
+benchmark currently lives on the `feat/osu-mbw-mr` branch (PR #9):
+
+```bash
+cd /opt/pytorch-hccl-tests
+git checkout feat/osu-mbw-mr
+make mbw-mr WORLD_SIZE=8 DEVICE=npu        # world_size//2 concurrent sender/receiver pairs
+```
+
+Update this to plain `master` once PR #9 merges.

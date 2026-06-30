@@ -101,12 +101,19 @@ RUN git clone "${PT_HCCL_REPO_URL}" "${PT_HCCL_DIR}" && \
 
 WORKDIR ${PT_HCCL_DIR}
 
+# `make ${PT_HCCL_INSTALL_TARGET}` installs the package non-editably
+# (`pip install .`, a copy into site-packages). Follow it with `pip install -e .`
+# so the working tree IS the installed package: `git checkout <branch>` inside
+# the container takes effect immediately with no reinstall (e.g. switching to
+# feat/osu-mbw-mr to use `mbw-mr`). Without this, the running code stays frozen
+# at the build-time commit and a branch switch yields ImportErrors.
 RUN python3.10 -m venv "${PT_HCCL_VENV}" && \
     . "${PT_HCCL_VENV}/bin/activate" && \
     python -m pip install --upgrade pip && \
     pip install pytest && \
     pip install -r requirements_plotting.txt && \
     make "${PT_HCCL_INSTALL_TARGET}" && \
+    pip install -e . && \
     pip install PyYAML && \
     python -c "import pytorch_hccl_tests; print('pytorch_hccl_tests ok')"
 
