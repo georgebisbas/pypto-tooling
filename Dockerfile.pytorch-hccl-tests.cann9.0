@@ -203,7 +203,9 @@ RUN set -eux; \
     cd /; rm -rf /tmp/mpich-build; \
     "${MPICH_HOME}/bin/mpichversion"
 # Put MPICH (mpirun/mpicc/mpiexec) on PATH ahead of the venv (no name clashes).
-ENV PATH=${MPICH_HOME}/bin:${PATH}
+# Also add MPICH lib to LD_LIBRARY_PATH so hccl_test binaries find libmpi.so.12 at runtime.
+ENV PATH=${MPICH_HOME}/bin:${PATH} \
+    LD_LIBRARY_PATH=${MPICH_HOME}/lib:${LD_LIBRARY_PATH}
 
 WORKDIR ${PT_HCCL_DIR}
 CMD ["bash"]
