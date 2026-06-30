@@ -21,9 +21,6 @@
 # BUILD (x86 host / custom ref):
 #   docker build --build-arg PT_HCCL_COMMIT=314b0ca4667bef624e826aae6633e1a6f275d9cd --build-arg PT_HCCL_INSTALL_TARGET=install-npu-x86 -t pytorch-hccl-tests:cann9 - < Dockerfile.pytorch-hccl-tests.cann9.0
 #
-# RUN (single-device, NO HCCL collectives):
-#   docker run --rm -it --privileged --ipc=host -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi:ro -v /usr/local/Ascend/driver:/usr/local/Ascend/driver:ro -v /dev:/dev pytorch-hccl-tests:cann9
-#
 # RUN (multi-device, HCCL collectives — MUST use --pid=host):
 #   docker run --rm -it --privileged --ipc=host --pid=host --cap-add=SYS_PTRACE --security-opt seccomp=unconfined -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi:ro -v /usr/local/Ascend/driver:/usr/local/Ascend/driver:ro -v /dev:/dev pytorch-hccl-tests:cann9
 #
@@ -46,6 +43,13 @@
 #   torchrun --nnodes 1 --nproc_per_node 2 pytorch_hccl_tests/cli.py --benchmark latency --device npu
 #   torchrun --nnodes 1 --nproc_per_node 2 pytorch_hccl_tests/cli.py --benchmark allreduce --device npu
 #   WORLD_SIZE=4 make allreduce DEVICE=npu
+#
+#   # CANN built-in HCCL op benchmarks (tools/hccl_test; cf. github.com/zzudongxiang/ascend.cl).
+#   # MPICH is prebuilt at /root/mpich (see below); just build the op tests and launch with mpirun:
+#   cd /usr/local/Ascend/ascend-toolkit/latest/tools/hccl_test
+#   make MPI_HOME=/root/mpich ASCEND_DIR=/usr/local/Ascend/ascend-toolkit/latest   # -> ./bin/*_test
+#   mpirun -n 8 ./bin/all_reduce_test -b 8 -e 2048M -f 2 -p 8   # -b min -e max -f step-factor -p ranks
+#   mpirun -n 8 ./bin/alltoall_test   -b 8 -e 2048M -f 2 -p 8   # bin/ also has all_gather/reduce/scatter/...
 
 ARG CANN_VERSION=9.0.0
 # TODO(reproducibility): the tag is mutable — pin by digest. Get it with:
@@ -85,7 +89,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
 # confirming a matching torch-npu wheel exists for the newer interpreter.
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-      git ca-certificates make python3.10 python3.10-venv && \
+      git ca-certificates make gcc g++ python3.10 python3.10-venv && \
     rm -rf /var/lib/apt/lists/*
 
 # Full clone (with .git) so the checkout is a usable, fully-offline git repo
@@ -165,6 +169,27 @@ RUN test -f "${CANN_HOME}/aarch64-linux/lib64/libhccl.so" \
 #   :${CANN_HOME}/opp/built-in/op_impl/ai_core/tbe
 #   :/usr/local/Ascend/ascend-toolkit/latest/opp/built-in/op_impl/ai_core/tbe
 ENV PYTHONPATH=${CANN_HOME}/python/site-packages:/usr/local/Ascend/ascend-toolkit/latest/python/site-packages
+
+# ── MPICH for the CANN built-in HCCL op benchmarks (tools/hccl_test) ──────────
+# tools/hccl_test (cf. github.com/zzudongxiang/ascend.cl) compiles against mpi.h
+# and links libmpi, then launches the *_test binaries with mpirun. CANN ships an
+# MPICH 4.2.0 source tarball under tools/hccl_test, so build it into /root/mpich
+# fully offline (no extra downloads). --disable-fortran avoids a Fortran toolchain.
+# We do NOT touch the existing MPI_HOME=/usr above (used by the torch path); the
+# hccl_test Makefile is pointed at this MPICH explicitly via `make MPI_HOME=/root/mpich`.
+ENV MPICH_HOME=/root/mpich
+RUN set -eux; \
+    src="$(ls ${CANN_HOME}/tools/hccl_test/mpich-*.tar.gz | head -n1)"; \
+    mkdir -p /tmp/mpich-build; \
+    tar -xzf "$src" -C /tmp/mpich-build; \
+    cd /tmp/mpich-build/mpich-*/; \
+    ./configure --prefix="${MPICH_HOME}" --disable-fortran; \
+    make -j"$(nproc)"; \
+    make install; \
+    cd /; rm -rf /tmp/mpich-build; \
+    "${MPICH_HOME}/bin/mpichversion"
+# Put MPICH (mpirun/mpicc/mpiexec) on PATH ahead of the venv (no name clashes).
+ENV PATH=${MPICH_HOME}/bin:${PATH}
 
 WORKDIR ${PT_HCCL_DIR}
 CMD ["bash"]
