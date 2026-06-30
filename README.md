@@ -330,13 +330,16 @@ number of chips (start at 2, scale to your visible count):
 torchrun --nnodes 1 --nproc_per_node 4 \
   pytorch_hccl_tests/cli.py --benchmark allreduce --device npu
 
-# Makefile shortcut — pass WORLD_SIZE as a make ARGUMENT, not an env prefix
-make allreduce WORLD_SIZE=4 DEVICE=npu
+# Makefile shortcut (canonical OSU-style API)
+WORLD_SIZE=4 make allreduce DEVICE=npu
 ```
 
-> The Makefile sets `export WORLD_SIZE = 2`, which **shadows** an environment
-> prefix. `WORLD_SIZE=4 make allreduce …` is silently ignored (stays at 2); pass
-> it as a make argument (`make allreduce WORLD_SIZE=4 …`) or use `make -e`.
+> **`WORLD_SIZE` caveat.** The env-prefix form above is the intended API, but it
+> only takes effect if the Makefile declares `WORLD_SIZE ?= 2` (conditional).
+> Older checkouts use `export WORLD_SIZE = 2`, which **shadows** the env prefix
+> (it silently stays at 2) — there, pass it as a make argument instead:
+> `make allreduce WORLD_SIZE=4 DEVICE=npu`, or use `make -e`. Fix tracked in
+> huawei-csl/pytorch-hccl-tests PR #9.
 
 Enumerate every benchmark and flag in the pinned build (`bibw`, `bandwidth`,
 `latency`, `allreduce`, `allgather`, `alltoall`, `broadcast`, `reducescatter`,
@@ -358,7 +361,10 @@ benchmark currently lives on the `feat/osu-mbw-mr` branch (PR #9):
 ```bash
 cd /opt/pytorch-hccl-tests
 git checkout feat/osu-mbw-mr
-make mbw-mr WORLD_SIZE=8 DEVICE=npu        # world_size//2 concurrent sender/receiver pairs
+WORLD_SIZE=8 make mbw-mr DEVICE=npu        # world_size//2 concurrent sender/receiver pairs
 ```
+
+(See the `WORLD_SIZE` caveat above — if the checkout still uses `export
+WORLD_SIZE = 2`, pass it as `make mbw-mr WORLD_SIZE=8 …` instead.)
 
 Update this to plain `master` once PR #9 merges.
