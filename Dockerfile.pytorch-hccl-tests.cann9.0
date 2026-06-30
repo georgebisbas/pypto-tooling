@@ -104,13 +104,16 @@ WORKDIR ${PT_HCCL_DIR}
 # `make ${PT_HCCL_INSTALL_TARGET}` installs the package non-editably
 # (`pip install .`, a flat copy of the `pytorch_hccl_tests/` package into
 # site-packages). That copy SHADOWS a later `pip install -e .` on sys.path, so
-# we must `pip uninstall` it first, then install editable — otherwise the
-# working tree is not authoritative and `git checkout <branch>` inside the
-# container yields ImportErrors (the copy stays frozen at the build commit).
-# After the uninstall+editable, switching branches (e.g. feat/osu-mbw-mr to use
-# `mbw-mr`) takes effect immediately with no reinstall. The final import prints
-# the resolved path as a build-time sanity check (must be under ${PT_HCCL_DIR},
-# not site-packages).
+# the working tree would NOT be authoritative and `git checkout <branch>` inside
+# the container yields ImportErrors (the copy stays frozen at the build commit).
+# `pip uninstall` ALONE is not enough: a `pip install .` of a flat-layout
+# package can leave the copied dir / dist-info behind, which keeps shadowing the
+# editable install — so we explicitly rm the leftover from purelib, then install
+# editable. The build then ASSERTS the package resolves under ${PT_HCCL_DIR}
+# (not site-packages); if a copy ever shadows again, the build fails loudly
+# instead of shipping an image where branch switches silently don't take effect.
+# With this, switching branches (e.g. feat/osu-mbw-mr to use `mbw-mr`) takes
+# effect immediately with no reinstall.
 RUN python3.10 -m venv "${PT_HCCL_VENV}" && \
     . "${PT_HCCL_VENV}/bin/activate" && \
     python -m pip install --upgrade pip && \
@@ -118,9 +121,16 @@ RUN python3.10 -m venv "${PT_HCCL_VENV}" && \
     pip install -r requirements_plotting.txt && \
     make "${PT_HCCL_INSTALL_TARGET}" && \
     pip uninstall -y pytorch_hccl_tests && \
+    SP="$(python -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')" && \
+    rm -rf "${SP}/pytorch_hccl_tests" "${SP}"/pytorch_hccl_tests-*.dist-info "${SP}"/pytorch_hccl_tests-*.egg-link && \
     pip install -e . && \
     pip install PyYAML && \
-    python -c "import pytorch_hccl_tests as p; print('pytorch_hccl_tests ok', p.__file__)"
+    RESOLVED="$(python -c 'import pytorch_hccl_tests as p; print(p.__file__)')" && \
+    echo "pytorch_hccl_tests resolved to ${RESOLVED}" && \
+    case "${RESOLVED}" in \
+      "${PT_HCCL_DIR}"/*) echo "OK: editable install authoritative (working tree wins)";; \
+      *) echo "ERROR: pytorch_hccl_tests resolves to ${RESOLVED}, not under ${PT_HCCL_DIR}; a site-packages copy is shadowing the editable install" && exit 1;; \
+    esac
 
 # Remove set_env.sh auto-sourcing from ALL system/user startup files.
 # The Ascend base image injects these hooks; they take 10–30s and break VS Code attach.
