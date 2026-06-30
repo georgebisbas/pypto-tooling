@@ -99,6 +99,18 @@ Note: No pypto, CANN, or ptoas — simpler-only sim image. Build context must in
 | 1 | Fork `origin/master` ahead of `PT_HCCL_COMMIT`? | `git -C /path/to/pytorch-hccl-tests rev-list --count ${PT_HCCL_COMMIT}..origin/master` | `ARG PT_HCCL_COMMIT` |
 | 2 | `ENV LD_PRELOAD` absent? | `grep LD_PRELOAD Dockerfile.pytorch-hccl-tests.cann9.0` — should be comments only | Remove image-wide `ENV LD_PRELOAD` |
 | 3 | `set_env.sh` stripped, not re-added to bashrc? | `grep set_env Dockerfile.pytorch-hccl-tests.cann9.0` — strip `RUN` only, no bashrc append | Align strip `RUN` with hw-native-sys |
+| 4 | Editable install (`pip uninstall` + `pip install -e .` after the make target)? | `grep -A1 'pip uninstall' Dockerfile.pytorch-hccl-tests.cann9.0` | Restore uninstall+editable so branch switches work — see below |
+
+**Install contract:** `make ${PT_HCCL_INSTALL_TARGET}` does a non-editable `pip install .` (a flat copy into site-packages). That copy **shadows** a later `pip install -e .` on `sys.path`, so the image must `pip uninstall -y pytorch_hccl_tests` first, then `pip install -e .`. Without it, `git checkout <branch>` inside the container yields `ImportError` against the frozen copy. The build ends with `python -c "import pytorch_hccl_tests as p; print(p.__file__)"` — must print a path under `${PT_HCCL_DIR}`, not site-packages.
+
+**Run recipes** (multi-device needs `--pid=host`; no `LD_PRELOAD`):
+
+```bash
+WORLD_SIZE=2 make bidirectional-bw DEVICE=npu   # bibw: point-to-point, exactly 2 ranks
+WORLD_SIZE=8 make mbw-mr DEVICE=npu             # mbw_mr: world_size//2 concurrent pairs
+```
+
+Pass `WORLD_SIZE` as a **make argument** (or `make -e`) unless the Makefile uses `?=` — `export WORLD_SIZE = 2` shadows an env prefix. Full debugging notes: `issue_pytorch_hccl_tests.md`.
 
 ### `Dockerfile.server.cann:9.0` — pypto dev workspace (host mount)
 
@@ -326,6 +338,9 @@ Error message contains...
 ├─ "fatal error: 'tensor.h'"        → Wrong SIMPLER_ROOT
 ├─ "PTOAS SHA256 mismatch"          → CI bumped version → update ARGs
 ├─ "custom op ... unknown"          → PTOAS too old → update PTOAS_VERSION
+├─ "cannot import name ..." from site-packages after checkout → non-editable copy shadows -e → issue_pytorch_hccl_tests
+├─ "Unsupported data type at::kDouble" → fp64 reduce on HCCL → use float32 → issue_pytorch_hccl_tests
+├─ WORLD_SIZE=N make ... ignored    → Makefile export shadows env → make arg / ?= → issue_pytorch_hccl_tests
 └─ Segfault in comm_init + fork warn → ACL/HCCL + fork → use spawn/forkserver
 ```
 
@@ -341,6 +356,9 @@ Error message contains...
 | segfault in `comm_init` + fork warning | ACL/HCCL loaded + multi-threaded fork | Use spawn/forkserver, avoid busy device 0 |
 | `COPY` fails: "path not found" | Stdin build has no build context | Use `git clone` instead of `COPY` |
 | `fatal error: 'tensor.h'` | Wrong `SIMPLER_ROOT` | Set to simpler source tree (`/opt/pypto/runtime`) |
+| `ImportError: cannot import name 'X'` from `site-packages/...` after `git checkout` | Non-editable `pip install .` copy shadows `pip install -e .` | `pip uninstall -y <pkg> && pip install -e .`; verify `python -c "import <pkg> as p; print(p.__file__)"` is under the repo, not site-packages → `issue_pytorch_hccl_tests.md` |
+| `WORLD_SIZE=N make ...` runs wrong rank count | Makefile `export VAR = n` shadows env prefix | Pass as make arg (`make t VAR=n`) or `make -e`; fix Makefile to `VAR ?= n` → `issue_pytorch_hccl_tests.md` |
+| `HCCL reduce: Unsupported data type at::kDouble` (ERR02007) | fp64 `dist.reduce` unsupported on HCCL (works on gloo) | Reduce in `float32`; use only HCCL dtypes (int32/fp16/fp32/bf16) → `issue_pytorch_hccl_tests.md` |
 
 For device health issues (dead NPUs, 507033): run `diagnose_npu.py` inside the container, or see `debugging_skills/SKILL.md`.
 
@@ -382,4 +400,7 @@ npu-smi info
 
 - `debugging_skills/SKILL.md` — NPU error codes, dead device diagnosis, Docker runtime tips, distributed bug recipes
 - `diagnose_npu.py` — 10-point NPU health check (run inside container)
+- `issue_pytorch_hccl_tests.md` — pytorch-hccl-tests benchmark image: editable-install shadow, WORLD_SIZE Makefile shadow, fp64 HCCL reduce crash
+- `issue_0.md` — `comm_alloc_windows` / HCCL IPC driver mismatch
+- `issue_vscode_summary.md` — VS Code attach hang (`set_env.sh` + `LD_PRELOAD`)
 - `build_skills/` — build system debugging

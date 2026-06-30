@@ -16,6 +16,7 @@ Dockerfiles and runbooks for PyPTO and simpler development on Ascend 910B.
 - [profiling/](profiling/): Personal collective benchmark harness for PyPTO vs simpler L3 collectives.
 - [dockerfile_skills/SKILL.md](dockerfile_skills/SKILL.md): Internal Dockerfile construction/debugging notes.
 - [dockerfile_skills/issue_0.md](dockerfile_skills/issue_0.md): Detailed issue log for comm_alloc_windows/HCCL environment mismatch.
+- [dockerfile_skills/issue_pytorch_hccl_tests.md](dockerfile_skills/issue_pytorch_hccl_tests.md): pytorch-hccl-tests benchmark image — editable-install shadow, WORLD_SIZE Makefile shadow, fp64 HCCL reduce crash.
 
 ## Purpose of Each File
 

@@ -49,6 +49,13 @@
       "outputs": ["containers", "profiling reports"],
       "canonical_docs": [],
       "agent_rules": []
+    },
+    "pytorch-hccl-tests": {
+      "role": "OSU-style PyTorch/HCCL micro-benchmarks: collective + p2p bandwidth on Ascend NPU",
+      "layer": "benchmarks",
+      "outputs": ["bandwidth CSVs", "latency/bandwidth/message-rate reports"],
+      "canonical_docs": ["pytorch-hccl-tests/README.md"],
+      "agent_rules": []
     }
   },
   "repositories": {
@@ -58,6 +65,7 @@
     "pypto-3.0-notes": "pypto-3.0-notes",
     "pypto-lib": "pypto-lib",
     "pypto-tooling": "pypto-tooling",
+    "pytorch-hccl-tests": "pytorch-hccl-tests",
     "simpler": "simpler"
   },
   "tasks": {
@@ -406,6 +414,58 @@
         "environment_sensitive": true,
         "duration_hint": "10-45m",
         "warning": "Full profiling campaign is intentionally heavy and best run off the critical development path."
+      },
+      "docker_build_pytorch_hccl": {
+        "command": "docker build -t pytorch-hccl-tests:cann9 - < Dockerfile.pytorch-hccl-tests.cann9.0",
+        "category": "build",
+        "risk": "writes-build-artifacts",
+        "long_running": true,
+        "environment_sensitive": true,
+        "duration_hint": "3-10m",
+        "prerequisites": [
+          "Docker daemon available"
+        ],
+        "warning": "Builds the OSU/HCCL benchmark image. Build ends with an editable-install sanity import (must resolve under /opt/pytorch-hccl-tests, not site-packages)."
+      }
+    },
+    "pytorch-hccl-tests": {
+      "bench_bibw_npu": {
+        "command": "WORLD_SIZE=2 make bidirectional-bw DEVICE=npu",
+        "category": "test",
+        "risk": "environment-sensitive",
+        "long_running": true,
+        "environment_sensitive": true,
+        "duration_hint": "2-10m",
+        "arch_families": ["a2a3"],
+        "requires": {
+          "npu_count_min": 2
+        },
+        "developer_only": true,
+        "container_notes": "Run inside the pytorch-hccl-tests:cann9 container: docker run --rm -it --privileged --ipc=host --pid=host --cap-add=SYS_PTRACE --security-opt seccomp=unconfined -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi:ro -v /usr/local/Ascend/driver:/usr/local/Ascend/driver:ro -v /dev:/dev pytorch-hccl-tests:cann9 ; then `cd /opt/pytorch-hccl-tests`. bibw is point-to-point (exactly 2 ranks). No LD_PRELOAD.",
+        "prerequisites": [
+          "Ascend NPU with >=2 devices",
+          "pytorch-hccl-tests:cann9 image (run pypto-tooling:docker_build_pytorch_hccl first)"
+        ],
+        "warning": "Developer verification only — agent must not run. Requires NPU hardware."
+      },
+      "bench_mbw_mr_npu": {
+        "command": "WORLD_SIZE=8 make mbw-mr DEVICE=npu",
+        "category": "test",
+        "risk": "environment-sensitive",
+        "long_running": true,
+        "environment_sensitive": true,
+        "duration_hint": "2-12m",
+        "arch_families": ["a2a3"],
+        "requires": {
+          "npu_count_min": 2
+        },
+        "developer_only": true,
+        "container_notes": "Run inside the pytorch-hccl-tests:cann9 container (see bench_bibw_npu for the docker run wrapper). mbw_mr uses world_size//2 concurrent pairs; pass WORLD_SIZE as a make argument (or use the ?=-fixed Makefile on feat/osu-mbw-mr). Reduces in float32 (fp64 crashes HCCL).",
+        "prerequisites": [
+          "Ascend NPU with >=2 devices",
+          "pytorch-hccl-tests:cann9 image; feat/osu-mbw-mr checked out for the mbw-mr target"
+        ],
+        "warning": "Developer verification only — agent must not run. Requires NPU hardware."
       }
     },
     "simpler": {

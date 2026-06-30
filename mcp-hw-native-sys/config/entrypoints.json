@@ -110,5 +110,19 @@
     "docs": [
       "docs/"
     ]
+  },
+  "pytorch-hccl-tests": {
+    "benchmarks": [
+      "pytorch_hccl_tests/osu/p2p/",
+      "pytorch_hccl_tests/osu/collectives/",
+      "pytorch_hccl_tests/cli.py",
+      "Makefile"
+    ]
+  },
+  "pypto-tooling": {
+    "hccl_docker": [
+      "Dockerfile.pytorch-hccl-tests.cann9.0",
+      "dockerfile_skills/SKILL.md"
+    ]
   }
 }
