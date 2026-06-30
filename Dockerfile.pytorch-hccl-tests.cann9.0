@@ -89,7 +89,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
 # confirming a matching torch-npu wheel exists for the newer interpreter.
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-      git ca-certificates make gcc g++ python3.10 python3.10-venv && \
+      git ca-certificates curl make gcc g++ python3.10 python3.10-venv && \
     rm -rf /var/lib/apt/lists/*
 
 # Full clone (with .git) so the checkout is a usable, fully-offline git repo
@@ -172,17 +172,31 @@ ENV PYTHONPATH=${CANN_HOME}/python/site-packages:/usr/local/Ascend/ascend-toolki
 
 # ── MPICH for the CANN built-in HCCL op benchmarks (tools/hccl_test) ──────────
 # tools/hccl_test (cf. github.com/zzudongxiang/ascend.cl) compiles against mpi.h
-# and links libmpi, then launches the *_test binaries with mpirun. CANN ships an
-# MPICH 4.2.0 source tarball under tools/hccl_test, so build it into /root/mpich
-# fully offline (no extra downloads). --disable-fortran avoids a Fortran toolchain.
+# and links libmpi, then launches the *_test binaries with mpirun. The hccl_test
+# *sources* ship in CANN, but the MPICH source tarball does NOT — it must be
+# fetched (the upstream guide has you download it by hand). We build it into
+# /root/mpich: use a tarball already under tools/hccl_test if a CANN layout
+# provides one, else download the pinned release from mpich.org (the image
+# already requires network at build). --disable-fortran avoids a Fortran toolchain.
 # We do NOT touch the existing MPI_HOME=/usr above (used by the torch path); the
 # hccl_test Makefile is pointed at this MPICH explicitly via `make MPI_HOME=/root/mpich`.
+ARG MPICH_VERSION=4.2.0
 ENV MPICH_HOME=/root/mpich
 RUN set -eux; \
-    src="$(ls ${CANN_HOME}/tools/hccl_test/mpich-*.tar.gz | head -n1)"; \
     mkdir -p /tmp/mpich-build; \
-    tar -xzf "$src" -C /tmp/mpich-build; \
-    cd /tmp/mpich-build/mpich-*/; \
+    bundled="$(ls ${CANN_HOME}/tools/hccl_test/mpich-${MPICH_VERSION}.tar.gz \
+                  /usr/local/Ascend/ascend-toolkit/latest/tools/hccl_test/mpich-${MPICH_VERSION}.tar.gz \
+                  2>/dev/null | head -n1 || true)"; \
+    if [ -n "$bundled" ]; then \
+      echo "using bundled MPICH tarball: $bundled"; \
+      tar -xzf "$bundled" -C /tmp/mpich-build; \
+    else \
+      echo "downloading MPICH ${MPICH_VERSION} from mpich.org"; \
+      curl -fsSL "https://www.mpich.org/static/downloads/${MPICH_VERSION}/mpich-${MPICH_VERSION}.tar.gz" \
+        -o /tmp/mpich-build/mpich.tar.gz; \
+      tar -xzf /tmp/mpich-build/mpich.tar.gz -C /tmp/mpich-build; \
+    fi; \
+    cd "/tmp/mpich-build/mpich-${MPICH_VERSION}/"; \
     ./configure --prefix="${MPICH_HOME}" --disable-fortran; \
     make -j"$(nproc)"; \
     make install; \
