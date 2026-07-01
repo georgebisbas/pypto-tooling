@@ -126,7 +126,7 @@ WORKDIR /workspace/hw-native-sys/pypto
 # Install PTO-ISA (required by system tests that call code_runner).
 # Pinned to the commit from the runtime submodule's runtime/pto_isa.pin
 # (the single source of truth per pypto CI toolchain job; see PR #1851).
-ARG PTO_ISA_COMMIT=016396b57e2c17093f1194e6acd89bb112b0ab24
+ARG PTO_ISA_COMMIT=e722679b6eb286de84ce0d668bd19e09eafee929
 RUN timeout 60 git clone https://github.com/hw-native-sys/pto-isa.git /opt/pto-isa \
       || { rm -rf /opt/pto-isa; timeout 300 git clone https://gitcode.com/luohuan40/pto-isa.git /opt/pto-isa; } && \
   git -C /opt/pto-isa checkout "${PTO_ISA_COMMIT}" && \
@@ -135,8 +135,8 @@ RUN timeout 60 git clone https://github.com/hw-native-sys/pto-isa.git /opt/pto-i
 ENV PTO_ISA_ROOT=/opt/pto-isa
 
 # Install PTOAS (required by PTOAS strategy tests in tests/st/codegen).
-ARG PTOAS_VERSION=v0.45
-ARG PTOAS_SHA256=d5e4380df7edd4d3eeb23502d57f923e4c912345eccceb5a9a0ec1aac3b5e7d4
+ARG PTOAS_VERSION=v0.46
+ARG PTOAS_SHA256=795f18baf204aa55d7fac14f873cf6ad14461deb11e4cc58da9e37bfa9dcc259
 RUN curl --fail --location --retry 3 --retry-all-errors \
       "https://github.com/hw-native-sys/PTOAS/releases/download/${PTOAS_VERSION}/ptoas-bin-aarch64.tar.gz" \
       -o /tmp/ptoas-bin-aarch64.tar.gz && \
