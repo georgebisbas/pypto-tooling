@@ -9,7 +9,7 @@
 #   PYPTO_COMMIT    (default: full SHA of github main) — must exist on github.com/hw-native-sys/pypto
 #                   Use 40-char SHA when pinning an older commit (GitHub fetch rejects short SHAs).
 #   PTO_ISA_COMMIT  (default: auto)     — pto-isa commit; auto-derived from runtime/pto_isa.pin if not set
-#   PTOAS_VERSION   (default: v0.46)    — PTOAS release (must match pypto CI)
+#   PTOAS_VERSION   (default: v0.48)    — PTOAS release (must match pypto CI)
 #
 # REQUIREMENTS:
 #   - Internet access during build (GitHub)
@@ -188,8 +188,8 @@ RUN if [ -z "${PTO_ISA_COMMIT}" ]; then \
 ENV PTO_ISA_ROOT=${PTO_ISA_DIR}
 
 # Install PTOAS binary.
-ARG PTOAS_VERSION=v0.46
-ARG PTOAS_SHA256=795f18baf204aa55d7fac14f873cf6ad14461deb11e4cc58da9e37bfa9dcc259
+ARG PTOAS_VERSION=v0.48
+ARG PTOAS_SHA256=94a47faf7371d38be71aa39582e15b85dc4fe7e1458198eda81ed8ea3b2b7b9f
 RUN curl --fail --location --retry 3 --retry-all-errors \
       "https://github.com/hw-native-sys/PTOAS/releases/download/${PTOAS_VERSION}/ptoas-bin-aarch64.tar.gz" \
       -o /tmp/ptoas-bin-aarch64.tar.gz && \
