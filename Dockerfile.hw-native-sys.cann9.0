@@ -24,7 +24,7 @@
 #   docker build -t pypto3-hw-native-sys:cann9 - < Dockerfile.hw-native-sys.cann9.0
 #
 # BUILD (custom prefix / pinned pto-isa / different commit):
-#   docker build --build-arg PYPTO_COMMIT=d598b41bcf2566744e7951eb6e41404154a5b44e -t pypto3-hw-native-sys:cann9 - < Dockerfile.hw-native-sys.cann9.0
+#   docker build --build-arg PYPTO_COMMIT=39a13a900ecec666c046d0108a58f024ca2a7503 -t pypto3-hw-native-sys:cann9 - < Dockerfile.hw-native-sys.cann9.0
 #
 # RUN (single-device, NO HCCL):
 #   docker run --rm -it --privileged --ipc=host -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi:ro -v /usr/local/Ascend/driver:/usr/local/Ascend/driver:ro -v /dev:/dev pypto3-hw-native-sys:cann9
@@ -38,7 +38,7 @@
 # COMMANDS INSIDE CONTAINER — mirrors pypto .github/workflows/ci.yml job order.
 #   INSTALL_PREFIX=/opt, CANN_VERSION=9.0.0. CANN env is sourced from bash.bashrc.
 #   Device lists are inlined below (change 0,1,2,3 / 0 to match your host).
-#   PTO-ISA: image auto-derives from runtime/pto_isa.pin (currently 016396b5…)
+#   PTO-ISA: image auto-derives from runtime/pto_isa.pin (currently e722679b6eb286de84ce0d668bd19e09eafee929)
 #   unless PTO_ISA_COMMIT was overridden at build.
 #
 #   cd /opt/pypto
@@ -62,7 +62,7 @@
 #   pytest tests/st/distributed/test_l2_multi_orch.py -v --device="0,1,2,3"
 #   # Swimlane — single device, forked.
 #   pytest tests/st/runtime/framework_and_models/test_perf_swimlane.py -v --device=0 --platform=a2a3 --enable-l2-swimlane --forked
-#   # Dump-tensor — single device, forked (older pto-isa pin per ci.yml).
+#   # Dump-tensor — single device, forked.
 #   pytest tests/st/runtime/framework_and_models/test_dump_tag.py -v --device=0 --platform=a2a3 --dump-tensor --forked
 #
 #   # --- dist-system-tests (job: dist-system-tests; HCCL, bare-metal in CI) ---
@@ -138,10 +138,27 @@ RUN apt-get update && \
 ENV CC=gcc-15 \
     CXX=g++-15
 
+# Python build toolchain + test deps (stable layer — changes only with ci.yml/github_ci.Dockerfile).
+RUN python3 -m pip install --upgrade pip setuptools wheel && \
+    pip install \
+      "scikit-build-core>=0.10.0" \
+      "nanobind>=2.0.0" \
+      "ninja>=1.11.0" \
+      "cmake>=3.15"
+
+RUN pip install \
+      "numpy>=2.0" \
+      "pytest>=7.0.0" "pytest-forked>=1.0" "pytest-xdist==3.8.0" \
+      "pyright==1.1.407" "ruff==0.14.8" "clang-tidy==21.1.0" \
+      "pre-commit==4.5.1"
+
+# Install torch (pin matches pypto/.github/docker/github_ci.Dockerfile)
+RUN pip install "torch==2.6.0" --index-url https://download.pytorch.org/whl/cpu
+
 # Clone pypto at the pinned commit (changing PYPTO_COMMIT busts the layer cache automatically).
 # Uses a blobless clone (--filter=blob:none) so any commit SHA can be checked out;
 # GitHub does not allow shallow-fetching arbitrary SHAs directly.
-ARG PYPTO_COMMIT=d598b41bcf2566744e7951eb6e41404154a5b44e
+ARG PYPTO_COMMIT=39a13a900ecec666c046d0108a58f024ca2a7503
 RUN git clone --filter=blob:none https://github.com/hw-native-sys/pypto.git "${PYPTO_DIR}" && \
     if ! git -C "${PYPTO_DIR}" cat-file -e "${PYPTO_COMMIT}^{commit}" 2>/dev/null; then \
       git -C "${PYPTO_DIR}" fetch origin "${PYPTO_COMMIT}"; \
@@ -198,24 +215,6 @@ RUN curl --fail --location --retry 3 --retry-all-errors \
     tar -xzf /tmp/ptoas-bin-aarch64.tar.gz -C "${PTOAS_DIR}" && \
     chmod +x "${PTOAS_DIR}/ptoas" "${PTOAS_DIR}/bin/ptoas" && \
     rm -f /tmp/ptoas-bin-aarch64.tar.gz
-
-# Python build toolchain.
-RUN python3 -m pip install --upgrade pip setuptools wheel && \
-    pip install \
-      "scikit-build-core>=0.10.0" \
-      "nanobind>=2.0.0" \
-      "ninja>=1.11.0" \
-      "cmake>=3.15"
-
-# CI/test dependencies.
-RUN pip install \
-      "numpy>=2.0" \
-      "pytest>=7.0.0" "pytest-forked>=1.0" "pytest-xdist==3.8.0" \
-      "pyright==1.1.407" "ruff==0.14.8" "clang-tidy==21.1.0" \
-      "pre-commit==4.5.1"
-
-# Install torch (pin matches pypto/.github/docker/github_ci.Dockerfile)
-RUN pip install "torch==2.6.0" --index-url https://download.pytorch.org/whl/cpu
 
 # Build simpler runtime extension.
 RUN rm -rf ./runtime/build && \
