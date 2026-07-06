@@ -126,7 +126,7 @@ WORKDIR /workspace/hw-native-sys/pypto
 # Install PTO-ISA (required by system tests that call code_runner).
 # Pinned to the commit from the runtime submodule's runtime/pto_isa.pin
 # (the single source of truth per pypto CI toolchain job; see PR #1851).
-ARG PTO_ISA_COMMIT=e722679b6eb286de84ce0d668bd19e09eafee929
+ARG PTO_ISA_COMMIT=83d01313d9bfc247c4b7c8bcf969d1019f0d106f
 RUN timeout 60 git clone https://github.com/hw-native-sys/pto-isa.git /opt/pto-isa \
       || { rm -rf /opt/pto-isa; timeout 300 git clone https://gitcode.com/luohuan40/pto-isa.git /opt/pto-isa; } && \
   git -C /opt/pto-isa checkout "${PTO_ISA_COMMIT}" && \
@@ -193,10 +193,37 @@ RUN rm -rf /workspace/hw-native-sys/pypto/runtime/build && \
 
 RUN pip install --no-build-isolation -v ".[dev]"
 
-# Source CANN environment for every shell (HCCL, Ascend libs, etc.).
-# Use || true so that a partially-installed host CANN (missing sub-scripts in
-# set_env.sh) does not kill the interactive shell on startup.
-RUN printf '[ -f /usr/local/Ascend/cann-9.0.0/set_env.sh ] && { source /usr/local/Ascend/cann-9.0.0/set_env.sh 2>/dev/null || true; }\n' >> /etc/bash.bashrc
+# Remove set_env.sh auto-sourcing from ALL system/user startup files.
+# The Ascend base image injects these hooks; they take 10–30s and break VS Code attach.
+# All required env vars are set via ENV below; source manually when needed.
+RUN for f in /etc/profile /etc/bash.bashrc /root/.profile /root/.bashrc /root/.bash_profile; do \
+      [ -f "$f" ] && sed -i '/set_env\.sh/d' "$f" || true; \
+    done && \
+    for f in /etc/profile.d/*.sh; do \
+      [ -f "$f" ] && sed -i '/set_env\.sh/d' "$f" || true; \
+    done
+
+# Unset PTO2_RING_* if the host leaked them in — CI does the same before HCCL pytest.
+RUN echo "unset PTO2_RING_HEAP PTO2_RING_TASK_WINDOW PTO2_RING_DEP_POOL 2>/dev/null || true" >> /etc/bash.bashrc
+
+# Preload libhccl.so so host_runtime.so's WEAK HCCL symbols resolve at load time.
+# Without this, HcclGetRootInfo et al. → NULL → SIGSEGV on comm_init.
+# See pypto-tooling/debugging_skills/SKILL.md → "Docker runtime: HCCL".
+#
+# run-side: the container MUST be started with --pid=host for HCCL.
+# See pypto-tooling/debugging_skills/SKILL.md → "Docker runtime: HCCL".
+RUN test -f "/usr/local/Ascend/cann-9.0.0/aarch64-linux/lib64/libhccl.so" \
+    || (echo "ERROR: libhccl.so missing at /usr/local/Ascend/cann-9.0.0/aarch64-linux/lib64/libhccl.so" \
+        && ls -la "/usr/local/Ascend/cann-9.0.0/aarch64-linux/lib64/" | grep -i hccl \
+        && exit 1)
+# LD_PRELOAD is NOT set automatically — setting it image-wide (ENV or bashrc) injects
+# libhccl.so into every process including VS Code server → hang on attach.
+# Before running HCCL tests, set it in your shell:
+#   export LD_PRELOAD=/usr/local/Ascend/cann-9.0.0/aarch64-linux/lib64/libhccl.so
+# Without it, weak HCCL symbols in host_runtime.so stay NULL → SIGSEGV on comm_init.
+
+# VS Code's userEnvProbe: if it ever captures LD_PRELOAD and injects it into the server,
+# override per-container via ~/.devcontainer/devcontainer.json: {"userEnvProbe": "none"}
 
 ENV ASCEND_HOME_PATH=/usr/local/Ascend/cann-9.0.0 \
     PTO_TILE_LIB_CODE_PATH=/usr/local/Ascend/cann-9.0.0 \
