@@ -163,7 +163,7 @@ RUN pip install \
 
 # Match fuzz simulation environment from CI container image.
 RUN pip install \
-      "torch==2.6.0" --index-url https://download.pytorch.org/whl/cpu
+      torch --index-url https://download.pytorch.org/whl/cpu
 
 COPY pypto /workspace/hw-native-sys/pypto
 
