@@ -110,19 +110,19 @@ pytest tests/st/runtime/test_matmul.py -v --device=0
 ### C) Full system tests (non-distributed)
 
 ```bash
-pytest tests/st -v --device="0,1,2,3" --precompile-workers=128 --pto-isa-commit=2c607938 --ignore=tests/st/distributed
+pytest tests/st -v --device="0,1,2,3" --precompile-workers=128 --ignore=tests/st/distributed
 ```
 
 ### D) Distributed system tests
 
 ```bash
-pytest tests/st/distributed -v --device="0,1,2,3" --pto-isa-commit=2c607938
+pytest tests/st/distributed -v --device="0,1,2,3"
 ```
 
 ### E) Focused PTOAS checks
 
 ```bash
-pytest tests/st/codegen/test_paged_attention.py -v --device=0 --pto-isa-commit=2c607938
+pytest tests/st/codegen/test_paged_attention.py -v --device=0
 ```
 
 ---
@@ -143,7 +143,7 @@ Then run runtime tests in the container (for example B, C, or D above). You shou
 
 - `--device="0,1,2,3"`: expose/select multiple NPU devices for tests.
 - `--precompile-workers=128`: parallel precompile workers for system-test setup.
-- `--pto-isa-commit=2c607938`: pin PTO-ISA commit used by system tests.
+- PTO-ISA commit is auto-derived from `runtime/pto_isa.pin`; use `--pto-isa-commit=<sha>` only to override.
 - `--ignore=tests/st/distributed`: run non-distributed system tests only.
 
 Simulator mode (`a2a3sim`) is not supported in this image.

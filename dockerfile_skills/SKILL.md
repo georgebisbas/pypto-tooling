@@ -56,17 +56,17 @@ Each Dockerfile pins specific external versions. When asked to update one, run t
 | # | Check | Command | What to update if drifted |
 |---|-------|---------|--------------------------|
 | 1 | pypto `origin/main` ahead of `PYPTO_COMMIT`? | `git -C /path/to/pypto rev-list --count ${PYPTO_COMMIT}..origin/main` | `ARG PYPTO_COMMIT` + header comment example |
-| 2 | pto-isa commit changed? | Read `pypto/runtime/pto_isa.pin` — the single source of truth (auto-derived at Docker build time). `ci.yml` toolchain job reads this file. | Auto-derived; no ARG update needed unless you want to hard-pin via `--build-arg` |
-| 3 | PTOAS version or SHA256 changed? | Read `pypto/toolchain/versions.env` directly — this is the **single source of truth** for PTOAS_VERSION and PTOAS_SHA256_{AARCH64,X86_64} (bumped via PRs like [#1921](https://github.com/hw-native-sys/pypto/pull/1921)). The `ci.yml` toolchain job reads this file; do NOT grep ci.yml for PTOAS. | `ARG PTOAS_VERSION` + `ARG PTOAS_SHA256` (aarch64 for cann/server, x86_64 for sim) |
+| 2 | pto-isa commit changed? | Read `pypto/runtime/pto_isa.pin` — the single source of truth (auto-derived at Docker build time). | Auto-derived; no ARG update needed unless you want to hard-pin via `--build-arg` |
+| 3 | PTOAS version or SHA256 changed? | Read `pypto/toolchain/versions.env` directly — this is the **single source of truth** for PTOAS_VERSION and PTOAS_SHA256_{AARCH64,X86_64} (bumped via PRs like [#1921](https://github.com/hw-native-sys/pypto/pull/1921)). Do NOT grep `.github/workflows/ci.yml` for PTOAS. | `ARG PTOAS_VERSION` + `ARG PTOAS_SHA256` (aarch64 for cann/server, x86_64 for sim) |
 | 4 | pip deps changed in pypto CI Dockerfile? | `diff <(grep 'pip install' pypto/.github/docker/github_ci.Dockerfile) <(grep 'pip install' Dockerfile.hw-native-sys.cann9.0)` | Update pip install RUN lines |
-| 5 | Test commands in header comment match pypto CI? | Compare `ci.yml` jobs with Dockerfile comment header | Update test command cheatsheet in header comment |
+| 5 | Test commands in header comment match pypto CI? | Compare `.github/workflows/ci.yml` jobs with Dockerfile comment header | Update test command cheatsheet in header comment |
 
 ### `Dockerfile.simpler.cann9.0` — simpler + pto-isa only
 
 | # | Check | Command | What to update if drifted |
 |---|-------|---------|--------------------------|
 | 1 | simpler `origin/main` ahead of `SIMPLER_COMMIT`? | `git -C /path/to/simpler rev-list --count ${SIMPLER_COMMIT}..origin/main` | `ARG SIMPLER_COMMIT` + header comment |
-| 2 | pto-isa commit in simpler's CI changed? | `grep -oP 'PTO_ISA_COMMIT:\s*\K[a-f0-9]+' simpler/.github/workflows/ci.yml \| head -1` | `ARG PTO_ISA_COMMIT` (simpler CI format, not pypto!) |
+| 2 | pto-isa commit changed? | Read `simpler/pto_isa.pin` — the single source of truth (auto-derived at Docker build time). | Auto-derived; no ARG update needed unless you want to hard-pin via `--build-arg` |
 | 3 | `ENV LD_PRELOAD` absent? | `grep LD_PRELOAD Dockerfile.simpler.cann9.0` — should be comments only | Remove image-wide `ENV LD_PRELOAD` |
 | 4 | `set_env.sh` stripped, not re-added to bashrc? | `grep set_env Dockerfile.simpler.cann9.0` — strip `RUN` only, no bashrc append | Align with hw-native-sys pattern |
 
@@ -77,7 +77,7 @@ Note: No PTOAS or pypto dependencies — simpler-only image.
 | # | Check | Command | What to update if drifted |
 |---|-------|---------|--------------------------|
 | 1 | pypto `origin/main` ahead of `PYPTO_COMMIT`? | Same as hw-native-sys check #1 | `ARG PYPTO_COMMIT` |
-| 2 | pto-isa commit in pypto's `ci.yml` changed? | Same as hw-native-sys check #2 | `ARG PTO_ISA_COMMIT` |
+| 2 | pto-isa commit changed? | Read `pypto/runtime/pto_isa.pin` — the single source of truth (auto-derived at Docker build time). | Auto-derived; no ARG update needed unless you want to hard-pin via `--build-arg` |
 | 3 | PTOAS x86_64 version/SHA256 changed? | Read `pypto/toolchain/versions.env` — use the **x86_64** SHA256 (`PTOAS_SHA256_X86_64`) from that file | `ARG PTOAS_VERSION` + `ARG PTOAS_SHA256` (x86_64 binary) |
 
 Note: Uses **x86_64** `ptoas-bin-x86_64.tar.gz` with a **different SHA256** than the aarch64 binary used in hw-native-sys.
@@ -87,8 +87,8 @@ Note: Uses **x86_64** `ptoas-bin-x86_64.tar.gz` with a **different SHA256** than
 | # | Check | Command | What to update if drifted |
 |---|-------|---------|--------------------------|
 | 1 | simpler `origin/main` ahead of `SIMPLER_COMMIT`? | `git -C /path/to/simpler rev-list --count ${SIMPLER_COMMIT}..origin/main` | `ARG SIMPLER_COMMIT` + header comment |
-| 2 | pto-isa commit in simpler's CI changed? | `grep -oP 'PTO_ISA_COMMIT:\s*\K[a-f0-9]+' simpler/.github/workflows/ci.yml \| head -1` | `ARG PTO_ISA_COMMIT` (simpler CI format) |
-| 3 | L3 sim pytest flags match `st-sim-a2a3`? | Compare `ci.yml` `pytest examples tests/st --platform a2a3sim` with `scripts/run-simpler-l3-sim.sh` | Update script + Dockerfile header |
+| 2 | pto-isa commit changed? | Read `simpler/pto_isa.pin` — the single source of truth (auto-derived at Docker build time). | Auto-derived; no ARG update needed unless you want to hard-pin via `--build-arg` |
+| 3 | L3 sim pytest flags match `st-sim-a2a3`? | Compare `simpler/.github/workflows/ci.yml` `pytest examples tests/st --platform a2a3sim` with `scripts/run-simpler-l3-sim.sh` | Update script + Dockerfile header |
 
 Note: No pypto, CANN, or ptoas — simpler-only sim image. Build context must include `scripts/run-simpler-l3-sim.sh` (build from `pypto-tooling/`).
 
@@ -116,7 +116,7 @@ Pass `WORLD_SIZE` as a **make argument** (or `make -e`) unless the Makefile uses
 
 | # | Check | Command | What to update if drifted |
 |---|-------|---------|--------------------------|
-| 1 | pto-isa commit in pypto's `ci.yml` changed? | Same as hw-native-sys check #2 | The clone command inside the Dockerfile |
+| 1 | pto-isa commit changed? | Same as hw-native-sys check #2 | The clone command inside the Dockerfile |
 | 2 | PTOAS version/SHA256 changed? | Read `pypto/toolchain/versions.env` (same as hw-native-sys check #3) | `ARG PTOAS_VERSION` + `ARG PTOAS_SHA256` |
 | 3 | pip deps changed in pypto CI Dockerfile? | Same as hw-native-sys check #4 | Update pip install RUN lines |
 
@@ -135,7 +135,7 @@ cd ~/pypto-tooling
 echo "=== pypto origin/main ===" && git -C /tmp/pypto rev-parse --short HEAD
 echo "=== simpler origin/main ===" && git -C /tmp/simpler rev-parse --short HEAD
 echo "=== pto-isa (pypto pin) ===" && cat /tmp/pypto/runtime/pto_isa.pin
-echo "=== pto-isa (simpler CI) ===" && grep -oP 'PTO_ISA_COMMIT:\s*\K[a-f0-9]+' /tmp/simpler/.github/workflows/ci.yml | head -1
+echo "=== pto-isa (simpler pin) ===" && cat /tmp/simpler/pto_isa.pin
 echo "=== PTOAS (toolchain/versions.env) ===" && cat /tmp/pypto/toolchain/versions.env
 echo "=== pip deps (pypto CI Dockerfile) ===" && grep 'pip install' /tmp/pypto/.github/docker/github_ci.Dockerfile
 ```
@@ -184,7 +184,7 @@ ENV PYTHONPATH=${PYTHONPATH}:/usr/local/Ascend/.../opp/...
 [ ] 2. Clone pto-isa (needed by simpler kernel compilation)
 [ ] 3. Install PTOAS binary (needed by pypto tests; NOT needed by simpler-only)
 [ ] 4. pip install scikit-build-core nanobind cmake ninja
-[ ] 5. pip install numpy pytest torch (CPU)
+[ ] 5. pip install numpy pytest torch (CPU, unversioned — matches CI)
 [ ] 6. pip install --no-build-isolation ./runtime   ← simpler MUST be built before pypto
 [ ] 7. pip install --no-build-isolation .[dev]       ← depends on simpler.task_interface
 ```
@@ -216,13 +216,13 @@ RUN timeout 60 git clone https://github.com/hw-native-sys/pto-isa.git "${PTO_ISA
     git -C "${PTO_ISA_DIR}" checkout "${PTO_ISA_COMMIT}"
 ```
 
-Auto-derive commit from CI when not pinned via ARG:
+Auto-derive commit when not pinned via ARG:
 
 ```bash
 # For pypto Dockerfiles:
-PTO_ISA_COMMIT=$(grep -oP '(?<=--pto-isa-commit=)[a-f0-9]+' .github/workflows/ci.yml | head -1)
-# For simpler Dockerfiles (different CI format!):
-PTO_ISA_COMMIT=$(grep -oP 'PTO_ISA_COMMIT:\s*\K[a-f0-9]+' .github/workflows/ci.yml | head -1)
+PTO_ISA_COMMIT=$(tr -d '[:space:]' < runtime/pto_isa.pin)
+# For simpler Dockerfiles:
+PTO_ISA_COMMIT=$(tr -d '[:space:]' < pto_isa.pin)
 ```
 
 ### 7. Third-party fallback (libbacktrace, msgpack-c)
@@ -349,7 +349,7 @@ Error message contains...
 | Symptom | Cause | Fix |
 |---------|-------|-----|
 | `WORKDIR: command not found` during build | Trailing `&& \` before WORKDIR | Terminate every RUN before WORKDIR |
-| `ImportError: ChipBufferSpec` | Stale simpler submodule pin | `git -C runtime fetch origin main && checkout origin/main` |
+| `ImportError: ChipBufferSpec` | Stale simpler submodule pin | `git -C runtime fetch origin main && git -C runtime checkout origin/main` |
 | `aclInit` / `aclrtSetDevice` failed | Missing docker run flags | Add `--privileged -v /dev:/dev` |
 | `HcclGetRootInfo` hangs (120s) | Wrong NIC / HCCL network | Try different device, check `HCCL_SOCKET_IFNAME` |
 | `comm_alloc_windows` + **507899** | CANN 9.0 + driver < 26.0.rc1 | → debugging_skills → "NPU error code reference" |

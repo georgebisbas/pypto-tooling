@@ -215,8 +215,8 @@ this skill is about **tile row stride** (logical shape), which is independent.
 | Layer | What fails | Notes |
 |-------|------------|-------|
 | **pto-isa** | C++ `static_assert` in generated kernel | e.g. A5 `TStore.hpp`: `Cols * sizeof(T) % 32 == 0` |
-| **PTOAS** | MLIR `verify()` on ops | Large verifier pass **2026-03-16** (`4051849` in PTOAS). Only explicit `% 32` string in v0.40 binary is often **transpose (A5)**; store/expand failures may surface as other op errors or kernel compile |
-| **PyPTO CI** | ST / codegen | **ptoas v0.40** pinned from **2026-05-20** (`pypto` #1417). Older ptoas may not catch the same cases |
+| **PTOAS** | MLIR `verify()` on ops | Large verifier pass **2026-03-16** (`4051849` in PTOAS). Store/expand failures may surface as other op errors or kernel compile |
+| **PyPTO CI** | ST / codegen | **ptoas v0.48** pinned from `pypto/toolchain/versions.env`. Older ptoas may not catch the same cases |
 | **PyPTO tests** | Documented shapes | `test_scatter_update` (INT32 `cols >= 8`), `test_gather`, `test_l3_notify_wait` |
 
 The rule is **not** a recent PyPTO DSL change; new code paths (e.g. `pl.tile.full`) **expose** it.
@@ -245,7 +245,8 @@ The rule is **not** a recent PyPTO DSL change; new code paths (e.g. `pl.tile.ful
    - Generated `.pto`: `!pto.tile_buf<loc=vec, …, rows=…, cols=…>`
 3. **Check**: `cols * element_bytes % 32 == 0` (row-major Vec).
 4. **Check toolchain versions**:
-   - `pypto/.github/workflows/ci.yml` → `PTOAS_VERSION`, `PTO_ISA` commit
+   - `pypto/toolchain/versions.env` → `PTOAS_VERSION` and `PTOAS_SHA256_*`
+   - `pypto/runtime/pto_isa.pin` → pto-isa commit
    - On atlas: pip-installed `pypto` vs stale tree; **do not** put `…/pypto/python` first on `PYTHONPATH` if testing installed wheel
 5. **If unsure which layer failed**:
    ```bash
@@ -306,6 +307,7 @@ Reference: `pypto/tests/st/distributed/test_l3_notify_wait.py` (comment explains
 | 2026-04-27+ | PyPTO gather/scatter tests document `cols * sizeof % 32` |
 | 2026-05-06 | `pl.tile.full` (#1274) — easy tiny tiles |
 | 2026-05-20 | PyPTO CI ptoas **v0.36 → v0.40** (#1417) |
+| 2026-06-30 | PyPTO CI ptoas **v0.40 → v0.48** (#1921) |
 | 2026-05-26 | `test_l3_notify_wait` — scalar workaround documented |
 | 2026-05-28 | GEMM comm anchor `[1,1]` → fix `[1,8]` |
 
@@ -323,7 +325,7 @@ Reference: `pypto/tests/st/distributed/test_l3_notify_wait.py` (comment explains
 | i32 index tile policy | `pypto/docs/en/dev/passes/12-convert_tensor_to_tile_ops.md` |
 | PTOAS manual (transpose) | `PTOAS/docs/PTO_IR_manual.md` (~32-byte major dim) |
 | A5 TStore assert | `pto-isa/include/pto/npu/a5/TStore.hpp` |
-| CI ptoas pin | `pypto/.github/workflows/ci.yml` → `PTOAS_VERSION` |
+| CI ptoas pin | `pypto/toolchain/versions.env` → `PTOAS_VERSION` |
 
 ---
 
