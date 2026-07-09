@@ -181,6 +181,46 @@ cat /usr/local/Ascend/cann-9.0.0/version.cfg 2>/dev/null
 Per `simpler/docs/install.md`: CANN 9.0.0 requires driver ≥ 26.0.rc1.
 Driver 25.5.1 with CANN 9.0.0 → 507033 (device setup) and 507899 (HCCL IPC).
 
+## Onboard workflow: `task-submit`, arch precheck, and device logs
+
+For **any** hardware work on the shared dev box, use `task-submit` to lock
+NPUs and run through the arch precheck first. See
+`simpler/.claude/rules/running-onboard.md` for the full policy; key points:
+
+1. **Arch precheck** before acquiring a device:
+   ```bash
+   .claude/skills/onboard-arch-precheck/check.sh a2a3 || exit 1
+   ```
+   Wrong `--platform` (e.g. a5 on a2a3 hardware) produces 507018 / 507899
+   cascades that look like real bugs.
+
+2. **Run through `task-submit`**:
+   ```bash
+   task-submit --timeout 1800 --max-time 1800 --device auto --device-num 2 \
+       --run "python -m pytest tests/st/... --platform a2a3 --device \$TASK_DEVICE ..."
+   ```
+   Check `task-submit --list` first to see queue state.
+
+3. **Redirect device logs** to a per-run directory so you don't fish them out
+   of the shared `~/ascend/log/debug/`:
+   ```bash
+   LOGDIR="$PWD/outputs/<case>/ascend"
+   mkdir -p "$LOGDIR"
+   export ASCEND_PROCESS_LOG_PATH="$LOGDIR"
+   task-submit --device auto --device-num 1 \
+       --run "python ... -d \$TASK_DEVICE"
+   # logs now at $LOGDIR/device-<id>/device-*.log
+   ```
+
+4. **507018 triage** — read the device log and grep for the actual signature:
+   - `FATAL: Task Allocator Deadlock` / `Provable head-of-line` → real ring/heap deadlock
+   - `Timeout (N cycles): producer/consumers ...` → spin wait on a producer/consumer
+   - `HandleTaskTimeout` / `kill aicpu-sd` → OS op-execute timeout (45s default); not necessarily a deadlock
+   - `log_stall_diagnostics` → forward-progress stall / race
+
+   If no deadlock detector fired and only `HandleTaskTimeout` appears, the
+   op was long or stalled, not a proven capacity bug.
+
 ---
 
 # PyPTO Vec tile 32-byte row alignment
@@ -293,7 +333,7 @@ Reference: `pypto/tests/st/distributed/test_l3_notify_wait.py` (comment explains
 
 - [ ] Dummy comm window + `CollectCommGroups`: anchor must **mutate** window (`InOut`); padded tile or scalar path
 - [ ] Window tensor can stay `[1, 1]` in **type** while tile is `[1, 8]` for the Vec op
-- [ ] Docker: `--pid=host` for HCCL; `source …/set_env.sh`; `PYTHONPATH` = runtime + examples only when using pip `pypto`
+- [ ] Docker: `--pid=host` for HCCL; do **not** source `set_env.sh` (CANN env vars are set via `ENV`); `PYTHONPATH` = runtime + examples only when using pip `pypto`
 - [ ] After branch pull: `pip install --no-build-isolation -v ".[dev]"` in `/opt/pypto` if compile errors look like missing passes/APIs
 
 ---
