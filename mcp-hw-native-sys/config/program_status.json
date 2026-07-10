@@ -1,42 +1,42 @@
 {
-  "last_verified": "2026-06-20 (manual audit; `sync_status_prs.sh` needs `gh auth login`)",
+  "last_verified": "2026-07-09 (run `tools/sync_status_prs.sh`)",
   "dashboard": {
-    "open": 3,
-    "merged_all": 15,
-    "merged_90d": 15,
-    "closed": 10
+    "open": 4,
+    "merged_all": 27,
+    "merged_90d": 27,
+    "closed": 11
   },
   "open_prs": [
     {
-      "pr": "#1782",
-      "title": "feat(distributed): add pld.tensor.barrier, broadcast...",
-      "branch": "feat/composite-collectives",
-      "ci": "\ud83d\udfe1",
-      "notes": "[1782_notes](../pull_requests/1782_notes.md)",
-      "repo": "pypto"
-    },
-    {
-      "pr": "#1813",
-      "title": "refactor(codegen): extract IterArgCarryAnalyzer from Fo...",
-      "branch": "refactor/extract-iterarg-carry-analyzer",
-      "ci": "\ud83d\udfe1",
-      "notes": "sim UT only; no distributed ST",
-      "repo": "pypto"
-    },
-    {
-      "pr": "#1059",
-      "title": "perf(l3): remove useless exchange buffer from ring a...",
-      "branch": "feat/simpler/l3-ring-allreduce-v2",
+      "pr": "#1967",
+      "title": "feat(distributed): push-based allgather composite in...",
+      "branch": "feat/push-based-allgather",
       "ci": "\u2705",
-      "notes": "[1782_notes](../pull_requests/1782_notes.md)",
+      "notes": "\u2014",
+      "repo": "pypto"
+    },
+    {
+      "pr": "#1984",
+      "title": "fix(ir): remap device= attr in IRMutator Call visito...",
+      "branch": "fix/kattrdevice-unroll-p1",
+      "ci": "\u2705",
+      "notes": "[1984_kattrdevice_unroll_fix](../pull_requests/1984_kattrdevice_unroll_fix.md)",
+      "repo": "pypto"
+    },
+    {
+      "pr": "#1267",
+      "title": "update(distributed): convert all_to_all distributed ...",
+      "branch": "perf/all-to-all-push-based",
+      "ci": "\u2705",
+      "notes": "\u2014",
       "repo": "simpler"
     },
     {
-      "pr": "#1092",
-      "title": "feat(l3): consolidate allreduce variants with --mode ...",
-      "branch": "feat/l3-allreduce-variants-consolidation",
+      "pr": "#1294",
+      "title": "feat(st): relocate collective examples into tests/st...",
+      "branch": "feat/collectives-scene-tests",
       "ci": "\u2705",
-      "notes": "[simpler-1092](../pull_requests/simpler-1092-allreduce-consolidation.md)",
+      "notes": "\u2014",
       "repo": "simpler"
     }
   ],
@@ -51,19 +51,30 @@
     },
     {
       "repo": "pypto",
-      "branch": "feat/host-collectives-builtin",
-      "sha": "eeea306e",
-      "plan": "[plan 33](33-pypto-host-collectives-builtin-program.md)",
-      "npu": "NPU pending",
-      "blocker": "sim UT green; blocked on #1782 merge for clean upstream story \u2014 [memories/host_collectives.md](../memories/host_collectives.md)"
-    }
-  ],
-  "blockers": [
+      "branch": "[#1850](https://github.com/hw-native-sys/pypto/issues/1850)",
+      "sha": "[RFC] Move LowerCompositeOps before ConvertTensorToT...",
+      "plan": "2026-06-24",
+      "npu": "[plan 36](36-move-lower-composite-ops-before-convert-tensor-to-tile.md)",
+      "blocker": "\u2014"
+    },
     {
-      "branch": "feat/host-collectives-builtin",
-      "blocker": "sim UT green; blocked on #1782 merge for clean upstream story \u2014 [memories/host_collectives.md](../memories/host_collectives.md)"
+      "repo": "pypto",
+      "branch": "[#1968](https://github.com/hw-native-sys/pypto/issues/1968)",
+      "sha": "[RFC] Window-Buffer Allocation API Is Byte-Centric a...",
+      "plan": "2026-07-07",
+      "npu": "[plan 46](46-pypto-dtype-byte-size.md), [plan 47](47-pypto-alloc-window-buffer-shaped.md)",
+      "blocker": "\u2014"
+    },
+    {
+      "repo": "pypto",
+      "branch": "[#1983](https://github.com/hw-native-sys/pypto/issues/1983)",
+      "sha": "[Pass Bug] IRMutator drops kAttrDevice remap during ...",
+      "plan": "2026-07-08",
+      "npu": "\u2014",
+      "blocker": "\u2014"
     }
   ],
+  "blockers": [],
   "plan_cross_index": [
     {
       "plan": "01",
@@ -116,14 +127,14 @@
     {
       "plan": "09",
       "repo": "pypto",
-      "prs": "\u2014",
+      "prs": "[#1938](https://github.com/hw-native-sys/pypto/pull/1938)",
       "title": "[Unskip put/get STs](09-pypto-unskip-put-get.md)"
     },
     {
-      "plan": "12",
-      "repo": "simpler",
-      "prs": "[#1059](https://github.com/hw-native-sys/simpler/pull/1059)",
-      "title": "[simpler ring allreduce cleanup](12-simpler-ring-allreduce-cleanup.md)"
+      "plan": "38",
+      "repo": "pypto",
+      "prs": "[#1937](https://github.com/hw-native-sys/pypto/pull/1937)",
+      "title": "[all_to_all composite](38-pypto-all-to-all-collective.md)"
     },
     {
       "plan": "12",
@@ -134,19 +145,19 @@
     {
       "plan": "13",
       "repo": "pypto",
-      "prs": "[#1781](https://github.com/hw-native-sys/pypto/pull/1781)",
+      "prs": "[#1893](https://github.com/hw-native-sys/pypto/pull/1893)",
       "title": "[AllGather dynamic NR parity](13-pypto-allgather-dynamic-nr-parity.md)"
     },
     {
       "plan": "14",
       "repo": "pypto",
-      "prs": "[#1781](https://github.com/hw-native-sys/pypto/pull/1781)",
+      "prs": "[#1893](https://github.com/hw-native-sys/pypto/pull/1893)",
       "title": "[ReduceScatter + Broadcast dynamic NR parity](14-pypto-reduce-scatter-broadcast-dynamic-nr-parity.md)"
     },
     {
       "plan": "15",
       "repo": "pypto",
-      "prs": "[#1781](https://github.com/hw-native-sys/pypto/pull/1781)",
+      "prs": "[#1726](https://github.com/hw-native-sys/pypto/pull/1726)",
       "title": "[Loop-bound index-cast UT pack](15-pypto-loop-bound-index-cast-ut-pack.md)"
     },
     {
@@ -170,8 +181,8 @@
     {
       "plan": "19",
       "repo": "pypto",
-      "prs": "\u2014",
-      "title": "[Add pre-verification barrier](19-pre-verification-barrier.md)"
+      "prs": "[#1828](https://github.com/hw-native-sys/pypto/pull/1828)",
+      "title": "[Add pre-verification barrier](19-codegen-precondition-verify.md)"
     },
     {
       "plan": "20",
@@ -188,7 +199,7 @@
     {
       "plan": "22",
       "repo": "pypto",
-      "prs": "\u2014",
+      "prs": "[#1828](https://github.com/hw-native-sys/pypto/pull/1828)",
       "title": "[Use CodeEmitter in orch](22-orch-use-codeemitter.md)"
     },
     {
@@ -254,8 +265,44 @@
     {
       "plan": "33",
       "repo": "pypto",
-      "prs": "\u2014",
+      "prs": "[#1829](https://github.com/hw-native-sys/pypto/pull/1829)",
       "title": "[Host collectives builtin program](33-pypto-host-collectives-builtin-program.md)"
+    },
+    {
+      "plan": "34",
+      "repo": "simpler",
+      "prs": "[#1092](https://github.com/hw-native-sys/simpler/pull/1092)",
+      "title": "[simpler L3 collective kernel optimizations](34-simpler-l3-collective-optimizations.md)"
+    },
+    {
+      "plan": "37",
+      "repo": "simpler",
+      "prs": "[#1271](https://github.com/hw-native-sys/simpler/pull/1271)",
+      "title": "[Bidirectional ring allreduce (simpler)](37-simpler-bidirectional-ring-allreduce.md)"
+    },
+    {
+      "plan": "40",
+      "repo": "pypto",
+      "prs": "[#1942](https://github.com/hw-native-sys/pypto/pull/1942)",
+      "title": "[Ring allreduce composite intrinsic](40-pypto-ring-allreduce-composite-intrinsic.md)"
+    },
+    {
+      "plan": "43",
+      "repo": "pypto",
+      "prs": "[#1967](https://github.com/hw-native-sys/pypto/pull/1967)",
+      "title": "[Push-based allgather composite](43-pypto-push-based-allgather.md)"
+    },
+    {
+      "plan": "45",
+      "repo": "simpler",
+      "prs": "[#1294](https://github.com/hw-native-sys/simpler/pull/1294)",
+      "title": "[Relocate collective examples into tests/st scene tests](45-simpler-collectives-scene-tests.md)"
+    },
+    {
+      "plan": "47",
+      "repo": "pypto",
+      "prs": "[#1968](https://github.com/hw-native-sys/pypto/pull/1968)",
+      "title": "[alloc_window_buffer(shape, dtype) overload](47-pypto-alloc-window-buffer-shaped.md)"
     }
   ]
 }

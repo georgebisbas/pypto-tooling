@@ -116,25 +116,25 @@
       "max_chars": 8000
     },
     "flows/matmul_demo": {
-      "path": "pypto-3.0-notes/matmul_demo.md",
+      "path": "pypto-3.0-notes/matmul/matmul_demo.md",
       "max_chars": 8000,
       "tier": "enriched"
     },
     "flows/distributed_allreduce": {
       "paths": [
-        "pypto-3.0-notes/simpler_distributed_allreduce.md",
+        "pypto-3.0-notes/distributed/simpler_distributed_allreduce.md",
         "pypto/docs/en/dev/distributed_ops.md"
       ],
       "max_chars": 8000
     },
     "flows/dependency_triangle": {
-      "path": "pypto-3.0-notes/dependency_triangle.md",
+      "path": "pypto-3.0-notes/architecture/dependency_triangle.md",
       "max_chars": 8000,
       "tier": "enriched"
     },
     "flows/performance": {
       "paths": [
-        "pypto-3.0-notes/performance_tuning.md/SKILL.md",
+        "pypto-3.0-notes/performance_tuning/SKILL.md",
         "pypto/docs/en/dev/01-compile-profiling.md",
         "pypto/docs/en/dev/03-runtime-dfx.md"
       ],
@@ -149,7 +149,7 @@
       "tier": "canonical"
     },
     "ascend/arch_families": {
-      "path": "pypto-3.0-notes/performance_tuning.md/ascend-architectures.md",
+      "path": "pypto-3.0-notes/performance_tuning/ascend-architectures.md",
       "max_chars": 12000,
       "tier": "enriched"
     },
@@ -233,11 +233,11 @@
     "pypto_lib_models": "pypto-3.0-notes/pypto-lib-status/models.md",
     "pypto_lib_distributed_support": "pypto-3.0-notes/pypto-lib-status/distributed-support.md",
     "moe": "pypto-3.0-notes/pypto-lib-status/moe.md",
-    "pass_infrastructure": "pypto-3.0-notes/pass_infrastructure.md",
-    "codegen_infrastructure": "pypto-3.0-notes/codegen_infrastructure.md",
-    "dependency_triangle": "pypto-3.0-notes/dependency_triangle.md",
-    "notes_simpler": "pypto-3.0-notes/notes_simpler.md",
-    "kernel_orchestration": "pypto-3.0-notes/kernel_orchestration.md",
+    "pass_infrastructure": "pypto-3.0-notes/infrastructure/pass_infrastructure.md",
+    "codegen_infrastructure": "pypto-3.0-notes/infrastructure/codegen_infrastructure.md",
+    "dependency_triangle": "pypto-3.0-notes/architecture/dependency_triangle.md",
+    "notes_simpler": "pypto-3.0-notes/simpler/notes_simpler.md",
+    "kernel_orchestration": "pypto-3.0-notes/architecture/kernel_orchestration.md",
     "stack_availability": "pypto-3.0-notes/collectives_benchmarking/stack_availability.md",
     "host_collectives": "pypto-3.0-notes/memories/host_collectives.md",
     "distributed_work_policy": "pypto-3.0-notes/agent/distributed_work_policy.md",
@@ -254,7 +254,7 @@
         "pypto/docs/en/dev/00-ecosystem.md"
       ],
       "read_first_enriched": [
-        "pypto-3.0-notes/pypto3.0-intro.md"
+        "pypto-3.0-notes/architecture/pypto3.0-intro.md"
       ],
       "rules": [],
       "entrypoint_areas": ["pypto"],
@@ -283,7 +283,7 @@
         "pypto/docs/en/dev/passes/00-pass_manager.md"
       ],
       "read_first_enriched": [
-        "pypto-3.0-notes/pass_infrastructure.md"
+        "pypto-3.0-notes/infrastructure/pass_infrastructure.md"
       ],
       "rules": [
         "pypto/.claude/rules/pass-submit-awareness.md",
@@ -301,7 +301,7 @@
         "pypto/docs/en/dev/codegen/00-pto_codegen.md"
       ],
       "read_first_enriched": [
-        "pypto-3.0-notes/codegen_infrastructure.md"
+        "pypto-3.0-notes/infrastructure/codegen_infrastructure.md"
       ],
       "rules": [
         "pypto/.claude/rules/cross-layer-sync.md"
@@ -316,7 +316,7 @@
         "pypto/docs/en/dev/codegen/01-orchestration_codegen.md"
       ],
       "read_first_enriched": [
-        "pypto-3.0-notes/kernel_orchestration.md"
+        "pypto-3.0-notes/architecture/kernel_orchestration.md"
       ],
       "rules": [
         "pypto/.claude/rules/cross-layer-sync.md"
@@ -329,8 +329,8 @@
       "description": "N6 distributed ops, collectives, multi-rank",
       "read_first_canonical": [
         "pypto/docs/en/dev/distributed_ops.md",
-        "pypto/docs/en/dev/passes/37-materialize_comm_domain_scopes.md",
-        "pypto/docs/en/dev/passes/38-lower_host_tensor_collectives.md"
+        "pypto/docs/en/dev/passes/38-materialize_comm_domain_scopes.md",
+        "pypto/docs/en/dev/passes/39-lower_host_tensor_collectives.md"
       ],
       "read_first_enriched": [
         "pypto-3.0-notes/abstractions/composite_collectives.md",
@@ -366,8 +366,8 @@
       "description": "Host builtin collectives program (plan 33): barrier, broadcast, reduce_scatter, allgather on #1798 rail",
       "read_first_canonical": [
         "pypto/docs/en/dev/distributed_ops.md",
-        "pypto/docs/en/dev/passes/37-materialize_comm_domain_scopes.md",
-        "pypto/docs/en/dev/passes/38-lower_host_tensor_collectives.md"
+        "pypto/docs/en/dev/passes/38-materialize_comm_domain_scopes.md",
+        "pypto/docs/en/dev/passes/39-lower_host_tensor_collectives.md"
       ],
       "read_first_enriched": [
         "pypto-3.0-notes/memories/host_collectives.md",
@@ -388,8 +388,8 @@
         "pypto/docs/en/dev/distributed_ops.md"
       ],
       "read_first_enriched": [
-        "pypto-3.0-notes/codegen_infrastructure.md",
-        "pypto-3.0-notes/pypto-3.0-distributed_support.md"
+        "pypto-3.0-notes/infrastructure/codegen_infrastructure.md",
+        "pypto-3.0-notes/distributed/pypto-3.0-distributed_support.md"
       ],
       "rules": [
         "pypto/.claude/rules/cross-layer-sync.md"
@@ -406,8 +406,8 @@
         "simpler/docs/remote-l3-worker-design.md"
       ],
       "read_first_enriched": [
-        "pypto-3.0-notes/notes_simpler.md",
-        "pypto-3.0-notes/simpler_distributed_allreduce.md"
+        "pypto-3.0-notes/simpler/notes_simpler.md",
+        "pypto-3.0-notes/distributed/simpler_distributed_allreduce.md"
       ],
       "rules": [
         "simpler/.claude/rules/ascend.md"
@@ -424,7 +424,7 @@
         "pypto-lib/docs/debugging.md"
       ],
       "read_first_enriched": [
-        "pypto-3.0-notes/pypto-lib-summary.md",
+        "pypto-3.0-notes/pypto-lib-status/pypto-lib-summary.md",
         "pypto-3.0-notes/pypto-lib-status/README.md",
         "pypto-3.0-notes/pypto-lib-status/models.md",
         "pypto-3.0-notes/pypto-lib-status/building-blocks.md"
@@ -443,7 +443,7 @@
         "PTOAS/docs/PTO_IR_manual.md"
       ],
       "read_first_enriched": [
-        "pypto-3.0-notes/PTOAS.md"
+        "pypto-3.0-notes/architecture/PTOAS.md"
       ],
       "rules": [
         "PTOAS/.claude/rules/cross-layer-sync.md"
@@ -459,7 +459,7 @@
         "pto-isa/docs/PTOISA.md"
       ],
       "read_first_enriched": [
-        "pypto-3.0-notes/overview_pto-isa.md"
+        "pypto-3.0-notes/architecture/overview_pto-isa.md"
       ],
       "rules": [
         "pto-isa/docs/agent.md"
@@ -476,7 +476,7 @@
         "simpler/docs/orchestrator.md"
       ],
       "read_first_enriched": [
-        "pypto-3.0-notes/notes_simpler.md"
+        "pypto-3.0-notes/simpler/notes_simpler.md"
       ],
       "rules": [
         "simpler/.claude/rules/ascend.md",
@@ -493,7 +493,7 @@
         "pypto-lib/docs/compile-runtime-workflow.md"
       ],
       "read_first_enriched": [
-        "pypto-3.0-notes/pypto-lib-summary.md",
+        "pypto-3.0-notes/pypto-lib-status/pypto-lib-summary.md",
         "pypto-3.0-notes/pypto-lib-status/README.md"
       ],
       "rules": [
@@ -530,8 +530,8 @@
         "pypto/docs/en/dev/03-runtime-dfx.md"
       ],
       "read_first_enriched": [
-        "pypto-3.0-notes/performance_tuning.md/SKILL.md",
-        "pypto-3.0-notes/performance_tuning.md/profiling.md"
+        "pypto-3.0-notes/performance_tuning/SKILL.md",
+        "pypto-3.0-notes/performance_tuning/profiling.md"
       ],
       "rules": [],
       "entrypoint_areas": ["pypto:passes", "simpler:worker"],
@@ -544,7 +544,7 @@
         "simpler/docs/hardware/chip-architecture.md"
       ],
       "read_first_enriched": [
-        "pypto-3.0-notes/performance_tuning.md/ascend-architectures.md"
+        "pypto-3.0-notes/performance_tuning/ascend-architectures.md"
       ],
       "rules": [
         "simpler/.claude/rules/ascend.md"
@@ -577,7 +577,7 @@
         "pypto-lib/docs/performance-tuning.md"
       ],
       "read_first_enriched": [
-        "pypto-3.0-notes/performance_tuning.md/ascend-architectures.md"
+        "pypto-3.0-notes/performance_tuning/ascend-architectures.md"
       ],
       "rules": [],
       "entrypoint_areas": ["pypto:passes", "pypto-lib:golden"],

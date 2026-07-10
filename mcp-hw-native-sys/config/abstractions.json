@@ -90,7 +90,7 @@
       "pypto/docs/en/dev/passes/00-pass_manager.md"
     ],
     "docs_enriched": [
-      "pypto-3.0-notes/pass_infrastructure.md"
+      "pypto-3.0-notes/infrastructure/pass_infrastructure.md"
     ],
     "rules": [
       "pypto/.claude/rules/pass-complexity.md"
@@ -119,7 +119,7 @@
       "pypto/docs/en/dev/passes/00-pass_manager.md"
     ],
     "docs_enriched": [
-      "pypto-3.0-notes/pass_infrastructure.md"
+      "pypto-3.0-notes/infrastructure/pass_infrastructure.md"
     ],
     "rules": [
       "pypto/.claude/rules/pass-context-config.md"
@@ -201,7 +201,7 @@
       "pypto/docs/en/dev/ir/02-types.md"
     ],
     "docs_enriched": [
-      "pypto-3.0-notes/pypto-3.0-distributed_support.md"
+      "pypto-3.0-notes/distributed/pypto-3.0-distributed_support.md"
     ],
     "rules": [],
     "related": [
@@ -225,10 +225,10 @@
       "pypto/include/pypto/ir/stmt.h"
     ],
     "docs_canonical": [
-      "pypto/docs/en/dev/passes/37-materialize_comm_domain_scopes.md"
+      "pypto/docs/en/dev/passes/38-materialize_comm_domain_scopes.md"
     ],
     "docs_enriched": [
-      "pypto-3.0-notes/pypto-3.0-distributed_support.md"
+      "pypto-3.0-notes/distributed/pypto-3.0-distributed_support.md"
     ],
     "rules": [],
     "related": [
@@ -253,10 +253,10 @@
       "pypto/src/ir/transforms/normalize_return_order_pass.cpp"
     ],
     "docs_canonical": [
-      "pypto/docs/en/dev/passes/24-normalize_return_order.md"
+      "pypto/docs/en/dev/passes/23-normalize_return_order.md"
     ],
     "docs_enriched": [
-      "pypto-3.0-notes/codegen_infrastructure.md"
+      "pypto-3.0-notes/infrastructure/codegen_infrastructure.md"
     ],
     "rules": [
       "pypto/.claude/rules/first-principles.md"
@@ -285,7 +285,7 @@
       "pypto/docs/en/dev/passes/00-pass_manager.md"
     ],
     "docs_enriched": [
-      "pypto-3.0-notes/pass_infrastructure.md"
+      "pypto-3.0-notes/infrastructure/pass_infrastructure.md"
     ],
     "rules": [],
     "related": [
@@ -310,7 +310,7 @@
       "pypto/src/ir/transforms/lower_host_tensor_collectives_pass.cpp"
     ],
     "docs_canonical": [
-      "pypto/docs/en/dev/passes/38-lower_host_tensor_collectives.md"
+      "pypto/docs/en/dev/passes/39-lower_host_tensor_collectives.md"
     ],
     "docs_enriched": [
       "pypto-3.0-notes/memories/host_collectives.md",
@@ -349,7 +349,7 @@
       "pypto/docs/en/dev/codegen/00-pto_codegen.md"
     ],
     "docs_enriched": [
-      "pypto-3.0-notes/codegen_infrastructure.md"
+      "pypto-3.0-notes/infrastructure/codegen_infrastructure.md"
     ],
     "rules": [
       "pypto/.claude/rules/cross-layer-sync.md"
@@ -381,7 +381,7 @@
       "pypto/docs/en/dev/codegen/01-orchestration_codegen.md"
     ],
     "docs_enriched": [
-      "pypto-3.0-notes/kernel_orchestration.md"
+      "pypto-3.0-notes/architecture/kernel_orchestration.md"
     ],
     "rules": [
       "pypto/.claude/rules/cross-layer-sync.md"
@@ -412,7 +412,7 @@
       "pypto/docs/en/dev/codegen/00-pto_codegen.md"
     ],
     "docs_enriched": [
-      "pypto-3.0-notes/codegen_infrastructure.md"
+      "pypto-3.0-notes/infrastructure/codegen_infrastructure.md"
     ],
     "rules": [
       "pypto/.claude/rules/first-principles.md"
@@ -500,8 +500,8 @@
       "PTOAS/docs/PTO_IR_manual.md"
     ],
     "docs_enriched": [
-      "pypto-3.0-notes/PTOAS.md",
-      "pypto-3.0-notes/pto_SSA.md"
+      "pypto-3.0-notes/architecture/PTOAS.md",
+      "pypto-3.0-notes/architecture/pto_SSA.md"
     ],
     "rules": [
       "PTOAS/.claude/rules/cross-layer-sync.md"
@@ -530,7 +530,7 @@
       "PTOAS/docs/PTO_IR_manual.md"
     ],
     "docs_enriched": [
-      "pypto-3.0-notes/pto_SSA.md"
+      "pypto-3.0-notes/architecture/pto_SSA.md"
     ],
     "rules": [],
     "related": [
@@ -557,7 +557,7 @@
       "PTOAS/README_en.md"
     ],
     "docs_enriched": [
-      "pypto-3.0-notes/PTOAS.md"
+      "pypto-3.0-notes/architecture/PTOAS.md"
     ],
     "rules": [],
     "related": [
@@ -585,7 +585,7 @@
       "pto-isa/docs/isa/"
     ],
     "docs_enriched": [
-      "pypto-3.0-notes/overview_pto-isa.md"
+      "pypto-3.0-notes/architecture/overview_pto-isa.md"
     ],
     "rules": [],
     "related": [
@@ -718,7 +718,7 @@
       "pto-isa/docs/isa/comm/TREDUCE.md"
     ],
     "docs_enriched": [
-      "pypto-3.0-notes/treduce.md"
+      "pypto-3.0-notes/distributed/treduce.md"
     ],
     "rules": [],
     "related": [
@@ -746,7 +746,7 @@
       "simpler/docs/task-flow.md"
     ],
     "docs_enriched": [
-      "pypto-3.0-notes/notes_simpler.md"
+      "pypto-3.0-notes/simpler/notes_simpler.md"
     ],
     "rules": [],
     "related": [
@@ -774,7 +774,7 @@
       "pypto/docs/en/dev/05-runtime-ring-sizing.md"
     ],
     "docs_enriched": [
-      "pypto-3.0-notes/notes_simpler.md"
+      "pypto-3.0-notes/simpler/notes_simpler.md"
     ],
     "rules": [],
     "related": [
@@ -802,7 +802,7 @@
       "simpler/docs/orchestrator.md"
     ],
     "docs_enriched": [
-      "pypto-3.0-notes/notes_simpler.md"
+      "pypto-3.0-notes/simpler/notes_simpler.md"
     ],
     "rules": [],
     "related": [
@@ -829,7 +829,7 @@
       "simpler/docs/comm-domain.md"
     ],
     "docs_enriched": [
-      "pypto-3.0-notes/simpler_distributed_allreduce.md"
+      "pypto-3.0-notes/distributed/simpler_distributed_allreduce.md"
     ],
     "rules": [
       "simpler/.claude/rules/ascend.md"
@@ -915,7 +915,7 @@
       "pypto/docs/en/dev/00-ecosystem.md"
     ],
     "docs_enriched": [
-      "pypto-3.0-notes/dependency_triangle.md"
+      "pypto-3.0-notes/architecture/dependency_triangle.md"
     ],
     "rules": [],
     "related": [
@@ -943,7 +943,7 @@
       "pypto-lib/docs/compile-runtime-workflow.md"
     ],
     "docs_enriched": [
-      "pypto-3.0-notes/pypto-lib-summary.md"
+      "pypto-3.0-notes/pypto-lib-status/pypto-lib-summary.md"
     ],
     "rules": [
       "pypto-lib/.claude/CLAUDE.md"
@@ -1050,7 +1050,7 @@
       "pypto/docs/en/dev/passes/00-pass_manager.md"
     ],
     "docs_enriched": [
-      "pypto-3.0-notes/pass_infrastructure.md"
+      "pypto-3.0-notes/infrastructure/pass_infrastructure.md"
     ],
     "rules": [
       "pypto/.claude/rules/pass-doc-ordering.md"
@@ -1107,7 +1107,7 @@
       "pypto/docs/en/dev/distributed_ops.md"
     ],
     "docs_enriched": [
-      "pypto-3.0-notes/codegen_infrastructure.md"
+      "pypto-3.0-notes/infrastructure/codegen_infrastructure.md"
     ],
     "rules": [],
     "related": [
@@ -1221,8 +1221,8 @@
       "pypto/docs/en/dev/passes/04-convert_to_ssa.md"
     ],
     "docs_enriched": [
-      "pypto-3.0-notes/pass_infrastructure.md",
-      "pypto-3.0-notes/pto_SSA.md"
+      "pypto-3.0-notes/infrastructure/pass_infrastructure.md",
+      "pypto-3.0-notes/architecture/pto_SSA.md"
     ],
     "rules": [],
     "related": [
@@ -1246,13 +1246,13 @@
       "pypto"
     ],
     "paths": [
-      "pypto/src/ir/transforms/init_mem_ref_pass.cpp"
+      "pypto/src/ir/transforms/init_memref.cpp"
     ],
     "docs_canonical": [
-      "pypto/docs/en/dev/passes/29-init_memref.md"
+      "pypto/docs/en/dev/passes/28-init_memref.md"
     ],
     "docs_enriched": [
-      "pypto-3.0-notes/pass_infrastructure.md"
+      "pypto-3.0-notes/infrastructure/pass_infrastructure.md"
     ],
     "rules": [],
     "related": [
@@ -1282,7 +1282,7 @@
       "pypto/docs/en/dev/passes/30-memory_reuse.md"
     ],
     "docs_enriched": [
-      "pypto-3.0-notes/pass_infrastructure.md"
+      "pypto-3.0-notes/infrastructure/pass_infrastructure.md"
     ],
     "rules": [],
     "related": [
@@ -1308,7 +1308,7 @@
       "pypto/src/ir/transforms/lower_composite_ops_pass.cpp"
     ],
     "docs_canonical": [
-      "pypto/docs/en/dev/passes/14-lower_composite_ops.md"
+      "pypto/docs/en/dev/passes/12-lower_composite_ops.md"
     ],
     "docs_enriched": [
       "pypto-3.0-notes/abstractions/allreduce.md"
@@ -1338,11 +1338,11 @@
       "pypto/src/ir/transforms/materialize_comm_domain_scopes_pass.cpp"
     ],
     "docs_canonical": [
-      "pypto/docs/en/dev/passes/37-materialize_comm_domain_scopes.md"
+      "pypto/docs/en/dev/passes/38-materialize_comm_domain_scopes.md"
     ],
     "docs_enriched": [
-      "pypto-3.0-notes/pass_infrastructure.md",
-      "pypto-3.0-notes/pypto-3.0-distributed_support.md"
+      "pypto-3.0-notes/infrastructure/pass_infrastructure.md",
+      "pypto-3.0-notes/distributed/pypto-3.0-distributed_support.md"
     ],
     "rules": [],
     "related": [
@@ -1368,10 +1368,10 @@
       "pypto/src/ir/transforms/convert_tensor_to_tile_ops_pass.cpp"
     ],
     "docs_canonical": [
-      "pypto/docs/en/dev/passes/12-convert_tensor_to_tile_ops.md"
+      "pypto/docs/en/dev/passes/10-convert_tensor_to_tile_ops.md"
     ],
     "docs_enriched": [
-      "pypto-3.0-notes/pass_infrastructure.md"
+      "pypto-3.0-notes/infrastructure/pass_infrastructure.md"
     ],
     "rules": [],
     "related": [
@@ -1531,7 +1531,7 @@
     ],
     "docs_enriched": [
       "pypto-3.0-notes/abstractions/simpler-abstractions.md",
-      "pypto-3.0-notes/simpler_distributed_allreduce.md"
+      "pypto-3.0-notes/distributed/simpler_distributed_allreduce.md"
     ],
     "rules": [],
     "related": [
@@ -1564,7 +1564,7 @@
     ],
     "docs_enriched": [
       "pypto-3.0-notes/abstractions/simpler-abstractions.md",
-      "pypto-3.0-notes/notes_simpler.md"
+      "pypto-3.0-notes/simpler/notes_simpler.md"
     ],
     "rules": [],
     "related": [
@@ -1595,7 +1595,7 @@
     ],
     "docs_enriched": [
       "pypto-3.0-notes/abstractions/pypto-abstractions.md",
-      "pypto-3.0-notes/kernel_orchestration.md"
+      "pypto-3.0-notes/architecture/kernel_orchestration.md"
     ],
     "rules": [],
     "related": [

@@ -279,7 +279,7 @@
         "duration_hint": "<30s"
       },
       "list_profiling_docs": {
-        "command": "find performance_tuning.md -name '*.md' | sort",
+        "command": "find performance_tuning -name '*.md' | sort",
         "category": "docs",
         "risk": "safe-read-only",
         "duration_hint": "<30s"
@@ -291,7 +291,7 @@
         "duration_hint": "<30s"
       },
       "search_reduction_notes": {
-        "command": "rg -n 'treduce|allreduce|reduce' treduce.md distributed || true",
+        "command": "rg -n 'treduce|allreduce|reduce' distributed/treduce.md distributed || true",
         "category": "docs",
         "risk": "safe-read-only",
         "duration_hint": "<30s"

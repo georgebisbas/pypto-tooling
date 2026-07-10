@@ -15,8 +15,17 @@ dependencies = [
   "mcp>=1.8.0"
 ]
 
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0"
+]
+
 [project.scripts]
 hw-native-sys-mcp = "mcp_hwnative_sys.server:main"
 
 [tool.setuptools]
 packages = ["mcp_hwnative_sys"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

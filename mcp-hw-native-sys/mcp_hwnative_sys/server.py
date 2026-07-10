@@ -12,6 +12,7 @@ from pydantic import Field
 from mcp_hwnative_sys.knowledge import get_repository_meta, register_knowledge
 from mcp_hwnative_sys.programs import match_program_hints
 from mcp_hwnative_sys.paths import (
+    is_within,
     load_repos_config,
     safe_relpath,
     workspace_root,
@@ -731,7 +732,7 @@ def read_file(
         raise ValueError(f"Repository path does not exist: {repo_cfg.path}")
 
     file_path = (repo_cfg.path / path).resolve()
-    if not str(file_path).startswith(str(repo_cfg.path.resolve())):
+    if not is_within(file_path, repo_cfg.path.resolve()):
         raise ValueError(f"Path escapes repository root: {path}")
     if not file_path.exists():
         raise FileNotFoundError(f"File not found: {path}")

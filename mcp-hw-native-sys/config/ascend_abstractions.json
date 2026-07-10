@@ -7,7 +7,7 @@
     "arch_families": ["a2a3", "a5"],
     "paths": ["simpler/docs/hardware/chip-architecture.md"],
     "docs_canonical": ["simpler/docs/hardware/chip-architecture.md"],
-    "docs_enriched": ["pypto-3.0-notes/performance_tuning.md/ascend-architectures.md"],
+    "docs_enriched": ["pypto-3.0-notes/performance_tuning/ascend-architectures.md"],
     "rules": ["simpler/.claude/rules/ascend.md"],
     "related": ["AIV", "TMATMUL", "L0A", "L0B", "L0C"],
     "downstream": ["cube matmul kernels", "mixed AIC+AIV kernels"]
@@ -20,7 +20,7 @@
     "arch_families": ["a2a3", "a5"],
     "paths": ["simpler/docs/hardware/chip-architecture.md"],
     "docs_canonical": ["simpler/docs/hardware/chip-architecture.md"],
-    "docs_enriched": ["pypto-3.0-notes/performance_tuning.md/ascend-architectures.md"],
+    "docs_enriched": ["pypto-3.0-notes/performance_tuning/ascend-architectures.md"],
     "rules": ["simpler/.claude/rules/ascend.md"],
     "related": ["AIC", "UB", "MTE2", "MTE3"],
     "downstream": ["element-wise ops", "vector tile kernels"]
@@ -33,7 +33,7 @@
     "arch_families": ["a2a3", "a5"],
     "paths": ["simpler/docs/chip-level-arch.md"],
     "docs_canonical": ["simpler/docs/chip-level-arch.md", "simpler/docs/task-flow.md"],
-    "docs_enriched": ["pypto-3.0-notes/notes_simpler.md"],
+    "docs_enriched": ["pypto-3.0-notes/simpler/notes_simpler.md"],
     "rules": ["simpler/.claude/rules/ascend.md"],
     "related": ["block_dim", "CallableHandle"],
     "downstream": ["task scheduling", "orchestration codegen"]
@@ -49,7 +49,7 @@
       "simpler/src/a5/platform/include/common/platform_config.h"
     ],
     "docs_canonical": ["simpler/docs/chip-level-arch.md"],
-    "docs_enriched": ["pypto-3.0-notes/performance_tuning.md/ascend-architectures.md"],
+    "docs_enriched": ["pypto-3.0-notes/performance_tuning/ascend-architectures.md"],
     "rules": [],
     "related": ["AIC", "AIV"],
     "downstream": ["kernel launch", "strong scaling sweeps"]
@@ -100,7 +100,7 @@
     "tags": ["l0", "cube", "a2a3", "a5"],
     "arch_families": ["a2a3", "a5"],
     "paths": ["pypto/include/pypto/backend/910B/backend_910b_handler.h"],
-    "docs_enriched": ["pypto-3.0-notes/performance_tuning.md/ascend-architectures.md"],
+    "docs_enriched": ["pypto-3.0-notes/performance_tuning/ascend-architectures.md"],
     "rules": [],
     "related": ["L0B", "L0C", "TMATMUL"],
     "downstream": ["cube left operand staging"]
@@ -112,7 +112,7 @@
     "tags": ["l0", "cube", "a2a3", "a5"],
     "arch_families": ["a2a3", "a5"],
     "paths": ["pypto/include/pypto/backend/910B/backend_910b_handler.h"],
-    "docs_enriched": ["pypto-3.0-notes/performance_tuning.md/ascend-architectures.md"],
+    "docs_enriched": ["pypto-3.0-notes/performance_tuning/ascend-architectures.md"],
     "rules": [],
     "related": ["L0A", "L0C", "TMATMUL"],
     "downstream": ["cube right operand staging"]
@@ -127,7 +127,7 @@
       "pypto/include/pypto/backend/910B/backend_910b_handler.h",
       "pypto/include/pypto/backend/950/backend_950_handler.h"
     ],
-    "docs_enriched": ["pypto-3.0-notes/performance_tuning.md/ascend-architectures.md"],
+    "docs_enriched": ["pypto-3.0-notes/performance_tuning/ascend-architectures.md"],
     "rules": [],
     "related": ["TMATMUL", "BackendHandler910B", "BackendHandler950"],
     "downstream": ["matmul accumulator", "AutoTileMatmulL0"]
@@ -166,7 +166,7 @@
     "arch_families": ["a2a3", "a5"],
     "paths": ["simpler/docs/hardware/chip-architecture.md"],
     "docs_canonical": ["simpler/docs/hardware/chip-architecture.md"],
-    "docs_enriched": ["pypto-3.0-notes/performance_tuning.md/ascend-architectures.md"],
+    "docs_enriched": ["pypto-3.0-notes/performance_tuning/ascend-architectures.md"],
     "rules": [],
     "related": ["MTE2", "MTE3", "HCCLWindow", "BackendHandler910B"],
     "downstream": ["global tensors", "A2A3 cross-core GM round-trips"]
@@ -178,7 +178,7 @@
     "tags": ["a2a3", "910b", "910c", "a2", "a3"],
     "arch_families": ["a2a3"],
     "paths": ["pypto/include/pypto/backend/910B/"],
-    "docs_enriched": ["pypto-3.0-notes/performance_tuning.md/ascend-architectures.md"],
+    "docs_enriched": ["pypto-3.0-notes/performance_tuning/ascend-architectures.md"],
     "rules": [],
     "related": ["A2A3", "BackendHandler910B"],
     "downstream": ["a2a3 platform", "a2a3sim"]
@@ -190,7 +190,7 @@
     "tags": ["a2a3", "a2a3sim", "910b", "910c"],
     "arch_families": ["a2a3"],
     "paths": ["simpler/src/a2a3/"],
-    "docs_enriched": ["pypto-3.0-notes/performance_tuning.md/ascend-architectures.md"],
+    "docs_enriched": ["pypto-3.0-notes/performance_tuning/ascend-architectures.md"],
     "rules": ["simpler/.claude/rules/ascend.md"],
     "related": ["Ascend910B", "BackendHandler910B"],
     "downstream": ["distributed STs on HCCL today"]
@@ -202,7 +202,7 @@
     "tags": ["a5", "950", "arch35"],
     "arch_families": ["a5"],
     "paths": ["pypto/include/pypto/backend/950/"],
-    "docs_enriched": ["pypto-3.0-notes/performance_tuning.md/ascend-architectures.md"],
+    "docs_enriched": ["pypto-3.0-notes/performance_tuning/ascend-architectures.md"],
     "rules": [],
     "related": ["A5", "BackendHandler950"],
     "downstream": ["a5 platform", "a5sim"]
@@ -214,7 +214,7 @@
     "tags": ["a5", "a5sim", "950"],
     "arch_families": ["a5"],
     "paths": ["simpler/src/a5/"],
-    "docs_enriched": ["pypto-3.0-notes/performance_tuning.md/ascend-architectures.md"],
+    "docs_enriched": ["pypto-3.0-notes/performance_tuning/ascend-architectures.md"],
     "rules": ["simpler/.claude/rules/ascend.md"],
     "related": ["Ascend950", "BackendHandler950"],
     "downstream": ["decode/prefill 950 kernels"]
@@ -226,7 +226,7 @@
     "tags": ["a2a3", "gm", "alignment", "512"],
     "arch_families": ["a2a3"],
     "paths": ["pypto/include/pypto/backend/910B/backend_910b_handler.h"],
-    "docs_enriched": ["pypto-3.0-notes/performance_tuning.md/ascend-architectures.md"],
+    "docs_enriched": ["pypto-3.0-notes/performance_tuning/ascend-architectures.md"],
     "rules": [],
     "related": ["GM", "A2A3", "RequiresGMPipeBuffer"],
     "downstream": ["mixed kernel legalization", "512B GM alignment"]
@@ -238,7 +238,7 @@
     "tags": ["a5", "fractal", "alignment", "128"],
     "arch_families": ["a5"],
     "paths": ["pypto/include/pypto/backend/950/backend_950_handler.h"],
-    "docs_enriched": ["pypto-3.0-notes/performance_tuning.md/ascend-architectures.md"],
+    "docs_enriched": ["pypto-3.0-notes/performance_tuning/ascend-architectures.md"],
     "rules": [],
     "related": ["A5", "RequiresVtoCFractalAdapt"],
     "downstream": ["fractal V2C adapter", "256KiB L0C"]
@@ -276,7 +276,7 @@
     "repos": ["simpler", "pypto"],
     "tags": ["hccl", "window", "distributed"],
     "arch_families": ["a2a3", "a5"],
-    "paths": ["simpler/docs/comm-domain.md", "simpler/examples/workers/l3/allgather_distributed/"],
+    "paths": ["simpler/docs/comm-domain.md", "simpler/examples/workers/l3/allreduce/"],
     "docs_canonical": ["pypto/docs/en/dev/distributed_ops.md"],
     "docs_enriched": ["pypto-3.0-notes/abstractions/composite_collectives.md"],
     "rules": [],
@@ -289,9 +289,9 @@
     "repos": ["simpler"],
     "tags": ["hccl", "remote", "peer"],
     "arch_families": ["a2a3", "a5"],
-    "paths": ["simpler/examples/workers/l3/allgather_distributed/"],
+    "paths": ["simpler/examples/workers/l3/allreduce/"],
     "docs_canonical": ["pypto/docs/en/dev/distributed_ops.md"],
-    "docs_enriched": ["pypto-3.0-notes/simpler_distributed_allreduce.md"],
+    "docs_enriched": ["pypto-3.0-notes/distributed/simpler_distributed_allreduce.md"],
     "rules": [],
     "related": ["HCCLWindow", "pld.tile.remote_load"],
     "downstream": ["peer reads", "allgather lowering"]
@@ -328,8 +328,8 @@
     "repos": ["pypto"],
     "tags": ["hccl", "signal", "barrier", "nr"],
     "arch_families": ["a2a3", "a5"],
-    "paths": ["pypto/docs/en/dev/passes/14-lower_composite_ops.md"],
-    "docs_canonical": ["pypto/docs/en/dev/passes/14-lower_composite_ops.md"],
+    "paths": ["pypto/docs/en/dev/passes/12-lower_composite_ops.md"],
+    "docs_canonical": ["pypto/docs/en/dev/passes/12-lower_composite_ops.md"],
     "docs_enriched": ["pypto-3.0-notes/abstractions/composite_collectives.md"],
     "rules": ["pypto/.claude/rules/first-principles.md"],
     "related": ["NotifyOp", "WaitCmp", "HCCLWindow"],

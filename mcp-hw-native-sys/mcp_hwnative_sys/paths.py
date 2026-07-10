@@ -38,13 +38,28 @@ def contract_artifacts_config_path() -> Path:
     return project_root() / "config" / "contract_artifacts.json"
 
 
+def is_within(path: Path, root: Path) -> bool:
+    """Return True if ``path`` is ``root`` itself or nested under it.
+
+    Boundary-aware containment check. Unlike ``str.startswith`` on the string
+    forms, this does not treat a sibling directory as contained: given
+    ``root=/ws/pypto``, the path ``/ws/pypto-lib/x`` is correctly rejected.
+    Both operands should already be resolved (absolute, symlink-free).
+    """
+    try:
+        path.relative_to(root)
+        return True
+    except ValueError:
+        return False
+
+
 def resolve_doc_path(relative_path: str) -> Path:
     """Resolve a document path — MCP-owned content/ lives under project_root."""
     normalized = relative_path.replace("\\", "/")
     if normalized.startswith("content/"):
         resolved = (project_root() / normalized).resolve()
         root = project_root().resolve()
-        if not str(resolved).startswith(str(root)):
+        if not is_within(resolved, root):
             raise ValueError(f"Path escapes MCP project root: {relative_path}")
         return resolved
     return resolve_workspace_path(relative_path)
@@ -58,7 +73,9 @@ def load_repos_config() -> dict[str, Any]:
     if _repos_config_cache is None:
         with repos_config_path().open("r", encoding="utf-8") as handle:
             _repos_config_cache = json.load(handle)
-    return _repos_config_cache
+    config = _repos_config_cache
+    assert config is not None
+    return config
 
 
 def workspace_root(raw_config: dict[str, Any] | None = None) -> Path:
@@ -92,6 +109,6 @@ def resolve_workspace_path(relative_path: str) -> Path:
     else:
         resolved = (root / relative_path).resolve()
 
-    if not str(resolved).startswith(str(root)):
+    if not is_within(resolved, root):
         raise ValueError(f"Path escapes workspace root: {relative_path}")
     return resolved
