@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 import fnmatch
-import json
 from pathlib import Path
 from typing import Any
 
-from mcp_hwnative_sys.paths import project_root
+from mcp_hwnative_sys.paths import load_json_cached, project_root
 
 
 def programs_config_path() -> Path:
@@ -16,8 +15,7 @@ def load_programs_config() -> dict[str, Any]:
     path = programs_config_path()
     if not path.exists():
         return {"programs": []}
-    with path.open("r", encoding="utf-8") as handle:
-        return json.load(handle)
+    return load_json_cached(path)
 
 
 def match_program_hints(repo_name: str, branch: str) -> list[dict[str, Any]]:

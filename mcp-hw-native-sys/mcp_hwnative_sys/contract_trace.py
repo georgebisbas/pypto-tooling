@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-import json
 from typing import Any
 
 from mcp_hwnative_sys.knowledge import load_abstractions
-from mcp_hwnative_sys.paths import contract_artifacts_config_path
+from mcp_hwnative_sys.paths import contract_artifacts_config_path, load_json_cached
 from mcp_hwnative_sys.program_status import program_status_impl
 
 # Path-prefix heuristics (moved from knowledge.py to avoid import cycles)
@@ -126,19 +125,11 @@ def _trace_stack_base(symbol_or_path: str) -> dict[str, Any]:
         "hint": "Use explain_abstraction or search_abstractions for concepts; pass a repo-relative path for heuristics.",
     }
 
-_contract_artifacts_cache: dict[str, dict[str, Any]] | None = None
-
-
 def _load_contract_artifacts() -> dict[str, dict[str, Any]]:
-    global _contract_artifacts_cache
-    if _contract_artifacts_cache is None:
-        path = contract_artifacts_config_path()
-        if path.exists():
-            with path.open("r", encoding="utf-8") as fh:
-                _contract_artifacts_cache = json.load(fh)
-        else:
-            _contract_artifacts_cache = {}
-    return _contract_artifacts_cache
+    path = contract_artifacts_config_path()
+    if not path.exists():
+        return {}
+    return load_json_cached(path)
 
 
 def trace_contract_impl(symbol_or_path: str) -> dict[str, Any]:

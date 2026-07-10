@@ -280,14 +280,37 @@ def _run_command(
     cwd: Path | None = None,
     timeout_seconds: int = 60,
 ) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        args,
-        cwd=str(cwd) if cwd else None,
-        text=True,
-        capture_output=True,
-        check=False,
-        timeout=timeout_seconds,
-    )
+    """Run a command, capturing output.
+
+    A timeout is reported as a completed process with exit code 124 (the
+    conventional timeout code) and the partial output preserved, so callers
+    surface it via their normal ``exit_code`` / ``stderr`` envelopes instead
+    of the server raising ``TimeoutExpired``. A missing executable raises a
+    clean ``RuntimeError`` naming the binary.
+    """
+    try:
+        return subprocess.run(
+            args,
+            cwd=str(cwd) if cwd else None,
+            text=True,
+            capture_output=True,
+            check=False,
+            timeout=timeout_seconds,
+        )
+    except subprocess.TimeoutExpired as exc:
+        # Under text=True these are str, but typeshed types them loosely.
+        stdout = exc.stdout if isinstance(exc.stdout, str) else ""
+        stderr = exc.stderr if isinstance(exc.stderr, str) else ""
+        note = f"Command timed out after {timeout_seconds}s: {' '.join(args)}"
+        result: subprocess.CompletedProcess[str] = subprocess.CompletedProcess(
+            args=args,
+            returncode=124,
+            stdout=stdout,
+            stderr=(stderr + ("\n" if stderr else "") + note),
+        )
+        return result
+    except FileNotFoundError as exc:
+        raise RuntimeError(f"Executable not found in PATH: {args[0]!r} ({exc})") from exc
 
 
 def _run_shell(command: str, cwd: Path, timeout_seconds: int) -> subprocess.CompletedProcess[str]:

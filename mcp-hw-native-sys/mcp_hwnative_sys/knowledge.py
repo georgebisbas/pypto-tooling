@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-import json
 import re
 from datetime import date, datetime
-from pathlib import Path
 from typing import Annotated, Any
 
 from mcp.server.fastmcp import FastMCP
@@ -15,11 +13,11 @@ from mcp_hwnative_sys.paths import (
     ascend_abstractions_config_path,
     entrypoints_config_path,
     knowledge_config_path,
+    load_json_cached,
     load_repos_config,
     project_root,
     resolve_doc_path,
     resolve_workspace_path,
-    safe_relpath,
     workspace_root,
 )
 
@@ -27,40 +25,33 @@ EPHEMERAL_PREFIXES = ("pypto-3.0-notes/pr_plans/", "pypto-3.0-notes/pull_request
 NOTES_FRESHNESS_PATH = "pypto-3.0-notes/NOTES_FRESHNESS.md"
 
 
-_knowledge_config_cache: dict[str, Any] | None = None
-_entrypoints_cache: dict[str, Any] | None = None
-_abstractions_cache: dict[str, Any] | None = None
-
-
-def _load_json(path: Path) -> dict[str, Any]:
-    with path.open("r", encoding="utf-8") as handle:
-        return json.load(handle)
-
-
 def load_knowledge_config() -> dict[str, Any]:
-    global _knowledge_config_cache
-    if _knowledge_config_cache is None:
-        _knowledge_config_cache = _load_json(knowledge_config_path())
-    return _knowledge_config_cache
+    return load_json_cached(knowledge_config_path())
 
 
 def load_entrypoints() -> dict[str, Any]:
-    global _entrypoints_cache
-    if _entrypoints_cache is None:
-        _entrypoints_cache = _load_json(entrypoints_config_path())
-    return _entrypoints_cache
+    return load_json_cached(entrypoints_config_path())
+
+
+# Merged abstractions are cached against the mtimes of both source files so an
+# edit to either abstractions.json or ascend_abstractions.json is picked up.
+_abstractions_cache: tuple[tuple[float, float], dict[str, Any]] | None = None
 
 
 def load_abstractions() -> dict[str, Any]:
     global _abstractions_cache
-    if _abstractions_cache is None:
-        merged = _load_json(abstractions_config_path())
-        ascend_path = ascend_abstractions_config_path()
-        if ascend_path.exists():
-            ascend_cards = _load_json(ascend_path)
-            merged.update(ascend_cards)
-        _abstractions_cache = merged
-    return _abstractions_cache
+    base_path = abstractions_config_path()
+    ascend_path = ascend_abstractions_config_path()
+    base_mtime = base_path.stat().st_mtime
+    ascend_mtime = ascend_path.stat().st_mtime if ascend_path.exists() else 0.0
+    key = (base_mtime, ascend_mtime)
+    if _abstractions_cache is not None and _abstractions_cache[0] == key:
+        return _abstractions_cache[1]
+    merged = dict(load_json_cached(base_path))
+    if ascend_path.exists():
+        merged.update(load_json_cached(ascend_path))
+    _abstractions_cache = (key, merged)
+    return merged
 
 
 _ABSTRACTION_ALIASES: dict[str, str] = {
@@ -114,11 +105,22 @@ def resolve_doc_tier(relative_path: str) -> str:
     return "canonical"
 
 
+# Cache the parsed freshness table against the source file's mtime — it is
+# read once per enriched path in knowledge_health_impl's loops.
+_notes_freshness_cache: tuple[float, dict[str, str]] | None = None
+
+
 def _parse_notes_freshness() -> dict[str, str]:
+    global _notes_freshness_cache
     root = workspace_root()
     freshness_path = root / NOTES_FRESHNESS_PATH
     if not freshness_path.exists():
+        _notes_freshness_cache = None
         return {}
+
+    mtime = freshness_path.stat().st_mtime
+    if _notes_freshness_cache is not None and _notes_freshness_cache[0] == mtime:
+        return _notes_freshness_cache[1]
 
     text = freshness_path.read_text(encoding="utf-8")
     mapping: dict[str, str] = {}
@@ -130,6 +132,7 @@ def _parse_notes_freshness() -> dict[str, str]:
         else:
             rel = f"pypto-3.0-notes/{link_path}"
         mapping[rel] = verified
+    _notes_freshness_cache = (mtime, mapping)
     return mapping
 
 
