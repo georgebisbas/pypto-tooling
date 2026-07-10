@@ -245,7 +245,18 @@
     "pypto_abstractions": "pypto-3.0-notes/abstractions/pypto-abstractions.md",
     "simpler_abstractions": "pypto-3.0-notes/abstractions/simpler-abstractions.md",
     "ptoisa_abstractions": "pypto-3.0-notes/abstractions/pto-isa-abstractions.md",
-    "ptoas_abstractions": "pypto-3.0-notes/abstractions/PTOAS-abstractions.md"
+    "ptoas_abstractions": "pypto-3.0-notes/abstractions/PTOAS-abstractions.md",
+    "runtime_arch_index": "pypto_top_level_documents/pypto-runtime-arch-docs/00-index.md",
+    "runtime_design": "pypto_top_level_documents/linqu_runtime_design.md",
+    "runtime_async": "pypto_top_level_documents/runtime_async.md",
+    "multi_level_runtime_ring": "pypto_top_level_documents/multi_level_runtime_ring_and_pypto_free_api.md",
+    "machine_hierarchy": "pypto_top_level_documents/machine_hierarchy_and_function_hierarchy.md",
+    "simpler_distributed_runtime_design": "pypto_top_level_documents/simpler_distributed_runtime_design.md",
+    "serving_implementation_plan": "pypto_top_level_documents/pypto_serving_implementation_plan.md",
+    "sharded_tensor": "pypto_top_level_documents/sharded_tensor.md",
+    "tensor_layout": "pypto_top_level_documents/tensor_layout.md",
+    "tensor_valid_shape": "pypto_top_level_documents/tensor_valid_shape.md",
+    "tpush_tpop_isa_design": "pypto_top_level_documents/tpush_tpop_isa_design_v3.md"
   },
   "routes": {
     "stack_overview": {

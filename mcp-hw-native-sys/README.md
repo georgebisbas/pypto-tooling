@@ -10,6 +10,7 @@ A local Model Context Protocol (MCP) server for full-stack compiler development 
 - `pypto-3.0-notes` — enriched planning notes (secondary tier)
 - `pypto-lib` — model zoo and golden harness
 - `pypto-tooling` — Docker, profiling, this MCP server
+- `pypto_top_level_documents` — top-level design & architecture docs (serving, runtime, sharded tensor, ISA proposals; design tier)
 - `pytorch-hccl-tests` — OSU-style PyTorch/HCCL bandwidth micro-benchmarks (NPU)
 - `simpler` — PTO2 runtime
 
@@ -80,7 +81,7 @@ Fixed URIs (read via MCP resource client):
 | `hw-native-sys://flows/*` | End-to-end flows (compile_to_device, distributed_allreduce, …) |
 | `hw-native-sys://ascend/*` | Ascend hardware, arch families, HCCL/container checklists |
 
-**Doc tiers:** `canonical` (sibling repo docs) is authoritative. `enriched` (pypto-3.0-notes) is secondary — check `last_verified` in front matter.
+**Doc tiers:** `canonical` (sibling repo docs) is authoritative. `enriched` (pypto-3.0-notes) is secondary — check `last_verified` in front matter. `design` (pypto_top_level_documents) holds forward-looking design/architecture proposals — non-canonical.
 
 ## MCP prompts
 

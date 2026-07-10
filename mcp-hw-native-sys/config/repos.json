@@ -56,6 +56,13 @@
       "outputs": ["bandwidth CSVs", "latency/bandwidth/message-rate reports"],
       "canonical_docs": ["pytorch-hccl-tests/README.md"],
       "agent_rules": []
+    },
+    "pypto_top_level_documents": {
+      "role": "Top-level design & architecture documents: serving, runtime, sharded tensor, tensor layout, ISA proposals (design tier, non-canonical)",
+      "layer": "design",
+      "outputs": [],
+      "canonical_docs": ["pypto_top_level_documents/pypto-runtime-arch-docs/00-index.md"],
+      "agent_rules": []
     }
   },
   "repositories": {
@@ -65,6 +72,7 @@
     "pypto-3.0-notes": "pypto-3.0-notes",
     "pypto-lib": "pypto-lib",
     "pypto-tooling": "pypto-tooling",
+    "pypto_top_level_documents": "pypto_top_level_documents",
     "pytorch-hccl-tests": "pytorch-hccl-tests",
     "simpler": "simpler"
   },

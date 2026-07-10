@@ -102,6 +102,8 @@ def resolve_doc_tier(relative_path: str) -> str:
             return "ephemeral"
     if normalized.startswith("pypto-3.0-notes/"):
         return "enriched"
+    if normalized.startswith("pypto_top_level_documents/"):
+        return "design"
     return "canonical"
 
 
