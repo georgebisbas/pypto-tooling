@@ -197,6 +197,15 @@ device_results: dict[int, str] = {}  # dev_id → "ok" | "dead" | "error_<code>"
 
 try:
     lib = ctypes.cdll.LoadLibrary("libascendcl.so")
+except OSError as exc:
+    bad(f"Cannot load libascendcl.so — Ascend CANN not installed or not in library path")
+    info("  detail", str(exc))
+    info("  hint", "Build and run from a CANN-based Docker image, or source set_env.sh from a CANN installation")
+    if saved_preload:
+        os.environ["LD_PRELOAD"] = saved_preload
+    sys.exit(0)  # clean exit — diagnostic is still useful up to this point
+
+try:
     lib.aclInit.argtypes = [ctypes.c_char_p]
     lib.aclInit.restype = ctypes.c_int
     lib.aclrtGetDeviceCount.argtypes = [ctypes.c_void_p]
