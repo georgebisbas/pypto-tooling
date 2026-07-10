@@ -89,7 +89,8 @@ ENV DEBIAN_FRONTEND=noninteractive \
 # confirming a matching torch-npu wheel exists for the newer interpreter.
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-      git ca-certificates curl make gcc g++ python3.10 python3.10-venv && \
+      git ca-certificates curl make gcc g++ python3.10 python3.10-venv \
+      bash-completion gh && \
     rm -rf /var/lib/apt/lists/*
 
 # Full clone (with .git) so the checkout is a usable, fully-offline git repo

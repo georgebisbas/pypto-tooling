@@ -69,7 +69,8 @@ RUN apt-get update && \
       python3.10 python3.10-dev python3.10-venv \
       gcc-15 g++-15 build-essential \
       git curl ca-certificates \
-      ccache cmake ninja-build pkg-config && \
+      ccache cmake ninja-build pkg-config \
+      bash-completion gh && \
     rm -rf /var/lib/apt/lists/*
 
 RUN update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-15 1 && \

@@ -77,7 +77,8 @@ RUN apt-get update && \
       git curl ca-certificates \
       ccache \
       build-essential cmake ninja-build pkg-config \
-      mpich libmpich-dev && \
+      mpich libmpich-dev \
+      bash-completion gh && \
     if ! command -v g++-15 >/dev/null 2>&1; then \
       ln -sf "$(command -v g++)" /usr/local/bin/g++-15; \
     fi && \

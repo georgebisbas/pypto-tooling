@@ -122,7 +122,8 @@ RUN apt-get update && \
       build-essential cmake ninja-build pkg-config \
       graphviz \
       mpich libmpich-dev \
-      ripgrep fd-find nano && \
+      ripgrep fd-find nano \
+      bash-completion gh && \
     ln -sf "$(command -v fdfind)" /usr/local/bin/fd && \
     add-apt-repository -y ppa:ubuntu-toolchain-r/test && \
     apt-get update && \
