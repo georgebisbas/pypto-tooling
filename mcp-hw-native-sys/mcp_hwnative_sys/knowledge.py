@@ -190,9 +190,12 @@ def read_multiple_docs(
     if not paths:
         raise ValueError("paths cannot be empty")
 
+    # max_chars is a global budget across all docs. Track usage incrementally
+    # so the loop stays O(n) rather than re-summing every part each iteration.
     parts: list[str] = []
-    remaining = max_chars
+    used = 0
     for index, path in enumerate(paths):
+        remaining = max_chars - used
         if remaining <= 0:
             parts.append(f"\n... (additional docs omitted: {', '.join(paths[index:])})")
             break
@@ -201,7 +204,7 @@ def read_multiple_docs(
             section = sections[index]
         slice_text = read_doc_slice(path, max_chars=remaining, section=section)
         parts.append(slice_text)
-        remaining = max_chars - sum(len(part) for part in parts)
+        used += len(slice_text)
 
     return "\n\n".join(parts)
 
@@ -487,7 +490,7 @@ def knowledge_health_impl() -> dict[str, Any]:
                 if age_days > 30:
                     stale_enriched.append({"path": path, "last_verified": verified, "age_days": str(age_days)})
 
-    ascend_arch_path = "pypto-3.0-notes/performance_tuning.md/ascend-architectures.md"
+    ascend_arch_path = "pypto-3.0-notes/performance_tuning/ascend-architectures.md"
     if not _path_exists(ascend_arch_path):
         ascend_issues.append(f"Missing ascend arch reference: {ascend_arch_path}")
     else:
@@ -527,6 +530,13 @@ def knowledge_health_impl() -> dict[str, Any]:
 
     ascend_route_count = sum(1 for k in config.get("routes", {}) if k.startswith(("ascend_", "npu_")))
 
+    # Surface a passes-index scrape failure (e.g. pass_manager.py refactored so
+    # the extraction regex no longer matches) instead of silently reporting 0.
+    from mcp_hwnative_sys.passes_index import load_passes_index
+
+    passes_index = load_passes_index()
+    passes_index_warning = passes_index.get("warning")
+
     return {
         "config_version": config.get("version", "unknown"),
         "workspace_root": str(root),
@@ -538,6 +548,8 @@ def knowledge_health_impl() -> dict[str, Any]:
         "stale_enriched": stale_enriched[:20],
         "ascend_issues_count": len(ascend_issues),
         "ascend_issues": ascend_issues[:20],
+        "pass_count": len(passes_index.get("passes", [])),
+        "passes_index_warning": passes_index_warning,
         "last_index_build": last_index_build,
     }
 

@@ -49,7 +49,12 @@ def build_passes_index() -> dict[str, Any]:
     root = workspace_root()
     path = root / "pypto/python/pypto/ir/pass_manager.py"
     if not path.exists():
-        return {"version": "1.0.0", "strategy": "Default", "passes": []}
+        return {
+            "version": "1.0.0",
+            "strategy": "Default",
+            "passes": [],
+            "warning": f"pass_manager.py not found at {path}",
+        }
 
     text = path.read_text(encoding="utf-8")
     # Extract pass names from PassSpec tuples: ("PassName", lambda: passes.foo())
@@ -75,20 +80,34 @@ def build_passes_index() -> dict[str, Any]:
             }
         )
 
-    return {
+    result: dict[str, Any] = {
         "version": "1.0.0",
         "generated_from": "pypto/python/pypto/ir/pass_manager.py",
         "strategy": "Default",
         "pass_count": len(passes),
         "passes": passes,
     }
+    if not passes:
+        # The scrape regex is tied to the ("Name", lambda: passes.…) shape of
+        # pass_manager.py; a refactor there yields zero matches. Flag it so
+        # knowledge_health surfaces the failure instead of reporting 0 passes.
+        result["warning"] = (
+            "Extracted 0 passes from pass_manager.py — the extraction regex "
+            "may be stale (pass_manager.py refactored)."
+        )
+    return result
 
 
 def load_passes_index() -> dict[str, Any]:
     path = passes_index_path()
     if not path.exists():
         data = build_passes_index()
-        path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+        # Best-effort cache write: a read-only config/ (e.g. installed package
+        # or container) must not make this read-path tool fail.
+        try:
+            path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+        except OSError:
+            pass
         return data
     return json.loads(path.read_text(encoding="utf-8"))
 

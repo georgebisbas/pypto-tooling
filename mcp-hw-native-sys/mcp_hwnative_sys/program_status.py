@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
-from mcp_hwnative_sys.paths import load_repos_config, project_root, workspace_root
+from mcp_hwnative_sys.paths import project_root, workspace_root
+
+_PR_NUM_RE = re.compile(r"#(\d+)")
 
 
 def program_status_path() -> Path:
@@ -16,9 +19,12 @@ def _parse_pr_row(cells: list[str]) -> dict[str, Any] | None:
     if len(cleaned) < 4:
         return None
     pr_cell = cleaned[0]
-    if not pr_cell.startswith("[#") and not pr_cell.startswith("#"):
+    # Extract the digits of the PR number robustly; skip rows whose first cell
+    # starts like a PR link but carries no number (e.g. a stray "#" header).
+    match = _PR_NUM_RE.search(pr_cell)
+    if match is None:
         return None
-    pr_num = pr_cell.split("#")[1].split("]")[0].split(")")[0]
+    pr_num = match.group(1)
     return {
         "pr": f"#{pr_num}",
         "title": cleaned[1] if len(cleaned) > 1 else "",
@@ -128,11 +134,17 @@ def parse_status_prs_markdown(text: str) -> dict[str, Any]:
 
 
 def re_search_dashboard(text: str) -> dict[str, int] | None:
-    import re
+    # Restrict the 4-integer row search to the marked dashboard region so an
+    # unrelated 4-column integer table elsewhere in the doc is not mis-parsed.
+    region = text
+    start = text.find("<!-- SYNC:DASHBOARD_START -->")
+    if start != -1:
+        end = text.find("<!-- SYNC:DASHBOARD_END -->", start)
+        region = text[start : end if end != -1 else len(text)]
 
     match = re.search(
         r"\|\s*(\d+)\s*\|\s*(\d+)\s*\|\s*(\d+)\s*\|\s*(\d+)\s*\|",
-        text,
+        region,
     )
     if not match:
         return None
@@ -149,7 +161,12 @@ def sync_program_status_from_workspace() -> dict[str, Any]:
     if not status_md.exists():
         return {"error": f"Missing {status_md}"}
     parsed = parse_status_prs_markdown(status_md.read_text(encoding="utf-8"))
-    program_status_path().write_text(json.dumps(parsed, indent=2) + "\n", encoding="utf-8")
+    # Best-effort cache write: a read-only config/ must not make the
+    # program_status read-path tool fail — the parsed data is returned regardless.
+    try:
+        program_status_path().write_text(json.dumps(parsed, indent=2) + "\n", encoding="utf-8")
+    except OSError:
+        pass
     return parsed
 
 

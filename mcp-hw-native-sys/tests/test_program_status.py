@@ -4,7 +4,11 @@ from __future__ import annotations
 
 import pytest
 
-from mcp_hwnative_sys.program_status import parse_status_prs_markdown
+from mcp_hwnative_sys.program_status import (
+    _parse_pr_row,
+    parse_status_prs_markdown,
+    re_search_dashboard,
+)
 
 _STATUS_MD = """# Program status
 
@@ -39,6 +43,38 @@ def test_empty_document_yields_defaults():
     data = parse_status_prs_markdown("# empty\n")
     assert data["open_prs"] == []
     assert data["dashboard"] == {"open": 0, "merged_all": 0, "merged_90d": 0, "closed": 0}
+
+
+def test_dashboard_scoped_to_marked_region():
+    # A 4-integer table before the region must be ignored in favor of the one
+    # inside the SYNC:DASHBOARD markers.
+    text = (
+        "| 1 | 2 | 3 | 4 |\n"
+        "<!-- SYNC:DASHBOARD_START -->\n"
+        "| 9 | 27 | 27 | 11 |\n"
+        "<!-- SYNC:DASHBOARD_END -->\n"
+    )
+    assert re_search_dashboard(text) == {
+        "open": 9,
+        "merged_all": 27,
+        "merged_90d": 27,
+        "closed": 11,
+    }
+
+
+def test_dashboard_falls_back_to_full_text_without_markers():
+    assert re_search_dashboard("| 5 | 6 | 7 | 8 |")["open"] == 5
+
+
+def test_pr_row_without_digits_is_skipped():
+    # First cell starts like a PR link but has no number -> skipped, not crash.
+    assert _parse_pr_row(["#", "title", "branch", "author"]) is None
+
+
+def test_pr_row_extracts_number_from_link():
+    row = _parse_pr_row(["[#1942](http://x/1942)", "Title", "`br`", "author", "ci"])
+    assert row is not None
+    assert row["pr"] == "#1942"
 
 
 if __name__ == "__main__":

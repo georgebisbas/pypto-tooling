@@ -33,6 +33,9 @@ def _first_existing_env(*names: str) -> str | None:
 
 
 def _guess_hccl_preload(cann_home: str | None) -> str | None:
+    # Ascend NPU hosts are aarch64, so the arch-suffixed CANN layout is tried
+    # first; the plain lib64 fallback covers x86 CANN installs. Each candidate
+    # is existence-checked below, so a wrong guess is harmless.
     if not cann_home:
         return None
     candidates = [

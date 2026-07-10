@@ -71,6 +71,7 @@ def generate_verify_handoff_impl(
 Run MCP `ascend_env_check` first. For HCCL multi-rank inside Docker see `hw-native-sys://ascend/hccl_container_checklist`.
 
 ```bash
+# NPU hosts are aarch64; on an x86 CANN install drop the aarch64-linux/ segment.
 export LD_PRELOAD=${{CANN_HOME}}/aarch64-linux/lib64/libhccl.so   # shell only, before pytest
 ```
 
