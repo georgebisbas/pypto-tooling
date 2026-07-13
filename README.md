@@ -54,7 +54,7 @@ Build standalone hw-native-sys image (custom commit/pinning):
 
 ```bash
 docker build \
-  --build-arg PYPTO_COMMIT=8ebddcb87a95c091c02f7f53b0a877c1e3f3d444 \
+  --build-arg PYPTO_COMMIT=fe8ebbfe2ff3dbb0ade9c592f7ed7604212369bc \
   --build-arg PTO_ISA_COMMIT=83d01313d9bfc247c4b7c8bcf969d1019f0d106f \
   -t pypto3-hw-native-sys:cann9 \
   - < Dockerfile.hw-native-sys.cann9.0
@@ -76,7 +76,7 @@ Build standalone simpler image (custom commit/pinning):
 
 ```bash
 docker build \
-  --build-arg SIMPLER_COMMIT=cbbdfd4daceb7c625c73b8e4d96c3c791e18ad34 \
+  --build-arg SIMPLER_COMMIT=8efe11271f5d6e6e123c753b8196131b51fb45c9 \
   --build-arg PTO_ISA_COMMIT=83d01313d9bfc247c4b7c8bcf969d1019f0d106f \
   -t simpler-cann9 \
   - < Dockerfile.simpler.cann9.0
@@ -106,7 +106,7 @@ docker build -t pypto3-hw-native-sys:sim -f Dockerfile.hw-native-sys.sim.ubuntu2
 Build standalone local simulation image (pinned commits):
 
 ```bash
-docker build --build-arg PYPTO_COMMIT=8ebddcb87a95c091c02f7f53b0a877c1e3f3d444 --build-arg PTO_ISA_COMMIT=83d01313d9bfc247c4b7c8bcf969d1019f0d106f -t pypto3-hw-native-sys:sim -f Dockerfile.hw-native-sys.sim.ubuntu22.04 .
+docker build --build-arg PYPTO_COMMIT=fe8ebbfe2ff3dbb0ade9c592f7ed7604212369bc --build-arg PTO_ISA_COMMIT=83d01313d9bfc247c4b7c8bcf969d1019f0d106f -t pypto3-hw-native-sys:sim -f Dockerfile.hw-native-sys.sim.ubuntu22.04 .
 ```
 
 Build standalone simpler simulation image (no NPU, no pypto):
@@ -119,7 +119,7 @@ Build standalone simpler simulation image (pinned commits):
 
 ```bash
 docker build \
-  --build-arg SIMPLER_COMMIT=cbbdfd4daceb7c625c73b8e4d96c3c791e18ad34 \
+  --build-arg SIMPLER_COMMIT=8efe11271f5d6e6e123c753b8196131b51fb45c9 \
   --build-arg PTO_ISA_COMMIT=83d01313d9bfc247c4b7c8bcf969d1019f0d106f \
   -t simpler-hw-native-sys:sim \
   -f Dockerfile.simpler.sim.ubuntu22.04 .

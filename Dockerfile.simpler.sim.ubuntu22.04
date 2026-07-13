@@ -13,7 +13,7 @@
 #
 # BUILD (pinned commits):
 #   docker build \
-#     --build-arg SIMPLER_COMMIT=cbbdfd4daceb7c625c73b8e4d96c3c791e18ad34 \
+#     --build-arg SIMPLER_COMMIT=8efe11271f5d6e6e123c753b8196131b51fb45c9 \
 #     --build-arg PTO_ISA_COMMIT=83d01313d9bfc247c4b7c8bcf969d1019f0d106f \
 #     -t simpler-hw-native-sys:sim \
 #     -f Dockerfile.simpler.sim.ubuntu22.04 .
@@ -48,7 +48,7 @@ FROM ubuntu:${UBUNTU_VERSION}
 ARG INSTALL_PREFIX=/opt
 # PTO_ISA_COMMIT defaults to empty — auto-derived from simpler's pto_isa.pin at build time.
 ARG PTO_ISA_COMMIT=
-ARG SIMPLER_COMMIT=cbbdfd4daceb7c625c73b8e4d96c3c791e18ad34
+ARG SIMPLER_COMMIT=8efe11271f5d6e6e123c753b8196131b51fb45c9
 
 ENV INSTALL_PREFIX=${INSTALL_PREFIX}
 ENV SIMPLER_DIR=${INSTALL_PREFIX}/simpler \
