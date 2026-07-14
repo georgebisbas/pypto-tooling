@@ -54,7 +54,7 @@ Build standalone hw-native-sys image (custom commit/pinning):
 
 ```bash
 docker build \
-  --build-arg PYPTO_COMMIT=fe8ebbfe2ff3dbb0ade9c592f7ed7604212369bc \
+  --build-arg PYPTO_COMMIT=5fd56e7f78707564a6dd617e9e3d2dc354461db2 \
   --build-arg PTO_ISA_COMMIT=83d01313d9bfc247c4b7c8bcf969d1019f0d106f \
   -t pypto3-hw-native-sys:cann9 \
   - < Dockerfile.hw-native-sys.cann9.0
@@ -106,7 +106,7 @@ docker build -t pypto3-hw-native-sys:sim -f Dockerfile.hw-native-sys.sim.ubuntu2
 Build standalone local simulation image (pinned commits):
 
 ```bash
-docker build --build-arg PYPTO_COMMIT=fe8ebbfe2ff3dbb0ade9c592f7ed7604212369bc --build-arg PTO_ISA_COMMIT=83d01313d9bfc247c4b7c8bcf969d1019f0d106f -t pypto3-hw-native-sys:sim -f Dockerfile.hw-native-sys.sim.ubuntu22.04 .
+docker build --build-arg PYPTO_COMMIT=5fd56e7f78707564a6dd617e9e3d2dc354461db2 --build-arg PTO_ISA_COMMIT=83d01313d9bfc247c4b7c8bcf969d1019f0d106f -t pypto3-hw-native-sys:sim -f Dockerfile.hw-native-sys.sim.ubuntu22.04 .
 ```
 
 Build standalone simpler simulation image (no NPU, no pypto):
