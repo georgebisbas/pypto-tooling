@@ -2,7 +2,6 @@
   "version": "1.0.0",
   "generated_from": "pypto/python/pypto/ir/pass_manager.py",
   "strategy": "Default",
-  "pass_count": 42,
   "passes": [
     {
       "name": "InlineFunctions",
@@ -382,5 +381,6 @@
         "pypto:codegen_tests"
       ]
     }
-  ]
+  ],
+  "pypto_pass_count": 42
 }

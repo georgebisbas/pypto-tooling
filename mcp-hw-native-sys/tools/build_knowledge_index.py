@@ -68,7 +68,7 @@ def main() -> int:
     report = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "existing_abstractions": len(existing),
-        "passes_index_count": passes_index.get("pass_count", 0),
+        "pypto_passes_index_count": passes_index.get("pypto_pass_count", 0),
         "suggested_missing_passes": missing_passes[:30],
         "sample_ir_classes": suggestions["ir_header_classes"][:20],
         "sample_pto_isa_ops": suggestions["pto_isa_instructions"][:20],

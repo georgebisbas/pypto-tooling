@@ -33,23 +33,35 @@ def load_entrypoints() -> dict[str, Any]:
     return load_json_cached(entrypoints_config_path())
 
 
-# Merged abstractions are cached against the mtimes of both source files so an
-# edit to either abstractions.json or ascend_abstractions.json is picked up.
-_abstractions_cache: tuple[tuple[float, float], dict[str, Any]] | None = None
+# Auto-generated abstraction cards (from tools/build_pto_isa_index.py and
+# tools/build_ptoas_index.py) are merged in first so they cover the long tail
+# of pto-isa instructions and PTOAS ops that nobody has hand-curated yet; any
+# hand-curated card with the same key always wins outright.
+_GENERATED_ABSTRACTION_FILES = ("pto_isa_generated.json", "ptoas_generated.json")
+
+# Merged abstractions are cached against the mtimes of every source file so an
+# edit to any of them is picked up without restarting the server.
+_abstractions_cache: tuple[tuple[float, ...], dict[str, Any]] | None = None
 
 
 def load_abstractions() -> dict[str, Any]:
     global _abstractions_cache
     base_path = abstractions_config_path()
     ascend_path = ascend_abstractions_config_path()
-    base_mtime = base_path.stat().st_mtime
-    ascend_mtime = ascend_path.stat().st_mtime if ascend_path.exists() else 0.0
-    key = (base_mtime, ascend_mtime)
+    generated_paths = [project_root() / "config" / name for name in _GENERATED_ABSTRACTION_FILES]
+    all_paths = [base_path, ascend_path, *generated_paths]
+    key = tuple(p.stat().st_mtime if p.exists() else 0.0 for p in all_paths)
     if _abstractions_cache is not None and _abstractions_cache[0] == key:
         return _abstractions_cache[1]
-    merged = dict(load_json_cached(base_path))
+
+    merged: dict[str, Any] = {}
+    for path in generated_paths:
+        if path.exists():
+            merged.update(load_json_cached(path))
+    merged.update(load_json_cached(base_path))
     if ascend_path.exists():
         merged.update(load_json_cached(ascend_path))
+
     _abstractions_cache = (key, merged)
     return merged
 
@@ -335,6 +347,7 @@ def explain_abstraction_impl(name: str) -> dict[str, Any]:
     card = abstractions[key]
     return {
         "name": key,
+        "source": card.get("source", "curated"),
         "layer": card.get("layer"),
         "kind": card.get("kind"),
         "tags": card.get("tags", []),
@@ -537,6 +550,17 @@ def knowledge_health_impl() -> dict[str, Any]:
     passes_index = load_passes_index()
     passes_index_warning = passes_index.get("warning")
 
+    # How much of pto-isa/PTOAS's real surface area the generated indices
+    # actually cover -- self-reported so index staleness/drift shows up here
+    # instead of requiring a manual audit to discover.
+    coverage: dict[str, int] = {}
+    for repo_key, filename in (
+        ("pto_isa_indexed", "pto_isa_generated.json"),
+        ("ptoas_indexed", "ptoas_generated.json"),
+    ):
+        gen_path = project_root() / "config" / filename
+        coverage[repo_key] = len(load_json_cached(gen_path)) if gen_path.exists() else 0
+
     return {
         "config_version": config.get("version", "unknown"),
         "workspace_root": str(root),
@@ -548,8 +572,9 @@ def knowledge_health_impl() -> dict[str, Any]:
         "stale_enriched": stale_enriched[:20],
         "ascend_issues_count": len(ascend_issues),
         "ascend_issues": ascend_issues[:20],
-        "pass_count": len(passes_index.get("passes", [])),
-        "passes_index_warning": passes_index_warning,
+        "pypto_pass_count": len(passes_index.get("passes", [])),
+        "pypto_passes_index_warning": passes_index_warning,
+        "coverage": coverage,
         "last_index_build": last_index_build,
     }
 
@@ -703,6 +728,17 @@ def register_knowledge(mcp: FastMCP) -> None:
         from mcp_hwnative_sys.program_status import program_status_impl
 
         return program_status_impl()
+
+    @mcp.tool()
+    def collective_status(
+        op: Annotated[str, Field(description='Optional collective op filter, e.g. "AllReduce" or "All-to-All" (substring match).')] = "",
+        axis: Annotated[str, Field(description='Optional feature axis filter, e.g. "Dynamic NR" or "Simplex native kernel" (substring match).')] = "",
+    ) -> dict[str, Any]:
+        """Collective-comm feature parity status (merged/planned/gap) from the parity matrix in
+        pypto-3.0-notes/distributed/current_status.md. Read-only -- never writes to the source doc."""
+        from mcp_hwnative_sys.collective_status import collective_status_impl
+
+        return collective_status_impl(op, axis)
 
     @mcp.tool()
     def verify_ladder(

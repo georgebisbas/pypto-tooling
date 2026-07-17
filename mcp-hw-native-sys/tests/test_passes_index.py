@@ -34,5 +34,15 @@ def test_healthy_index_has_no_warning():
     assert "warning" not in result
 
 
+def test_pass_count_key_is_pypto_scoped():
+    # pass_manager.py is the only pipeline ever scraped (no PTOAS/pto-isa/simpler
+    # equivalent exists), so the count must be labeled as pypto-specific rather
+    # than implying it's a generic cross-repo figure.
+    result = passes_index.build_passes_index()
+    assert "pypto_pass_count" in result
+    assert result["pypto_pass_count"] == len(result["passes"])
+    assert "pass_count" not in result
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

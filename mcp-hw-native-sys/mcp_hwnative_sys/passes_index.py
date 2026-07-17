@@ -84,7 +84,7 @@ def build_passes_index() -> dict[str, Any]:
         "version": "1.0.0",
         "generated_from": "pypto/python/pypto/ir/pass_manager.py",
         "strategy": "Default",
-        "pass_count": len(passes),
+        "pypto_pass_count": len(passes),
         "passes": passes,
     }
     if not passes:

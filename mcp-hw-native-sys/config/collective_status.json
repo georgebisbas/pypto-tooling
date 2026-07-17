@@ -1,0 +1,312 @@
+{
+  "last_verified": "2026-07-16",
+  "legend": {
+    "\u2705": "Merged to `main`",
+    "\ud83d\udfe1": "In review (PR open)",
+    "\ud83d\udd35": "Planned (not started)",
+    "\u274c": "Gap \u2014 plan exists but not implemented",
+    "N/A": "Not applicable"
+  },
+  "matrix": {
+    "Composite intrinsic (`pld.tensor.*`)": {
+      "AllReduce (mesh)": {
+        "raw": "\u2705 #1746",
+        "symbol": "\u2705",
+        "ref": "#1746",
+        "meaning": "Merged to `main`"
+      },
+      "AllReduce (ring)": {
+        "raw": "\u2705 #1942",
+        "symbol": "\u2705",
+        "ref": "#1942",
+        "meaning": "Merged to `main`"
+      },
+      "AllReduce (bidir)": {
+        "raw": "\ud83d\udd35 Plan 52",
+        "symbol": "\ud83d\udd35",
+        "ref": "Plan 52",
+        "meaning": "Planned (not started)"
+      },
+      "AllGather": {
+        "raw": "\u2705 #1782",
+        "symbol": "\u2705",
+        "ref": "#1782",
+        "meaning": "Merged to `main`"
+      },
+      "ReduceScatter": {
+        "raw": "\u2705 #1782",
+        "symbol": "\u2705",
+        "ref": "#1782",
+        "meaning": "Merged to `main`"
+      },
+      "Broadcast": {
+        "raw": "\u2705 #1782",
+        "symbol": "\u2705",
+        "ref": "#1782",
+        "meaning": "Merged to `main`"
+      },
+      "Barrier": {
+        "raw": "\u2705 #1782",
+        "symbol": "\u2705",
+        "ref": "#1782",
+        "meaning": "Merged to `main`"
+      },
+      "All-to-All": {
+        "raw": "\u2705 #1937",
+        "symbol": "\u2705",
+        "ref": "#1937",
+        "meaning": "Merged to `main`"
+      }
+    },
+    "Host builtin": {
+      "AllReduce (mesh)": {
+        "raw": "\u2705 #1829",
+        "symbol": "\u2705",
+        "ref": "#1829",
+        "meaning": "Merged to `main`"
+      },
+      "AllReduce (ring)": {
+        "raw": "\u274c Plan 41",
+        "symbol": "\u274c",
+        "ref": "Plan 41",
+        "meaning": "Gap \u2014 plan exists but not implemented"
+      },
+      "AllReduce (bidir)": {
+        "raw": "\u274c",
+        "symbol": "\u274c",
+        "ref": "",
+        "meaning": "Gap \u2014 plan exists but not implemented"
+      },
+      "AllGather": {
+        "raw": "\u2705 #1829",
+        "symbol": "\u2705",
+        "ref": "#1829",
+        "meaning": "Merged to `main`"
+      },
+      "ReduceScatter": {
+        "raw": "\u2705 #1829",
+        "symbol": "\u2705",
+        "ref": "#1829",
+        "meaning": "Merged to `main`"
+      },
+      "Broadcast": {
+        "raw": "\u2705 #1829",
+        "symbol": "\u2705",
+        "ref": "#1829",
+        "meaning": "Merged to `main`"
+      },
+      "Barrier": {
+        "raw": "\u2705 #1829",
+        "symbol": "\u2705",
+        "ref": "#1829",
+        "meaning": "Merged to `main`"
+      },
+      "All-to-All": {
+        "raw": "\ud83d\udfe1 #1997",
+        "symbol": "\ud83d\udfe1",
+        "ref": "#1997",
+        "meaning": "In review (PR open)"
+      }
+    },
+    "Dynamic NR": {
+      "AllReduce (mesh)": {
+        "raw": "\u2705 #1668",
+        "symbol": "\u2705",
+        "ref": "#1668",
+        "meaning": "Merged to `main`"
+      },
+      "AllReduce (ring)": {
+        "raw": "\u26a0\ufe0f Monolithic only",
+        "symbol": "\u26a0\ufe0f",
+        "ref": "Monolithic only",
+        "meaning": "\u26a0\ufe0f"
+      },
+      "AllReduce (bidir)": {
+        "raw": "\u274c",
+        "symbol": "\u274c",
+        "ref": "",
+        "meaning": "Gap \u2014 plan exists but not implemented"
+      },
+      "AllGather": {
+        "raw": "\u2705 #1893",
+        "symbol": "\u2705",
+        "ref": "#1893",
+        "meaning": "Merged to `main`"
+      },
+      "ReduceScatter": {
+        "raw": "\u2705 #1893",
+        "symbol": "\u2705",
+        "ref": "#1893",
+        "meaning": "Merged to `main`"
+      },
+      "Broadcast": {
+        "raw": "\u2705 #1893",
+        "symbol": "\u2705",
+        "ref": "#1893",
+        "meaning": "Merged to `main`"
+      },
+      "Barrier": {
+        "raw": "N/A (no data)",
+        "symbol": "N/A",
+        "ref": "(no data)",
+        "meaning": "Not applicable"
+      },
+      "All-to-All": {
+        "raw": "\u274c",
+        "symbol": "\u274c",
+        "ref": "",
+        "meaning": "Gap \u2014 plan exists but not implemented"
+      }
+    },
+    "System test (ST)": {
+      "AllReduce (mesh)": {
+        "raw": "\u2705 #1646",
+        "symbol": "\u2705",
+        "ref": "#1646",
+        "meaning": "Merged to `main`"
+      },
+      "AllReduce (ring)": {
+        "raw": "\u2705 #1778",
+        "symbol": "\u2705",
+        "ref": "#1778",
+        "meaning": "Merged to `main`"
+      },
+      "AllReduce (bidir)": {
+        "raw": "\u274c",
+        "symbol": "\u274c",
+        "ref": "",
+        "meaning": "Gap \u2014 plan exists but not implemented"
+      },
+      "AllGather": {
+        "raw": "\u2705 #1782",
+        "symbol": "\u2705",
+        "ref": "#1782",
+        "meaning": "Merged to `main`"
+      },
+      "ReduceScatter": {
+        "raw": "\u2705 #1782",
+        "symbol": "\u2705",
+        "ref": "#1782",
+        "meaning": "Merged to `main`"
+      },
+      "Broadcast": {
+        "raw": "\u2705 #1782",
+        "symbol": "\u2705",
+        "ref": "#1782",
+        "meaning": "Merged to `main`"
+      },
+      "Barrier": {
+        "raw": "\u2705 #1782",
+        "symbol": "\u2705",
+        "ref": "#1782",
+        "meaning": "Merged to `main`"
+      },
+      "All-to-All": {
+        "raw": "\u2705 #1937",
+        "symbol": "\u2705",
+        "ref": "#1937",
+        "meaning": "Merged to `main`"
+      }
+    },
+    "Simplex native kernel": {
+      "AllReduce (mesh)": {
+        "raw": "\u2705 #1092",
+        "symbol": "\u2705",
+        "ref": "#1092",
+        "meaning": "Merged to `main`"
+      },
+      "AllReduce (ring)": {
+        "raw": "\u2705 #975",
+        "symbol": "\u2705",
+        "ref": "#975",
+        "meaning": "Merged to `main`"
+      },
+      "AllReduce (bidir)": {
+        "raw": "\u2705 #1271",
+        "symbol": "\u2705",
+        "ref": "#1271",
+        "meaning": "Merged to `main`"
+      },
+      "AllGather": {
+        "raw": "\u2705 #1092",
+        "symbol": "\u2705",
+        "ref": "#1092",
+        "meaning": "Merged to `main`"
+      },
+      "ReduceScatter": {
+        "raw": "\u2705 #1092",
+        "symbol": "\u2705",
+        "ref": "#1092",
+        "meaning": "Merged to `main`"
+      },
+      "Broadcast": {
+        "raw": "\u2705 #1092",
+        "symbol": "\u2705",
+        "ref": "#1092",
+        "meaning": "Merged to `main`"
+      },
+      "Barrier": {
+        "raw": "N/A",
+        "symbol": "N/A",
+        "ref": "",
+        "meaning": "Not applicable"
+      },
+      "All-to-All": {
+        "raw": "\u2705 #1267",
+        "symbol": "\u2705",
+        "ref": "#1267",
+        "meaning": "Merged to `main`"
+      }
+    },
+    "Auto-select algorithm": {
+      "AllReduce (mesh)": {
+        "raw": "N/A",
+        "symbol": "N/A",
+        "ref": "",
+        "meaning": "Not applicable"
+      },
+      "AllReduce (ring)": {
+        "raw": "\ud83d\udd35 Plan 42",
+        "symbol": "\ud83d\udd35",
+        "ref": "Plan 42",
+        "meaning": "Planned (not started)"
+      },
+      "AllReduce (bidir)": {
+        "raw": "\u2014",
+        "symbol": "\u2014",
+        "ref": "",
+        "meaning": "\u2014"
+      },
+      "AllGather": {
+        "raw": "N/A",
+        "symbol": "N/A",
+        "ref": "",
+        "meaning": "Not applicable"
+      },
+      "ReduceScatter": {
+        "raw": "N/A",
+        "symbol": "N/A",
+        "ref": "",
+        "meaning": "Not applicable"
+      },
+      "Broadcast": {
+        "raw": "N/A",
+        "symbol": "N/A",
+        "ref": "",
+        "meaning": "Not applicable"
+      },
+      "Barrier": {
+        "raw": "N/A",
+        "symbol": "N/A",
+        "ref": "",
+        "meaning": "Not applicable"
+      },
+      "All-to-All": {
+        "raw": "N/A",
+        "symbol": "N/A",
+        "ref": "",
+        "meaning": "Not applicable"
+      }
+    }
+  }
+}
