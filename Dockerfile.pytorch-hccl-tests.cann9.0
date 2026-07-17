@@ -7,7 +7,7 @@
 #   CANN_VERSION            (default: 9.0.0) — selects the base image tag and cann-* paths
 #   INSTALL_PREFIX          (default: /opt)  — root for the benchmark checkout and venv
 #   PT_HCCL_REPO_URL        (default: georgebisbas fork URL)
-#   PT_HCCL_COMMIT          (default: 53a6734b085d9559fc069351747be2ca8663d6ff) — benchmark repo ref to checkout
+#   PT_HCCL_COMMIT          (default: 029e745b5dacdf288316818fd6ae197c2506dc8f) — benchmark repo ref to checkout
 #   PT_HCCL_INSTALL_TARGET  (default: install-npu-arm) — Makefile target to install deps into the venv
 #
 # REQUIREMENTS:
@@ -19,7 +19,7 @@
 #   docker build -t pytorch-hccl-tests:cann9 - < Dockerfile.pytorch-hccl-tests.cann9.0
 #
 # BUILD (x86 host / custom ref):
-#   docker build --build-arg PT_HCCL_COMMIT=314b0ca4667bef624e826aae6633e1a6f275d9cd --build-arg PT_HCCL_INSTALL_TARGET=install-npu-x86 -t pytorch-hccl-tests:cann9 - < Dockerfile.pytorch-hccl-tests.cann9.0
+#   docker build --build-arg PT_HCCL_COMMIT=029e745b5dacdf288316818fd6ae197c2506dc8f --build-arg PT_HCCL_INSTALL_TARGET=install-npu-x86 -t pytorch-hccl-tests:cann9 - < Dockerfile.pytorch-hccl-tests.cann9.0
 #
 # RUN (multi-device, HCCL collectives — MUST use --pid=host):
 #   docker run --rm -it --privileged --ipc=host --pid=host --cap-add=SYS_PTRACE --security-opt seccomp=unconfined -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi:ro -v /usr/local/Ascend/driver:/usr/local/Ascend/driver:ro -v /dev:/dev pytorch-hccl-tests:cann9
@@ -60,7 +60,7 @@ FROM quay.io/ascend/cann:${CANN_VERSION}-910b-ubuntu22.04-py3.12
 ARG CANN_VERSION=9.0.0
 ARG INSTALL_PREFIX=/opt
 ARG PT_HCCL_REPO_URL=https://github.com/georgebisbas/pytorch-hccl-tests.git
-ARG PT_HCCL_COMMIT=53a6734b085d9559fc069351747be2ca8663d6ff
+ARG PT_HCCL_COMMIT=029e745b5dacdf288316818fd6ae197c2506dc8f
 ARG PT_HCCL_INSTALL_TARGET=install-npu-arm
 
 ENV CANN_VERSION=${CANN_VERSION} \
