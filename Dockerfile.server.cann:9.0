@@ -213,14 +213,14 @@ RUN echo "unset PTO2_RING_HEAP PTO2_RING_TASK_WINDOW PTO2_RING_DEP_POOL 2>/dev/n
 #
 # run-side: the container MUST be started with --pid=host for HCCL.
 # See pypto-tooling/debugging_skills/SKILL.md → "Docker runtime: HCCL".
-RUN test -f "/usr/local/Ascend/cann-9.0.0/aarch64-linux/lib64/libhccl.so" \
-    || (echo "ERROR: libhccl.so missing at /usr/local/Ascend/cann-9.0.0/aarch64-linux/lib64/libhccl.so" \
-        && ls -la "/usr/local/Ascend/cann-9.0.0/aarch64-linux/lib64/" | grep -i hccl \
+RUN test -f "/usr/local/Ascend/cann-9.0.0/lib64/libhccl.so" \
+    || (echo "ERROR: libhccl.so missing at /usr/local/Ascend/cann-9.0.0/lib64/libhccl.so" \
+        && ls -la "/usr/local/Ascend/cann-9.0.0/lib64/" | grep -i hccl \
         && exit 1)
 # LD_PRELOAD is NOT set automatically — setting it image-wide (ENV or bashrc) injects
 # libhccl.so into every process including VS Code server → hang on attach.
 # Before running HCCL tests, set it in your shell:
-#   export LD_PRELOAD=/usr/local/Ascend/cann-9.0.0/aarch64-linux/lib64/libhccl.so
+#   export LD_PRELOAD=/usr/local/Ascend/cann-9.0.0/lib64/libhccl.so
 # Without it, weak HCCL symbols in host_runtime.so stay NULL → SIGSEGV on comm_init.
 
 # VS Code's userEnvProbe: if it ever captures LD_PRELOAD and injects it into the server,
@@ -233,7 +233,7 @@ ENV ASCEND_HOME_PATH=/usr/local/Ascend/cann-9.0.0 \
     PTOAS_ROOT=/opt/ptoas-bin \
     SIMPLER_ROOT=/workspace/hw-native-sys/pypto/runtime \
     PTO_ISA_ROOT=/opt/pto-isa \
-    LD_LIBRARY_PATH=/usr/local/Ascend/driver/lib64/driver:/usr/local/Ascend/cann-9.0.0/aarch64-linux/lib64:/usr/local/Ascend/ascend-toolkit/latest/lib64:${LD_LIBRARY_PATH:-} \
+    LD_LIBRARY_PATH=/usr/local/Ascend/driver/lib64/driver:/usr/local/Ascend/cann-9.0.0/lib64:/usr/local/Ascend/ascend-toolkit/latest/lib64:${LD_LIBRARY_PATH:-} \
     PATH=/opt/ptoas-bin:/opt/ptoas-bin/bin:${PATH} \
     PYTHONPATH=/workspace/hw-native-sys/pypto/runtime/python:/workspace/hw-native-sys/pypto/runtime/examples/scripts \
     PYTHONPATH=${PYTHONPATH}:/usr/local/Ascend/cann-9.0.0/python/site-packages:/usr/local/Ascend/cann-9.0.0/opp/built-in/op_impl/ai_core/tbe \
