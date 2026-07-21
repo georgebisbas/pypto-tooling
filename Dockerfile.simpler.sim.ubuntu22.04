@@ -28,7 +28,7 @@
 #
 # L3 DISTRIBUTED / COLLECTIVE STs (a2a3sim — same flags as simpler ci.yml st-sim-a2a3):
 #   cd /opt/simpler
-#   pytest examples/workers/l3/allreduce_distributed \
+#   pytest examples/workers/l3/allreduce \
 #     --platform a2a3sim --device 0-15 -v \
 #     --pto-session-timeout 600 \
 #     --clone-protocol https --require-pto-isa
