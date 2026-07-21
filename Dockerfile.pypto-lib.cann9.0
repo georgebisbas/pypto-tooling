@@ -40,7 +40,7 @@
 #   python examples/advanced/allreduce.py -p a2a3 -d 0,1
 #
 # HCCL collectives (multi-card examples):
-#   export LD_PRELOAD=${CANN_HOME}/lib64/libhccl.so
+#   export LD_PRELOAD=${CANN_HOME}/aarch64-linux/lib64/libhccl.so
 #   python examples/advanced/allreduce.py -p a2a3 -d 0,1
 #
 # LOCAL ITERATION:
