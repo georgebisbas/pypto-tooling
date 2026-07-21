@@ -11,6 +11,8 @@ Dockerfiles and runbooks for PyPTO and simpler development on Ascend 910B.
 - [Dockerfile.pytorch-hccl-tests.cann9.0](Dockerfile.pytorch-hccl-tests.cann9.0): Standalone HCCL micro-benchmark image (`torchrun` + pytorch-hccl-tests fork).
 - [Dockerfile.hw-native-sys.sim.ubuntu22.04](Dockerfile.hw-native-sys.sim.ubuntu22.04): Standalone local simulation image for PyPTO (`a2a3sim`/`a5sim`) on x86_64 without NPU devices.
 - [Dockerfile.simpler.sim.ubuntu22.04](Dockerfile.simpler.sim.ubuntu22.04): Standalone simpler-only simulation image (`a2a3sim`/`a5sim`) for L3 worker STs without pypto or CANN.
+- [Dockerfile.pypto-lib.sim.ubuntu22.04](Dockerfile.pypto-lib.sim.ubuntu22.04): Thin layer on `pypto3-hw-native-sys:sim` with a baked `pypto-lib` checkout for example/model sim smoke tests.
+- [Dockerfile.pypto-lib.cann9.0](Dockerfile.pypto-lib.cann9.0): Thin layer on `pypto3-hw-native-sys:cann9` with a baked `pypto-lib` checkout for onboard NPU model runs.
 - [docker-entrypoint-cann.sh](docker-entrypoint-cann.sh): Runtime helper for workspace/runtime symlink handling.
 - [bz910b-reproduce.md](bz910b-reproduce.md): Reproduction and test workflow guide.
 - [profiling/](profiling/): Personal collective benchmark harness for PyPTO vs simpler L3 collectives.
@@ -27,6 +29,8 @@ Dockerfiles and runbooks for PyPTO and simpler development on Ascend 910B.
 - [Dockerfile.pytorch-hccl-tests.cann9.0](Dockerfile.pytorch-hccl-tests.cann9.0): Build a standalone HCCL benchmark image for baseline latency/bandwidth/allreduce comparisons (not for pypto/simpler composite tests).
 - [Dockerfile.hw-native-sys.sim.ubuntu22.04](Dockerfile.hw-native-sys.sim.ubuntu22.04): Build a standalone simulation-only PyPTO image for local development/testing on CPU-hosted simulators (`a2a3sim`, `a5sim`).
 - [Dockerfile.simpler.sim.ubuntu22.04](Dockerfile.simpler.sim.ubuntu22.04): Build a standalone simpler-only simulation image for L3 worker/collective STs on `a2a3sim` without pypto or CANN.
+- [Dockerfile.pypto-lib.sim.ubuntu22.04](Dockerfile.pypto-lib.sim.ubuntu22.04): Build a pypto-lib sim image (extends `pypto3-hw-native-sys:sim`) for example/model smoke tests on `a2a3sim`/`a5sim`.
+- [Dockerfile.pypto-lib.cann9.0](Dockerfile.pypto-lib.cann9.0): Build a pypto-lib NPU image (extends `pypto3-hw-native-sys:cann9`) for onboard model runs on Ascend 910B.
 - [docker-entrypoint-cann.sh](docker-entrypoint-cann.sh): Runtime helper script that normalizes runtime layout (workspace/runtime symlink behavior) before launching the container command.
 - [bz910b-reproduce.md](bz910b-reproduce.md): Operator runbook for reproducing tests and validating NPU execution on Ascend 910B hosts.
 - [profiling/](profiling/): Personal harness: equivalence-driven benchmark drivers, artifact bundles, and figure generation for collectives performance analysis.
@@ -125,6 +129,29 @@ docker build \
   -f Dockerfile.simpler.sim.ubuntu22.04 .
 ```
 
+Build pypto-lib simulation image (requires `pypto3-hw-native-sys:sim` base):
+
+```bash
+docker build -t pypto3-hw-native-sys:sim -f Dockerfile.hw-native-sys.sim.ubuntu22.04 .
+docker build -t pypto-lib-hw-native-sys:sim -f Dockerfile.pypto-lib.sim.ubuntu22.04 .
+```
+
+Build pypto-lib simulation image (pinned pypto-lib commit):
+
+```bash
+docker build \
+  --build-arg PYPTO_LIB_COMMIT=2d0a0ee1f939289d1e7bede9f0cd859d5142c3b6 \
+  -t pypto-lib-hw-native-sys:sim \
+  -f Dockerfile.pypto-lib.sim.ubuntu22.04 .
+```
+
+Build pypto-lib NPU image (requires `pypto3-hw-native-sys:cann9` base):
+
+```bash
+docker build -t pypto3-hw-native-sys:cann9 - < Dockerfile.hw-native-sys.cann9.0
+docker build -t pypto-lib-hw-native-sys:cann9 - < Dockerfile.pypto-lib.cann9.0
+```
+
 ## Runtime Notes (Local Simulation)
 
 This mode is for local CPU-hosted simulator workflows only (`a2a3sim`, `a5sim`):
@@ -211,6 +238,34 @@ python -c "import simpler; print('simpler ok')"
 ```
 
 Use `--shm-size=4g` on `docker run` when running L3 tests (forked workers + torch shared memory exhaust default `/dev/shm`).
+
+### pypto-lib simulation (`Dockerfile.pypto-lib.sim.ubuntu22.04`)
+
+```bash
+docker run --rm -it --shm-size=4g pypto-lib-hw-native-sys:sim
+```
+
+Inside the container:
+
+```bash
+cd /opt/pypto-lib
+python examples/beginner/hello_world.py -p a2a3sim
+python examples/advanced/allreduce.py -p a2a3sim
+python models/deepseek/v4/moe.py -p a2a3sim
+pytest tests/golden -v
+```
+
+Local branch iteration (mount both worktrees; reinstall pypto only when pypto sources change):
+
+```bash
+docker run --rm -it --shm-size=4g \
+  -v /path/to/pypto:/opt/pypto \
+  -v /path/to/pypto-lib:/opt/pypto-lib \
+  pypto-lib-hw-native-sys:sim
+# inside: pip install --no-build-isolation -e '/opt/pypto[dev]'
+```
+
+Distributed sim examples (`allreduce.py`, DeepSeek EP models) need `--shm-size=4g` at `docker run` time.
 
 Local branch (mount workspace `simpler/`):
 

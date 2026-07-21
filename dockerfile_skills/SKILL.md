@@ -42,6 +42,8 @@ Task starts
 | `Dockerfile.simpler.cann9.0` | simpler + pto-isa only | `docker build -t img - < Dockerfile...` | Yes (a2a3) |
 | `Dockerfile.hw-native-sys.sim.ubuntu22.04` | pypto + pto-isa (sim mode) | `docker build -t img -f Dockerfile... .` | No |
 | `Dockerfile.simpler.sim.ubuntu22.04` | simpler + pto-isa (sim mode) | `docker build -t img -f Dockerfile... .` | No |
+| `Dockerfile.pypto-lib.sim.ubuntu22.04` | pypto-lib on top of `pypto3-hw-native-sys:sim` | `docker build -t img -f Dockerfile... .` | No |
+| `Dockerfile.pypto-lib.cann9.0` | pypto-lib on top of `pypto3-hw-native-sys:cann9` | `docker build -t img - < Dockerfile...` | Yes (a2a3) |
 | `Dockerfile.pytorch-hccl-tests.cann9.0` | HCCL benchmarks | `docker build -t img - < Dockerfile...` | Yes (a2a3) |
 | `Dockerfile.server.cann:9.0` | pypto dev workspace | `docker build -t img -f Dockerfile... .` | Yes (a2a3) |
 
