@@ -29,3 +29,9 @@ export LD_PRELOAD=${CANN_HOME}/aarch64-linux/lib64/libhccl.so
 pip install --no-build-isolation -e .
 
 ```
+
+```
+git pull
+cmake --build build --parallel
+pip install --no-build-isolation -e .
+```
