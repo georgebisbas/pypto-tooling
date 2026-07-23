@@ -190,6 +190,11 @@
       "max_chars": 8000,
       "tier": "mcp-owned"
     },
+    "tools/sim_docker_workflow": {
+      "path": "content/tools/sim_docker_workflow.md",
+      "max_chars": 6000,
+      "tier": "mcp-owned"
+    },
     "notes/freshness": {
       "path": "pypto-3.0-notes/NOTES_FRESHNESS.md",
       "max_chars": 8000,
@@ -391,7 +396,7 @@
       "verify_tasks": ["pypto-tooling:host_collectives_ut_sim"],
       "agent_verify_tasks": ["pypto-tooling:host_collectives_ut_sim"],
       "developer_verify_tasks": ["pypto:host_collectives_st_npu"],
-      "resources": ["agent/distributed_work_policy", "flows/distributed_allreduce"]
+      "resources": ["agent/distributed_work_policy", "flows/distributed_allreduce", "tools/sim_docker_workflow"]
     },
     "distributed_codegen": {
       "description": "Distributed codegen backend",
@@ -609,7 +614,7 @@
       "verify_tasks": [],
       "agent_verify_tasks": [],
       "developer_verify_tasks": ["pypto:host_collectives_st_npu"],
-      "resources": ["ascend/hccl_container_checklist", "ascend/hccl_runtime", "agent/distributed_work_policy"]
+      "resources": ["ascend/hccl_container_checklist", "ascend/hccl_runtime", "agent/distributed_work_policy", "tools/sim_docker_workflow"]
     },
     "hccl_bandwidth": {
       "description": "PyTorch/HCCL collective + p2p bandwidth benchmarking on Ascend NPU (osu bibw/bw/mbw_mr/allreduce) via the pytorch-hccl-tests image",

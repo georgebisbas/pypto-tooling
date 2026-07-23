@@ -382,7 +382,7 @@
         "warning": "Pins pypto to current ../pypto HEAD for fork branch verification."
       },
       "host_collectives_ut_sim": {
-        "command": "docker run --rm -v \"$(cd ../pypto && pwd):/opt/pypto\" pypto3-hw-native-sys:sim bash -lc 'cd /opt/pypto && pip install -q ./runtime && pip install -q \".[dev]\" && pytest tests/ut/ir/transforms/test_lower_host_tensor_collectives.py tests/ut/codegen/distributed/test_host_orch_distributed.py tests/ut/ir/transforms/test_lower_composite_ops.py -v -k \"host_barrier or host_broadcast or host_reduce_scatter or host_allgather or materializes or template_package or host_allreduce or allgather or barrier or broadcast or reduce_scatter\"'",
+        "command": "docker run --rm -v \"$(cd ../pypto && pwd):/opt/pypto\" pypto3-hw-native-sys:sim bash -lc 'cd /opt/pypto && rm -rf build _skbuild && pip install -q ./runtime && pip install -q \".[dev]\" && pytest tests/ut/ir/transforms/test_lower_host_tensor_collectives.py tests/ut/codegen/distributed/test_host_orch_distributed.py tests/ut/ir/transforms/test_lower_composite_ops.py -v -k \"host_barrier or host_broadcast or host_reduce_scatter or host_allgather or materializes or template_package or host_allreduce or allgather or barrier or broadcast or reduce_scatter\"'",
         "category": "test",
         "risk": "long-running",
         "long_running": true,
