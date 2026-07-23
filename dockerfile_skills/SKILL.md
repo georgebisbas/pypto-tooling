@@ -94,6 +94,29 @@ Note: Uses **x86_64** `ptoas-bin-x86_64.tar.gz` with a **different SHA256** than
 
 Note: No pypto, CANN, or ptoas — simpler-only sim image. Build context must include `scripts/run-simpler-l3-sim.sh` (build from `pypto-tooling/`).
 
+### `Dockerfile.pypto-lib.sim.ubuntu22.04` — pypto-lib on `pypto3-hw-native-sys:sim`
+
+| # | Check | Command | What to update if drifted |
+|---|-------|---------|--------------------------|
+| 1 | Base image (`pypto3-hw-native-sys:sim`) `PYPTO_COMMIT` drifted? | Run `Dockerfile.hw-native-sys.sim.ubuntu22.04` checks first; the pypto-lib sim image inherits from it | Rebuild base image, then rebuild this image |
+| 2 | pypto-lib `origin/main` ahead of `PYPTO_LIB_COMMIT` example SHA in header? | `git -C /path/to/pypto-lib rev-parse origin/main` vs header `--build-arg PYPTO_LIB_COMMIT=` | Update build example comment in header |
+| 3 | pypto-lib quick-check examples still valid? | Verify `examples/beginner/hello_world.py -p a2a3sim`, `examples/advanced/allreduce.py -p a2a3sim`, `models/deepseek/v4/moe.py -p a2a3sim` exist in pypto-lib tree | Update header QUICK CHECKS comment |
+| 4 | `pytest tests/golden -v` still the correct test command? | Check `pypto-lib/.claude/skills/test-with-golden/SKILL.md` | Update header test command |
+
+Note: Pass-through image — no new build steps beyond `git clone pypto-lib`. All toolchain (pypto, ptoas, pto-isa) comes from the base image.
+
+### `Dockerfile.pypto-lib.cann9.0` — pypto-lib on `pypto3-hw-native-sys:cann9`
+
+| # | Check | Command | What to update if drifted |
+|---|-------|---------|--------------------------|
+| 1 | Base image (`pypto3-hw-native-sys:cann9`) `PYPTO_COMMIT` drifted? | Run `Dockerfile.hw-native-sys.cann9.0` checks first; the pypto-lib cann image inherits from it | Rebuild base image, then rebuild this image |
+| 2 | pypto-lib `origin/main` ahead of `PYPTO_LIB_COMMIT` example SHA in header? | `git -C /path/to/pypto-lib rev-parse origin/main` vs header `--build-arg PYPTO_LIB_COMMIT=` | Update build example comment in header |
+| 3 | pypto-lib quick-check examples still valid? | Verify `examples/beginner/hello_world.py -p a2a3 -d 0`, `examples/advanced/allreduce.py -p a2a3 -d 0,1` exist in pypto-lib tree | Update header QUICK CHECKS comment |
+| 4 | `LD_PRELOAD` comment-only (no `ENV`)? | `grep LD_PRELOAD Dockerfile.pypto-lib.cann9.0` — should be comments only | Remove image-wide `ENV LD_PRELOAD` |
+| 5 | `set_env.sh` not re-sourced? | Inherited from base image — already stripped there. If base image pattern changes, verify this image doesn't re-add it | Align with base image pattern |
+
+Note: Pass-through image — no new build steps beyond `git clone pypto-lib`. All toolchain and HCCL env comes from the base image. HCCL collectives need `export LD_PRELOAD=${CANN_HOME}/aarch64-linux/lib64/libhccl.so` before running multi-card examples.
+
 ### `Dockerfile.pytorch-hccl-tests.cann9.0` — HCCL benchmarks only
 
 | # | Check | Command | What to update if drifted |
@@ -127,15 +150,17 @@ Note: pypto + simpler are mounted from host at runtime, not pinned in the Docker
 ### Quick bulk check (all Dockerfiles)
 
 ```bash
-# Clone pypto and simpler if not already present
+# Clone pypto, simpler, and pypto-lib if not already present
 cd /tmp
 git clone --depth 1 https://github.com/hw-native-sys/pypto.git 2>/dev/null || true
 git clone --depth 1 https://github.com/hw-native-sys/simpler.git 2>/dev/null || true
+git clone --depth 1 https://github.com/hw-native-sys/pypto-lib.git 2>/dev/null || true
 
 # Run all checks at once
 cd ~/pypto-tooling
 echo "=== pypto origin/main ===" && git -C /tmp/pypto rev-parse --short HEAD
 echo "=== simpler origin/main ===" && git -C /tmp/simpler rev-parse --short HEAD
+echo "=== pypto-lib origin/main ===" && git -C /tmp/pypto-lib rev-parse --short HEAD
 echo "=== pto-isa (pypto pin) ===" && cat /tmp/pypto/runtime/pto_isa.pin
 echo "=== pto-isa (simpler pin) ===" && cat /tmp/simpler/pto_isa.pin
 echo "=== PTOAS (toolchain/versions.env) ===" && cat /tmp/pypto/toolchain/versions.env
