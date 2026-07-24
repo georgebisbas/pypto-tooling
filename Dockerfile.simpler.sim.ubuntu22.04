@@ -13,7 +13,7 @@
 #
 # BUILD (pinned commits):
 #   docker build \
-#     --build-arg SIMPLER_COMMIT=c032e07eab9a2ce1278377974867b7a8fd43ff13 \
+#     --build-arg SIMPLER_COMMIT=d0bc661a5b41b4925f2d72c77e86228cc351cf23 \
 #     --build-arg PTO_ISA_COMMIT=83d01313d9bfc247c4b7c8bcf969d1019f0d106f \
 #     -t simpler-hw-native-sys:sim \
 #     -f Dockerfile.simpler.sim.ubuntu22.04 .
@@ -46,9 +46,6 @@ ARG UBUNTU_VERSION=22.04
 FROM ubuntu:${UBUNTU_VERSION}
 
 ARG INSTALL_PREFIX=/opt
-# PTO_ISA_COMMIT defaults to empty — auto-derived from simpler's pto_isa.pin at build time.
-ARG PTO_ISA_COMMIT=
-ARG SIMPLER_COMMIT=c032e07eab9a2ce1278377974867b7a8fd43ff13
 
 ENV INSTALL_PREFIX=${INSTALL_PREFIX}
 ENV SIMPLER_DIR=${INSTALL_PREFIX}/simpler \
@@ -95,6 +92,8 @@ RUN python -m pip install --upgrade pip setuptools wheel && \
     pip install --no-cache-dir \
       torch --index-url https://download.pytorch.org/whl/cpu
 
+ARG SIMPLER_COMMIT=d0bc661a5b41b4925f2d72c77e86228cc351cf23
+
 # Clone simpler at a pinned commit (blobless clone supports arbitrary SHAs).
 RUN git clone --filter=blob:none https://github.com/hw-native-sys/simpler.git "${SIMPLER_DIR}" && \
     if ! git -C "${SIMPLER_DIR}" cat-file -e "${SIMPLER_COMMIT}^{commit}" 2>/dev/null; then \
@@ -103,6 +102,9 @@ RUN git clone --filter=blob:none https://github.com/hw-native-sys/simpler.git "$
     git -C "${SIMPLER_DIR}" checkout "${SIMPLER_COMMIT}"
 
 WORKDIR ${SIMPLER_DIR}
+
+# PTO_ISA_COMMIT defaults to empty — auto-derived from simpler's pto_isa.pin at build time.
+ARG PTO_ISA_COMMIT=
 
 # Pre-clone pto-isa to avoid first-run cloning during tests.
 # If PTO_ISA_COMMIT was not set via --build-arg, derive it from simpler's

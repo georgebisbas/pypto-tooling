@@ -434,6 +434,15 @@
           "Docker daemon available"
         ],
         "warning": "Builds the OSU/HCCL benchmark image. Build ends with an editable-install sanity import (must resolve under /opt/pytorch-hccl-tests, not site-packages)."
+      },
+      "dockerfile_sync": {
+        "command": "set -euo pipefail; TMPDIR=$(mktemp -d); trap 'rm -rf \"$TMPDIR\"' EXIT; echo '=== Upstream HEADs ===' && for repo in pypto simpler pypto-lib; do git -C \"$TMPDIR\" clone --depth 1 \"https://github.com/hw-native-sys/${repo}.git\" \"$TMPDIR/${repo}\" 2>/dev/null && echo \"${repo}: $(git -C \"$TMPDIR/${repo}\" rev-parse HEAD)\"; done && git -C \"$TMPDIR\" clone --depth 1 https://github.com/georgebisbas/pytorch-hccl-tests.git \"$TMPDIR/pt-hccl\" 2>/dev/null && echo \"pytorch-hccl-tests: $(git -C \"$TMPDIR/pt-hccl\" rev-parse HEAD)\" && echo && echo '=== Current Dockerfile pins (ARG SHAs) ===' && rg '^ARG.*COMMIT=' Dockerfile.* && echo && echo '=== Current Dockerfile PTOAS pins ===' && rg '^ARG PTOAS' Dockerfile.hw-native-sys.cann9.0 Dockerfile.hw-native-sys.sim.ubuntu22.04 Dockerfile.server.cann:9.0 && echo && echo '=== Upstream pto-isa pins ===' && echo \"pypto (runtime/pto_isa.pin): $(cat \"$TMPDIR/pypto/runtime/pto_isa.pin\" 2>/dev/null || echo 'N/A')\" && echo \"simpler (pto_isa.pin): $(cat \"$TMPDIR/simpler/pto_isa.pin\" 2>/dev/null || echo 'N/A')\" && echo && echo '=== Upstream PTOAS (pypto toolchain/versions.env) ===' && cat \"$TMPDIR/pypto/toolchain/versions.env\" 2>/dev/null | grep -E '^(PTOAS_VERSION|PTOAS_SHA256)' && echo && echo '=== pip deps (pypto CI Dockerfile) ===' && grep -B1 'pip install' \"$TMPDIR/pypto/.github/docker/github_ci.Dockerfile\" 2>/dev/null | head -20 || echo 'N/A'",
+        "category": "diagnostics",
+        "risk": "safe-read-only",
+        "duration_hint": "<30s",
+        "prerequisites": [
+          "Network access to github.com"
+        ]
       }
     },
     "pytorch-hccl-tests": {

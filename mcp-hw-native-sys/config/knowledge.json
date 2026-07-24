@@ -631,6 +631,19 @@
       "agent_verify_tasks": ["pypto-tooling:docker_build_pytorch_hccl"],
       "developer_verify_tasks": ["pytorch-hccl-tests:bench_bibw_npu", "pytorch-hccl-tests:bench_mbw_mr_npu"],
       "resources": ["pytorch-hccl-tests/overview", "pytorch-hccl-tests/bandwidth-runbook"]
+    },
+    "dockerfile_sync": {
+      "description": "Sync Dockerfile SHA pins to latest origin/main: pypto, simpler, pypto-lib, pytorch-hccl-tests, pto-isa, PTOAS",
+      "read_first_canonical": [
+        "pypto-tooling/dockerfile_skills/SKILL.md"
+      ],
+      "read_first_enriched": [],
+      "rules": [
+        "pypto-tooling/dockerfile_skills/SKILL.md"
+      ],
+      "entrypoint_areas": ["pypto-tooling:dockerfiles"],
+      "verify_tasks": ["pypto-tooling:dockerfile_sync"],
+      "resources": []
     }
   }
 }

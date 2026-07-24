@@ -150,20 +150,23 @@ Note: pypto + simpler are mounted from host at runtime, not pinned in the Docker
 ### Quick bulk check (all Dockerfiles)
 
 ```bash
-# Clone pypto, simpler, and pypto-lib if not already present
+# Clone pypto, simpler, pypto-lib, and pytorch-hccl-tests if not already present
 cd /tmp
 git clone --depth 1 https://github.com/hw-native-sys/pypto.git 2>/dev/null || true
 git clone --depth 1 https://github.com/hw-native-sys/simpler.git 2>/dev/null || true
 git clone --depth 1 https://github.com/hw-native-sys/pypto-lib.git 2>/dev/null || true
+git clone --depth 1 https://github.com/georgebisbas/pytorch-hccl-tests.git 2>/dev/null || true
 
-# Run all checks at once
+# Run all checks at once (or use the MCP task: run_task pypto-tooling dockerfile_sync)
 cd ~/pypto-tooling
 echo "=== pypto origin/main ===" && git -C /tmp/pypto rev-parse --short HEAD
 echo "=== simpler origin/main ===" && git -C /tmp/simpler rev-parse --short HEAD
 echo "=== pypto-lib origin/main ===" && git -C /tmp/pypto-lib rev-parse --short HEAD
-echo "=== pto-isa (pypto pin) ===" && cat /tmp/pypto/runtime/pto_isa.pin
+echo "=== pytorch-hccl-tests origin/master ===" && git -C /tmp/pytorch-hccl-tests rev-parse --short HEAD
+echo "=== Current ARG SHAs ===" && rg '^ARG.*COMMIT=' Dockerfile.* && rg '^ARG PTOAS' Dockerfile.hw-native-sys.cann9.0 Dockerfile.hw-native-sys.sim.ubuntu22.04 Dockerfile.server.cann:9.0
+echo "=== pto-isa (pypto pin) ===" && cat /tmp/pypto/runtime/pto_isa.pin 2>/dev/null || echo 'N/A'
 echo "=== pto-isa (simpler pin) ===" && cat /tmp/simpler/pto_isa.pin
-echo "=== PTOAS (toolchain/versions.env) ===" && cat /tmp/pypto/toolchain/versions.env
+echo "=== PTOAS (toolchain/versions.env) ===" && grep -E '^(PTOAS_VERSION|PTOAS_SHA256)' /tmp/pypto/toolchain/versions.env
 echo "=== pip deps (pypto CI Dockerfile) ===" && grep 'pip install' /tmp/pypto/.github/docker/github_ci.Dockerfile
 ```
 

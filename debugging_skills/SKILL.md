@@ -256,7 +256,7 @@ this skill is about **tile row stride** (logical shape), which is independent.
 |-------|------------|-------|
 | **pto-isa** | C++ `static_assert` in generated kernel | e.g. A5 `TStore.hpp`: `Cols * sizeof(T) % 32 == 0` |
 | **PTOAS** | MLIR `verify()` on ops | Large verifier pass **2026-03-16** (`4051849` in PTOAS). Store/expand failures may surface as other op errors or kernel compile |
-| **PyPTO CI** | ST / codegen | **ptoas v0.48** pinned from `pypto/toolchain/versions.env`. Older ptoas may not catch the same cases |
+| **PyPTO CI** | ST / codegen | **ptoas v0.50** pinned from `pypto/toolchain/versions.env`. Older ptoas may not catch the same cases |
 | **PyPTO tests** | Documented shapes | `test_scatter_update` (INT32 `cols >= 8`), `test_gather`, `test_l3_notify_wait` |
 
 The rule is **not** a recent PyPTO DSL change; new code paths (e.g. `pl.tile.full`) **expose** it.
@@ -348,6 +348,7 @@ Reference: `pypto/tests/st/distributed/test_l3_notify_wait.py` (comment explains
 | 2026-05-06 | `pl.tile.full` (#1274) — easy tiny tiles |
 | 2026-05-20 | PyPTO CI ptoas **v0.36 → v0.40** (#1417) |
 | 2026-06-30 | PyPTO CI ptoas **v0.40 → v0.48** (#1921) |
+| 2026-07-24 | PyPTO CI ptoas **v0.48 → v0.50** |
 | 2026-05-26 | `test_l3_notify_wait` — scalar workaround documented |
 | 2026-05-28 | GEMM comm anchor `[1,1]` → fix `[1,8]` |
 

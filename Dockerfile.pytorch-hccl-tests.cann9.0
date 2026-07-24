@@ -19,7 +19,7 @@
 #   docker build -t pytorch-hccl-tests:cann9 - < Dockerfile.pytorch-hccl-tests.cann9.0
 #
 # BUILD (x86 host / custom ref):
-#   docker build --build-arg PT_HCCL_COMMIT=029e745b5dacdf288316818fd6ae197c2506dc8f --build-arg PT_HCCL_INSTALL_TARGET=install-npu-x86 -t pytorch-hccl-tests:cann9 - < Dockerfile.pytorch-hccl-tests.cann9.0
+#   docker build --build-arg PT_HCCL_COMMIT=53a6734b085d9559fc069351747be2ca8663d6ff --build-arg PT_HCCL_INSTALL_TARGET=install-npu-x86 -t pytorch-hccl-tests:cann9 - < Dockerfile.pytorch-hccl-tests.cann9.0
 #
 # RUN (multi-device, HCCL collectives — MUST use --pid=host):
 #   docker run --rm -it --privileged --ipc=host --pid=host --cap-add=SYS_PTRACE --security-opt seccomp=unconfined -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi:ro -v /usr/local/Ascend/driver:/usr/local/Ascend/driver:ro -v /dev:/dev pytorch-hccl-tests:cann9
@@ -59,9 +59,6 @@ FROM quay.io/ascend/cann:${CANN_VERSION}-910b-ubuntu22.04-py3.12
 
 ARG CANN_VERSION=9.0.0
 ARG INSTALL_PREFIX=/opt
-ARG PT_HCCL_REPO_URL=https://github.com/georgebisbas/pytorch-hccl-tests.git
-ARG PT_HCCL_COMMIT=029e745b5dacdf288316818fd6ae197c2506dc8f
-ARG PT_HCCL_INSTALL_TARGET=install-npu-arm
 
 ENV CANN_VERSION=${CANN_VERSION} \
     INSTALL_PREFIX=${INSTALL_PREFIX}
@@ -72,6 +69,9 @@ ENV CANN_VERSION=${CANN_VERSION} \
 ENV CANN_HOME=/usr/local/Ascend/cann-${CANN_VERSION}
 ENV PT_HCCL_DIR=${INSTALL_PREFIX}/pytorch-hccl-tests \
     PT_HCCL_VENV=${INSTALL_PREFIX}/venvs/pytorch-hccl-tests
+
+ARG PT_HCCL_REPO_URL=https://github.com/georgebisbas/pytorch-hccl-tests.git
+ARG PT_HCCL_COMMIT=53a6734b085d9559fc069351747be2ca8663d6ff
 
 # Provenance: record the benchmark repo ref baked into this image.
 LABEL org.opencontainers.image.revision="${PT_HCCL_COMMIT}" \
@@ -119,6 +119,9 @@ WORKDIR ${PT_HCCL_DIR}
 # instead of shipping an image where branch switches silently don't take effect.
 # With this, switching branches (e.g. feat/osu-mbw-mr to use `mbw-mr`) takes
 # effect immediately with no reinstall.
+
+ARG PT_HCCL_INSTALL_TARGET=install-npu-arm
+
 RUN python3.10 -m venv "${PT_HCCL_VENV}" && \
     . "${PT_HCCL_VENV}/bin/activate" && \
     python -m pip install --upgrade pip && \

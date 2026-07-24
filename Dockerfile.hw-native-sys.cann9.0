@@ -9,7 +9,7 @@
 #   PYPTO_COMMIT    (default: full SHA of github main) — must exist on github.com/hw-native-sys/pypto
 #                   Use 40-char SHA when pinning an older commit (GitHub fetch rejects short SHAs).
 #   PTO_ISA_COMMIT  (default: auto)     — pto-isa commit; auto-derived from runtime/pto_isa.pin if not set
-#   PTOAS_VERSION   (default: v0.48)    — PTOAS release (must match pypto CI)
+#   PTOAS_VERSION   (default: v0.50)    — PTOAS release (must match pypto CI)
 #
 # REQUIREMENTS:
 #   - Internet access during build (GitHub)
@@ -24,7 +24,7 @@
 #   docker build -t pypto3-hw-native-sys:cann9 - < Dockerfile.hw-native-sys.cann9.0
 #
 # BUILD (custom prefix / pinned pto-isa / different commit):
-#   docker build --build-arg PYPTO_COMMIT=2a282cc9c067d150c2460ed5a9def9e73b7b7fa3 -t pypto3-hw-native-sys:cann9 - < Dockerfile.hw-native-sys.cann9.0
+#   docker build --build-arg PYPTO_COMMIT=efb78378071d6f6568e72402ae0f529c83ec81dc -t pypto3-hw-native-sys:cann9 - < Dockerfile.hw-native-sys.cann9.0
 #
 # RUN (single-device, NO HCCL):
 #   docker run --rm -it --privileged --ipc=host -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi:ro -v /usr/local/Ascend/driver:/usr/local/Ascend/driver:ro -v /dev:/dev pypto3-hw-native-sys:cann9
@@ -94,10 +94,6 @@ FROM quay.io/ascend/cann:${CANN_VERSION}-910b-ubuntu22.04-py3.12
 # Re-declare after FROM (ARG scope resets after each FROM).
 ARG CANN_VERSION=9.0.0
 ARG INSTALL_PREFIX=/opt
-# PTO_ISA_COMMIT defaults to empty — auto-derived from runtime/pto_isa.pin
-# (the single source of truth per pypto CI toolchain job; see PR #1851).
-# Set via --build-arg to pin a specific commit.
-ARG PTO_ISA_COMMIT=
 
 # Persist as ENV so all subsequent instructions can reference them.
 ENV CANN_VERSION=${CANN_VERSION} \
@@ -158,7 +154,7 @@ RUN pip install torch --index-url https://download.pytorch.org/whl/cpu
 # Clone pypto at the pinned commit (changing PYPTO_COMMIT busts the layer cache automatically).
 # Uses a blobless clone (--filter=blob:none) so any commit SHA can be checked out;
 # GitHub does not allow shallow-fetching arbitrary SHAs directly.
-ARG PYPTO_COMMIT=2a282cc9c067d150c2460ed5a9def9e73b7b7fa3
+ARG PYPTO_COMMIT=efb78378071d6f6568e72402ae0f529c83ec81dc
 RUN git clone --filter=blob:none https://github.com/hw-native-sys/pypto.git "${PYPTO_DIR}" && \
     if ! git -C "${PYPTO_DIR}" cat-file -e "${PYPTO_COMMIT}^{commit}" 2>/dev/null; then \
       git -C "${PYPTO_DIR}" fetch origin "${PYPTO_COMMIT}"; \
@@ -186,6 +182,11 @@ RUN if [ ! -f 3rdparty/libbacktrace/configure.ac ]; then \
     test -f 3rdparty/msgpack-c/include/msgpack.hpp && \
     test -f runtime/pyproject.toml
 
+# PTO_ISA_COMMIT defaults to empty — auto-derived from runtime/pto_isa.pin
+# (the single source of truth per pypto CI toolchain job; see PR #1851).
+# Set via --build-arg to pin a specific commit.
+ARG PTO_ISA_COMMIT=
+
 # Install PTO-ISA (required by system tests).
 # If PTO_ISA_COMMIT was not set via --build-arg, derive it from the runtime
 # submodule's runtime/pto_isa.pin (the single source of truth per pypto CI;
@@ -205,8 +206,8 @@ RUN if [ -z "${PTO_ISA_COMMIT}" ]; then \
 ENV PTO_ISA_ROOT=${PTO_ISA_DIR}
 
 # Install PTOAS binary.
-ARG PTOAS_VERSION=v0.48
-ARG PTOAS_SHA256=94a47faf7371d38be71aa39582e15b85dc4fe7e1458198eda81ed8ea3b2b7b9f
+ARG PTOAS_VERSION=v0.50
+ARG PTOAS_SHA256=acf7b316bedccf0689971d2dc92f9f80621ab5eba131d805317e01c766c1dc2c
 RUN curl --fail --location --retry 3 --retry-all-errors \
       "https://github.com/hw-native-sys/PTOAS/releases/download/${PTOAS_VERSION}/ptoas-bin-aarch64.tar.gz" \
       -o /tmp/ptoas-bin-aarch64.tar.gz && \
