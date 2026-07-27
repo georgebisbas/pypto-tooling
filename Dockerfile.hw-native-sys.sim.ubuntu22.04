@@ -13,7 +13,7 @@
 #   docker build -t pypto3-hw-native-sys:sim -f Dockerfile.hw-native-sys.sim.ubuntu22.04 .
 #
 # BUILD (pinned commits):
-#   docker build --build-arg PYPTO_COMMIT=efb78378071d6f6568e72402ae0f529c83ec81dc --build-arg PTO_ISA_COMMIT=83d01313d9bfc247c4b7c8bcf969d1019f0d106f -t pypto3-hw-native-sys:sim -f Dockerfile.hw-native-sys.sim.ubuntu22.04 .
+#   docker build --build-arg PYPTO_COMMIT=ef6ce7cd8bd33b4c93b58dc34830a20b145736ac --build-arg PTO_ISA_COMMIT=83d01313d9bfc247c4b7c8bcf969d1019f0d106f -t pypto3-hw-native-sys:sim -f Dockerfile.hw-native-sys.sim.ubuntu22.04 .
 #
 # RUN:
 #   docker run --rm -it pypto3-hw-native-sys:sim
@@ -119,7 +119,7 @@ RUN python -m pip install --upgrade pip setuptools wheel && \
       torch --index-url https://download.pytorch.org/whl/cpu
 
 # Clone pypto with submodules so runtime/simpler sources are present.
-ARG PYPTO_COMMIT=efb78378071d6f6568e72402ae0f529c83ec81dc
+ARG PYPTO_COMMIT=ef6ce7cd8bd33b4c93b58dc34830a20b145736ac
 RUN git clone --filter=blob:none https://github.com/hw-native-sys/pypto.git "${PYPTO_DIR}" && \
     if ! git -C "${PYPTO_DIR}" cat-file -e "${PYPTO_COMMIT}^{commit}" 2>/dev/null; then \
       git -C "${PYPTO_DIR}" fetch origin "${PYPTO_COMMIT}"; \
@@ -151,8 +151,8 @@ RUN if [ -z "${PTO_ISA_COMMIT}" ]; then \
     git -C "${PTO_ISA_DIR}" rev-parse --short HEAD
 
 # Install ptoas x86_64 used by simulator CI jobs.
-ARG PTOAS_VERSION=v0.50
-ARG PTOAS_SHA256=eb3112ac208413670be2e743433a0d19e20a4c2c8a5d26dbadd152fec94d30e7
+ARG PTOAS_VERSION=v0.48
+ARG PTOAS_SHA256=701249dc3d49045814a147cd6f516f624a7d2d1a59041f1d99f3e4c637857bbe
 RUN curl --fail --location --retry 3 --retry-all-errors \
       "https://github.com/hw-native-sys/PTOAS/releases/download/${PTOAS_VERSION}/ptoas-bin-x86_64.tar.gz" \
       -o /tmp/ptoas-bin-x86_64.tar.gz && \

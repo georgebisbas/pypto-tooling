@@ -12,7 +12,7 @@
 #
 # BUILD (pinned pypto-lib commit):
 #   docker build \
-#     --build-arg PYPTO_LIB_COMMIT=273a84d1e9462a947ab3b28631c3dd495abc4647 \
+#     --build-arg PYPTO_LIB_COMMIT=d28a3fb9687a96cfb825b807ff2cf2e0308c0832 \
 #     -t pypto-lib-hw-native-sys:sim \
 #     -f Dockerfile.pypto-lib.sim.ubuntu22.04 .
 #
@@ -37,7 +37,7 @@
 #   python -c "import pypto; import golden; print('ok')"
 #   python examples/beginner/hello_world.py -p a2a3sim
 #   python examples/advanced/allreduce.py -p a2a3sim
-#   python models/deepseek/v4/moe.py -p a2a3sim
+#   python models/deepseek/v4-flash/moe.py -p a2a3sim
 #   pytest tests/golden -v
 #
 # PRE-COMMIT (pypto-lib):

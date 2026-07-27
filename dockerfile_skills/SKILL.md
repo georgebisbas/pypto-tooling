@@ -59,9 +59,12 @@ Each Dockerfile pins specific external versions. When asked to update one, run t
 |---|-------|---------|--------------------------|
 | 1 | pypto `origin/main` ahead of `PYPTO_COMMIT`? | `git -C /path/to/pypto rev-list --count ${PYPTO_COMMIT}..origin/main` | `ARG PYPTO_COMMIT` + header comment example |
 | 2 | pto-isa commit changed? | Read `pypto/runtime/pto_isa.pin` — the single source of truth (auto-derived at Docker build time). | Auto-derived; no ARG update needed unless you want to hard-pin via `--build-arg` |
-| 3 | PTOAS version or SHA256 changed? | Read `pypto/toolchain/versions.env` directly — this is the **single source of truth** for PTOAS_VERSION and PTOAS_SHA256_{AARCH64,X86_64} (bumped via PRs like [#1921](https://github.com/hw-native-sys/pypto/pull/1921)). Do NOT grep `.github/workflows/ci.yml` for PTOAS. | `ARG PTOAS_VERSION` + `ARG PTOAS_SHA256` (aarch64 for cann/server, x86_64 for sim) |
+| 3 | PTOAS version or SHA256 changed? | Read `pypto/toolchain/versions.env` **at the commit you are pinning** — this is the **single source of truth** for PTOAS_VERSION and PTOAS_SHA256_{AARCH64,X86_64} (bumped via PRs like [#1921](https://github.com/hw-native-sys/pypto/pull/1921)). Do NOT grep `.github/workflows/ci.yml` for PTOAS. | `ARG PTOAS_VERSION` + `ARG PTOAS_SHA256` (aarch64 for cann/server, x86_64 for sim) |
 | 4 | pip deps changed in pypto CI Dockerfile? | `diff <(grep 'pip install' pypto/.github/docker/github_ci.Dockerfile) <(grep 'pip install' Dockerfile.hw-native-sys.cann9.0)` | Update pip install RUN lines |
 | 5 | Test commands in header comment match pypto CI? | Compare `.github/workflows/ci.yml` jobs with Dockerfile comment header | Update test command cheatsheet in header comment |
+| 6 | `3rdparty` fallback clones match `pypto/.gitmodules`? | `git -C /path/to/pypto show origin/main:.gitmodules` vs the fallback `git clone` URLs/branches in the Dockerfile | Update the fallback URL/branch — see "Third-party fallback" pattern |
+
+**PTOAS versions are not monotonic.** `versions.env` can move *backwards*: pypto bumped to v0.50 (#2076) then reverted to v0.48 (#2138) because that ptoas build was buggy. Always take the version from `versions.env` at the pypto commit you pin — never carry forward a higher number just because you set it last time, and never bump ahead of `versions.env` even when newer PTOAS releases exist.
 
 ### `Dockerfile.simpler.cann9.0` — simpler + pto-isa only
 
@@ -100,7 +103,7 @@ Note: No pypto, CANN, or ptoas — simpler-only sim image. Build context must in
 |---|-------|---------|--------------------------|
 | 1 | Base image (`pypto3-hw-native-sys:sim`) `PYPTO_COMMIT` drifted? | Run `Dockerfile.hw-native-sys.sim.ubuntu22.04` checks first; the pypto-lib sim image inherits from it | Rebuild base image, then rebuild this image |
 | 2 | pypto-lib `origin/main` ahead of `PYPTO_LIB_COMMIT` example SHA in header? | `git -C /path/to/pypto-lib rev-parse origin/main` vs header `--build-arg PYPTO_LIB_COMMIT=` | Update build example comment in header |
-| 3 | pypto-lib quick-check examples still valid? | Verify `examples/beginner/hello_world.py -p a2a3sim`, `examples/advanced/allreduce.py -p a2a3sim`, `models/deepseek/v4/moe.py -p a2a3sim` exist in pypto-lib tree | Update header QUICK CHECKS comment |
+| 3 | pypto-lib quick-check examples still valid? | Verify `examples/beginner/hello_world.py -p a2a3sim`, `examples/advanced/allreduce.py -p a2a3sim`, `models/deepseek/v4-flash/moe.py -p a2a3sim` exist in pypto-lib tree — model paths get renamed (pypto-lib #816 split `models/deepseek/v4/` into `v4-flash/` + `v4-pro/`) | Update header QUICK CHECKS comment |
 | 4 | `pytest tests/golden -v` still the correct test command? | Check `pypto-lib/.claude/skills/test-with-golden/SKILL.md` | Update header test command |
 
 Note: Pass-through image — no new build steps beyond `git clone pypto-lib`. All toolchain (pypto, ptoas, pto-isa) comes from the base image.
@@ -135,7 +138,7 @@ WORLD_SIZE=2 make bidirectional-bw DEVICE=npu   # bibw: point-to-point, exactly 
 WORLD_SIZE=8 make mbw-mr DEVICE=npu             # mbw_mr: world_size//2 concurrent pairs
 ```
 
-Pass `WORLD_SIZE` as a **make argument** (or `make -e`) unless the Makefile uses `?=` — `export WORLD_SIZE = 2` shadows an env prefix. Full debugging notes: `issue_pytorch_hccl_tests.md`.
+As of `029e745b` the Makefile declares `export WORLD_SIZE ?= 2`, so a plain env prefix (`WORLD_SIZE=8 make mbw-mr`) is honoured. On older refs it was `export WORLD_SIZE = 2`, which shadows the env prefix — there you must pass it as a **make argument** (`make mbw-mr WORLD_SIZE=8`) or use `make -e`. Full debugging notes: `issue_pytorch_hccl_tests.md`.
 
 ### `Dockerfile.server.cann:9.0` — pypto dev workspace (host mount)
 
@@ -260,8 +263,8 @@ PTO_ISA_COMMIT=$(tr -d '[:space:]' < pto_isa.pin)
 ```dockerfile
 RUN if [ ! -f 3rdparty/libbacktrace/configure.ac ]; then \
       rm -rf 3rdparty/libbacktrace && \
-      git clone --depth 1 --branch macho-bundle-support \
-        https://github.com/Hzfengsy/libbacktrace.git 3rdparty/libbacktrace; \
+      git clone --depth 1 \
+        https://github.com/ianlancetaylor/libbacktrace.git 3rdparty/libbacktrace; \
     fi && \
     if [ ! -f 3rdparty/msgpack-c/include/msgpack.hpp ]; then \
       rm -rf 3rdparty/msgpack-c && \
@@ -423,7 +426,7 @@ npu-smi info
 | pto-isa | `github.com/hw-native-sys/pto-isa.git` | kernel ISA headers |
 | pto-isa mirror | `gitcode.com/luohuan40/pto-isa.git` | fallback |
 | PTOAS | `github.com/hw-native-sys/PTOAS/releases/download/${VER}/ptoas-bin-aarch64.tar.gz` | binary tarball |
-| libbacktrace | `github.com/Hzfengsy/libbacktrace.git` | `macho-bundle-support` branch |
+| libbacktrace | `github.com/ianlancetaylor/libbacktrace.git` | upstream, default branch (pypto #2146 dropped the `Hzfengsy` fork + `macho-bundle-support` branch) |
 | msgpack-c | `github.com/msgpack/msgpack-c.git` | `cpp_master` branch |
 
 ## See also
