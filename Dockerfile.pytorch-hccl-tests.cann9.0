@@ -71,7 +71,7 @@ ENV PT_HCCL_DIR=${INSTALL_PREFIX}/pytorch-hccl-tests \
     PT_HCCL_VENV=${INSTALL_PREFIX}/venvs/pytorch-hccl-tests
 
 ARG PT_HCCL_REPO_URL=https://github.com/georgebisbas/pytorch-hccl-tests.git
-ARG PT_HCCL_COMMIT=89dfa9f2f674909e1cd9814457db10a5d746675c
+ARG PT_HCCL_COMMIT=029e745b5dacdf288316818fd6ae197c2506dc8f
 
 # Provenance: record the benchmark repo ref baked into this image.
 LABEL org.opencontainers.image.revision="${PT_HCCL_COMMIT}" \

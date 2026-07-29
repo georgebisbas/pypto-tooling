@@ -150,21 +150,17 @@ RUN if [ -z "${PTO_ISA_COMMIT}" ]; then \
     git -C "${PTO_ISA_DIR}" checkout "${PTO_ISA_COMMIT}" && \
     git -C "${PTO_ISA_DIR}" rev-parse --short HEAD
 
-# Install ptoas x86_64 used by simulator CI jobs.
-ARG PTOAS_VERSION=v0.48
-ARG PTOAS_SHA256=701249dc3d49045814a147cd6f516f624a7d2d1a59041f1d99f3e4c637857bbe
+# Install ptoas x86_64 used by simulator CI jobs (wheel from GitHub Release).
+ARG PTOAS_VERSION=v0.54
+ARG PTOAS_WHEEL_SHA256=b25a9804d307b6573ff15b88129485c416477f2567fe54f73105693b77532305
 RUN curl --fail --location --retry 3 --retry-all-errors \
-      "https://github.com/hw-native-sys/PTOAS/releases/download/${PTOAS_VERSION}/ptoas-bin-x86_64.tar.gz" \
-      -o /tmp/ptoas-bin-x86_64.tar.gz && \
-    echo "${PTOAS_SHA256}  /tmp/ptoas-bin-x86_64.tar.gz" | sha256sum -c - && \
-    mkdir -p "${PTOAS_DIR}" && \
-    tar -xzf /tmp/ptoas-bin-x86_64.tar.gz -C "${PTOAS_DIR}" && \
-    chmod +x "${PTOAS_DIR}/ptoas" "${PTOAS_DIR}/bin/ptoas" && \
-    rm -f /tmp/ptoas-bin-x86_64.tar.gz
+      "https://github.com/hw-native-sys/PTOAS/releases/download/${PTOAS_VERSION}/ptoas-0.54-cp310-cp310-manylinux_2_34_x86_64.whl" \
+      -o /tmp/ptoas-0.54-cp310-cp310-manylinux_2_34_x86_64.whl && \
+    echo "${PTOAS_WHEEL_SHA256}  /tmp/ptoas-0.54-cp310-cp310-manylinux_2_34_x86_64.whl" | sha256sum -c - && \
+    python3 -m pip install /tmp/ptoas-0.54-cp310-cp310-manylinux_2_34_x86_64.whl && \
+    rm -f /tmp/ptoas-0.54-cp310-cp310-manylinux_2_34_x86_64.whl
 
-ENV PTO_ISA_ROOT=${PTO_ISA_DIR} \
-    PTOAS_ROOT=${PTOAS_DIR}
-ENV PATH=${PTOAS_DIR}:${PTOAS_DIR}/bin:${PATH}
+ENV PTO_ISA_ROOT=${PTO_ISA_DIR}
 
 WORKDIR ${PYPTO_DIR}
 
