@@ -800,6 +800,30 @@ def bootstrap_session(
     )
 
 
+@mcp.tool()
+def gate_pr_script(
+    repo: Annotated[str, Field(description='Repository name, e.g. "pypto"')],
+    test_paths: Annotated[list[str], Field(description='List of pytest test files/dirs (repo-relative), e.g. ["tests/st/distributed/collectives/test_allreduce.py"]')] = [],
+    extra_test_args: Annotated[str, Field(description="Extra pytest arguments appended after test paths, e.g. '-k allreduce -v'")] = "",
+    base_branch: Annotated[str, Field(description="Branch to rebase onto")] = "main",
+    skip_pre_commit: Annotated[bool, Field(description="Skip pre-commit checks")] = False,
+    skip_tests: Annotated[bool, Field(description="Skip sim Docker tests")] = False,
+    push_remote: Annotated[str, Field(description="Remote to force-push to")] = "origin",
+) -> dict[str, Any]:
+    """Generate a bash script for the safe rebase->pre-commit->sim-Docker-tests->squash->push gate workflow."""
+    from mcp_hwnative_sys.gate_pr import gate_pr_script_impl
+
+    return gate_pr_script_impl(
+        repo=repo,
+        test_paths=list(test_paths) if test_paths else [],
+        extra_test_args=extra_test_args,
+        base_branch=base_branch,
+        skip_pre_commit=skip_pre_commit,
+        skip_tests=skip_tests,
+        push_remote=push_remote,
+    )
+
+
 def main() -> None:
     mcp.run()
 

@@ -443,6 +443,12 @@
         "prerequisites": [
           "Network access to github.com"
         ]
+      },
+      "config_freshness": {
+        "command": "cd mcp-hw-native-sys && .venv/bin/python -c \"from mcp_hwnative_sys.knowledge import knowledge_health_impl; import json; print(json.dumps(knowledge_health_impl(), indent=2))\"",
+        "category": "diagnostics",
+        "risk": "safe-read-only",
+        "duration_hint": "<10s"
       }
     },
     "pytorch-hccl-tests": {
