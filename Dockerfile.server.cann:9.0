@@ -102,6 +102,7 @@ RUN apt-get update && \
       ccache \
       build-essential cmake ninja-build pkg-config \
       mpich libmpich-dev \
+      ripgrep nano \
       bash-completion gh && \
     if ! command -v g++-15 >/dev/null 2>&1; then \
       ln -sf "$(command -v g++)" /usr/local/bin/g++-15; \

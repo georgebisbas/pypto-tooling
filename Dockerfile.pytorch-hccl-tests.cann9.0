@@ -90,6 +90,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
       git ca-certificates curl make gcc g++ python3.10 python3.10-venv \
+      ripgrep nano \
       bash-completion gh && \
     rm -rf /var/lib/apt/lists/*
 

@@ -91,6 +91,7 @@ RUN apt-get update && \
       gcc-15 g++-15 build-essential \
       git curl ca-certificates \
       ccache cmake ninja-build pkg-config \
+      ripgrep nano \
       bash-completion gh && \
     rm -rf /var/lib/apt/lists/*
 
