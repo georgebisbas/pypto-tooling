@@ -6,6 +6,7 @@ import os
 import re
 import shutil
 import subprocess
+import time
 from pathlib import Path
 from typing import Any
 
@@ -71,6 +72,55 @@ def _suggest_platform() -> str:
     if "950" in ascend or "a5" in ascend:
         return "a5"
     return "a2a3"
+
+
+# Short-lived cache so run_task/run_command routing does not shell out to
+# npu-smi on every call. 10s is long enough to amortize repeated routing
+# within one interaction, short enough to notice a device being released.
+_NPU_CACHE: dict[str, Any] = {"ts": 0.0, "available": None}
+
+
+def _detect_npu_available() -> bool:
+    """Return True only when at least one NPU device is confirmed reachable."""
+    npu_smi = shutil.which("npu-smi")
+    if npu_smi is None:
+        return False
+    code, stdout, stderr = _run_capture([npu_smi, "info"])
+    if code != 0:
+        return False
+    count = _parse_npu_smi_device_count(stdout)
+    return bool(count and count > 0)
+
+
+def npu_available(cache_seconds: float = 10.0) -> bool:
+    """Whether at least one NPU device is reachable (cached).
+
+    Anything short of a confirmed device — missing npu-smi, failed npu-smi
+    invocation, or an unparseable output — is treated as *not available*.
+    Callers use this as the gate for host-side build/test: no confirmed NPU
+    means build/test work must run inside the sim Docker images instead.
+    """
+    now = time.monotonic()
+    if _NPU_CACHE["available"] is not None and now - _NPU_CACHE["ts"] < cache_seconds:
+        return _NPU_CACHE["available"]
+    available = _detect_npu_available()
+    _NPU_CACHE["ts"] = now
+    _NPU_CACHE["available"] = available
+    return available
+
+
+def npu_env_summary() -> dict[str, Any]:
+    """Structured NPU availability facts for task-result envelopes."""
+    npu_smi = shutil.which("npu-smi")
+    if npu_smi is None:
+        return {"available": False, "devices": 0, "reason": "npu-smi not in PATH"}
+    code, stdout, stderr = _run_capture([npu_smi, "info"])
+    if code != 0:
+        return {"available": False, "devices": 0, "reason": f"npu-smi info failed: {stderr[:120]}"}
+    count = _parse_npu_smi_device_count(stdout)
+    if not count:
+        return {"available": False, "devices": 0, "reason": "npu-smi reported no devices"}
+    return {"available": True, "devices": count, "reason": "npu-smi ok"}
 
 
 def ascend_env_check_impl() -> dict[str, Any]:

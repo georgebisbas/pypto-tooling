@@ -80,6 +80,30 @@ Register a stdio MCP server manually:
 6. Implement.
 7. Run **`verify_ladder(changed_paths)`** to get the minimal test set, then run `agent_verify_tasks` via **`run_task`**. Never run `developer_verify_tasks` (NPU/hardware-gated) yourself — those are for the human developer.
 
+## Build & test policy (NPU-or-sim-Docker)
+
+The server never builds/tests directly on a local repo unless NPUs are
+reachable. Every heavy (build/test/package) task is routed on
+`npu-smi` availability:
+
+- **NPU reachable** → the host `command` runs as configured (host builds allowed).
+- **No NPU** → `run_task` re-routes the task into the repo's sim Docker image
+  (mounted worktree + in-container install) and reports the redirect in the
+  result's `note`. Images: `pypto3-hw-native-sys:sim` (pypto/pto-isa),
+  `simpler-hw-native-sys:sim`, `pypto-lib-hw-native-sys:sim` — built from
+  `pypto-tooling/Dockerfile.*sim.ubuntu22.04`.
+- **No NPU + image missing** → the task is refused with the exact `docker build`
+  command to create the image first.
+- **No sim image for the repo** (e.g. PTOAS) → refused with guidance.
+- `run_command` refuses ad-hoc build/test commands (`cmake`/`make`/`ninja`/
+  `pip install`/`pytest`/…) when no NPU is reachable; read-only commands are
+  unaffected. Tasks whose command already runs in a container are marked
+  `sim_docker: true` and bypass routing.
+
+See `content/tools/sim_docker_workflow.md` (MCP resource `tools/sim_docker_workflow`)
+for the full loop, and `pypto-3.0-notes/pr_plans/00-branch-and-pr-standards.md`
+§ Sim Docker for the canonical iteration loop.
+
 ## Tools
 
 ### Operations (`mcp_hwnative_sys/server.py`)

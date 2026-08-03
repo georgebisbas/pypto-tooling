@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+import shlex
 import shutil
 import subprocess
 from dataclasses import dataclass
@@ -9,6 +11,7 @@ from typing import Annotated, Any
 from mcp.server.fastmcp import FastMCP
 from pydantic import Field
 
+from mcp_hwnative_sys.ascend_env import npu_available, npu_env_summary
 from mcp_hwnative_sys.knowledge import get_repository_meta, register_knowledge
 from mcp_hwnative_sys.programs import match_program_hints
 from mcp_hwnative_sys.paths import (
@@ -55,6 +58,10 @@ class TaskSpec:
     requires: dict[str, Any] | None = None
     developer_only: bool = False
     container_notes: str | None = None
+    # True when the task's command already runs inside a container by design
+    # (e.g. a docker run wrapper or a docker build). Such tasks are exempt
+    # from the NPU-or-sim routing below — they never build on the local repo.
+    sim_docker: bool = False
 
 
 def _load_raw_config() -> dict[str, Any]:
@@ -168,6 +175,7 @@ def _normalize_task_spec(task_key: str, raw_task: Any) -> TaskSpec:
         requires=requires_dict,
         developer_only=_to_bool(raw_task.get("developer_only", False)),
         container_notes=container_notes_raw if container_notes_raw else None,
+        sim_docker=_to_bool(raw_task.get("sim_docker", False)),
     )
 
 
@@ -253,6 +261,8 @@ def _task_to_dict(task: TaskSpec, include_command: bool = True) -> dict[str, Any
         payload["developer_only"] = True
     if task.container_notes:
         payload["container_notes"] = task.container_notes
+    if task.sim_docker:
+        payload["sim_docker"] = True
 
     warning = _task_warning(task)
     if warning:
@@ -273,6 +283,88 @@ def _require_repo(repo_name: str) -> tuple[Path, RepoConfig]:
         available = ", ".join(sorted(repo_by_name))
         raise ValueError(f"Unknown repo '{repo_name}'. Available: {available}")
     return root, repo
+
+
+# --- NPU-or-sim-Docker routing -------------------------------------------------
+#
+# Policy: the server never builds/tests directly on a local repo unless NPUs are
+# reachable. When npu_available() is False, build/test tasks are re-routed into
+# the simulation Docker images (pypto-tooling Dockerfile.*sim.ubuntu22.04), and
+# ad-hoc build/test shell commands are refused with guidance.
+
+# Task categories that compile or execute code and therefore require either an
+# NPU (host build is fine) or the sim Docker fallback.
+_HEAVY_CATEGORIES = {"build", "test", "package"}
+
+
+def _needs_npu_or_sim(task: TaskSpec) -> bool:
+    return task.category in _HEAVY_CATEGORIES
+
+
+# Per-repo sim image, container mount point, and in-container setup. `prepare`
+# is executed before the task command inside the container (fresh install of
+# the mounted worktree so the built extension matches the current source).
+_SIM_RUN: dict[str, dict[str, str]] = {
+    "pypto": {
+        "image": "pypto3-hw-native-sys:sim",
+        "mount": "/opt/pypto",
+        "prepare": "git config --global --add safe.directory '*' && rm -rf build _skbuild && pip install --no-build-isolation -q '.[dev]'",
+        "env": "",
+    },
+    "simpler": {
+        "image": "simpler-hw-native-sys:sim",
+        "mount": "/opt/simpler",
+        "prepare": "git config --global --add safe.directory '*' && rm -rf build _skbuild && pip install --no-build-isolation -q .",
+        "env": "",
+    },
+    "pypto-lib": {
+        "image": "pypto-lib-hw-native-sys:sim",
+        "mount": "/opt/pypto-lib",
+        "prepare": "git config --global --add safe.directory '*'",
+        "env": "PYTHONPATH=/opt/pypto-lib",
+    },
+    "pto-isa": {
+        "image": "pypto3-hw-native-sys:sim",
+        "mount": "/opt/pto-isa",
+        "prepare": "git config --global --add safe.directory '*'",
+        "env": "",
+    },
+}
+
+
+def _sim_docker_redirect(
+    repo_name: str, repo_path: Path, inner_command: str
+) -> tuple[str, str] | None:
+    """Wrap a host build/test command into a sim-Docker run.
+
+    Returns ``(docker_command, image)`` or ``None`` when the repo has no sim
+    image mapping (e.g. PTOAS — no simulation Dockerfile exists).
+    """
+    cfg = _SIM_RUN.get(repo_name)
+    if cfg is None:
+        return None
+    image = cfg["image"]
+    mount = cfg["mount"]
+    env_prefix = f"export {cfg['env']} && " if cfg.get("env") else ""
+    inner = f"{cfg['prepare']} && cd {mount} && {env_prefix}{inner_command}"
+    docker_command = (
+        f"docker run --rm --shm-size=4g "
+        f"-v {shlex.quote(str(repo_path))}:{mount} "
+        f"{image} bash -lc {shlex.quote(inner)}"
+    )
+    return docker_command, image
+
+
+def _docker_image_present(image: str) -> bool:
+    proc = _run_command(["docker", "image", "inspect", image], timeout_seconds=15)
+    return proc.returncode == 0
+
+
+# Ad-hoc build/test commands that run_command refuses when no NPU is reachable.
+_HEAVY_BUILD_TEST_RE = re.compile(
+    r"\bcmake\b|\bmake\b|\bninja\b|\bpip install\b|pytest\b|"
+    r"build_runtimes|run_cpu\.py|run_st\.py|\./build\.sh"
+)
 
 
 def _run_command(
@@ -586,7 +678,13 @@ def run_task(
     extra_args: Annotated[str, Field(description="Extra arguments appended verbatim to the task command string, e.g. '--verbose -k test_foo'")] = "",
     timeout_seconds: Annotated[int, Field(description="Execution timeout in seconds (1–7200). Long-running tasks may need 1800+.", ge=1, le=7200)] = 900,
 ) -> dict[str, Any]:
-    """Run a configured task in a repository."""
+    """Run a configured task in a repository.
+
+    Build/test tasks are routed by NPU availability: with NPUs reachable they
+    run on the host (allowed by policy); without NPUs they are re-routed into
+    the sim Docker image for the repo (see _SIM_RUN), or refused with guidance
+    when the repo has no sim image (e.g. PTOAS).
+    """
     if timeout_seconds < 1 or timeout_seconds > 7200:
         raise ValueError("timeout_seconds must be between 1 and 7200")
 
@@ -604,8 +702,63 @@ def run_task(
     if extra_args.strip():
         command = f"{command} {extra_args.strip()}"
 
-    proc = _run_shell(command, repo_cfg.path, timeout_seconds)
     warning = _task_warning(task_spec)
+    npu_state = npu_env_summary()
+    note: str | None = None
+
+    if task_spec.sim_docker:
+        # Already containerized (docker run / docker build wrapper) — safe as-is.
+        note = "Task runs inside its own container by design (sim_docker); no host build."
+        proc = _run_shell(command, repo_cfg.path, timeout_seconds)
+    elif _needs_npu_or_sim(task_spec) and not npu_available():
+        redirect = _sim_docker_redirect(repo, repo_cfg.path, command)
+        if redirect is None:
+            return {
+                "repo": repo,
+                "path": safe_relpath(repo_cfg.path, root),
+                "task": task,
+                "command": command,
+                "task_metadata": _task_to_dict(task_spec, include_command=False),
+                "warning": warning,
+                "npu": npu_state,
+                "note": (
+                    "No NPU detected and this repo has no sim Docker image mapping "
+                    "(e.g. PTOAS). Refused to build/test on the local repo — "
+                    "build/test requires either reachable NPUs or a sim Docker image."
+                ),
+                "exit_code": -1,
+                "stdout": "",
+                "stderr": "Refused: no NPU reachable and no sim Docker image for this repo.",
+            }
+        docker_command, image = redirect
+        if not _docker_image_present(image):
+            return {
+                "repo": repo,
+                "path": safe_relpath(repo_cfg.path, root),
+                "task": task,
+                "command": command,
+                "task_metadata": _task_to_dict(task_spec, include_command=False),
+                "warning": warning,
+                "npu": npu_state,
+                "note": (
+                    f"No NPU detected and sim Docker image '{image}' is not present. "
+                    "Build it first from pypto-tooling: "
+                    "`docker build -t {image} -f Dockerfile.{repo}.sim.ubuntu22.04 .` "
+                    "(for pypto also docker_build_sim). Then re-run this task — it will "
+                    "auto-redirect into the container."
+                ),
+                "exit_code": -1,
+                "stdout": "",
+                "stderr": f"Refused: sim Docker image '{image}' not found (no NPU reachable).",
+            }
+        note = f"No NPU detected — redirected into sim Docker image '{image}'."
+        proc = _run_shell(docker_command, repo_cfg.path, timeout_seconds)
+        command = docker_command
+    elif _needs_npu_or_sim(task_spec):
+        note = "NPU(s) reachable — host build/test allowed by policy."
+        proc = _run_shell(command, repo_cfg.path, timeout_seconds)
+    else:
+        proc = _run_shell(command, repo_cfg.path, timeout_seconds)
 
     return {
         "repo": repo,
@@ -614,6 +767,8 @@ def run_task(
         "command": command,
         "task_metadata": _task_to_dict(task_spec, include_command=False),
         "warning": warning,
+        "npu": npu_state,
+        "note": note,
         "exit_code": proc.returncode,
         "stdout": _truncate_text(proc.stdout),
         "stderr": _truncate_text(proc.stderr),
@@ -626,7 +781,12 @@ def run_command(
     command: Annotated[str, Field(description="Shell command to execute via bash. Destructive patterns (git reset --hard, rm -rf /) are blocked.")],
     timeout_seconds: Annotated[int, Field(description="Execution timeout in seconds (1–7200)", ge=1, le=7200)] = 600,
 ) -> dict[str, Any]:
-    """Run an ad-hoc shell command in a repository. Prefer run_task for known tasks or git_log/git_diff/read_file for read-only operations."""
+    """Run an ad-hoc shell command in a repository. Prefer run_task for known tasks or git_log/git_diff/read_file for read-only operations.
+
+    When no NPU is reachable, build/test commands (cmake, make, ninja, pip
+    install, pytest, …) are refused — those must run inside the sim Docker
+    images, never on the local repo. Read-only commands are unaffected.
+    """
     if not command.strip():
         raise ValueError("command cannot be empty")
     if timeout_seconds < 1 or timeout_seconds > 7200:
@@ -634,6 +794,15 @@ def run_command(
     blocked = _blocked_pattern(command)
     if blocked:
         raise ValueError(f"Command contains blocked pattern: {blocked!r}")
+    already_in_docker = "docker run" in command or "docker exec" in command
+    if not npu_available() and not already_in_docker and _HEAVY_BUILD_TEST_RE.search(command):
+        raise ValueError(
+            "No NPU reachable — building/testing on the local repo is disallowed by "
+            "policy. Run this inside the sim Docker image instead: "
+            "`docker build -t pypto3-hw-native-sys:sim -f Dockerfile.hw-native-sys.sim.ubuntu22.04 .` "
+            "(and the simpler/pypto-lib sim images), then `docker run --rm -v <repo>:/opt/<repo> <image> bash -lc '...'`. "
+            "For a named task, use run_task — it auto-redirects into the container."
+        )
 
     root, repo_cfg = _require_repo(repo)
     if not repo_cfg.path.exists():
@@ -644,6 +813,7 @@ def run_command(
         "repo": repo,
         "path": safe_relpath(repo_cfg.path, root),
         "command": command,
+        "npu": npu_env_summary(),
         "exit_code": proc.returncode,
         "stdout": _truncate_text(proc.stdout),
         "stderr": _truncate_text(proc.stderr),

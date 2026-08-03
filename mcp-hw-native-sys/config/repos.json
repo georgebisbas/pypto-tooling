@@ -175,28 +175,32 @@
         "duration_hint": "3-12m",
         "prerequisites": [
           "Python test dependencies installed"
-        ]
+        ],
+        "container_notes": "No NPU reachable → the MCP auto-redirects this task into the pypto3-hw-native-sys:sim image (mounted pto-isa worktree; builds in place inside the container)."
       },
       "demo_gemm": {
         "command": "python3 tests/run_cpu.py --demo gemm --verbose",
         "category": "test",
         "risk": "long-running",
         "long_running": true,
-        "duration_hint": "2-8m"
+        "duration_hint": "2-8m",
+        "container_notes": "No NPU reachable → the MCP auto-redirects this task into the pypto3-hw-native-sys:sim image (mounted pto-isa worktree)."
       },
       "st_single_tadd": {
         "command": "python3 tests/script/run_st.py -r sim -v a3 -t tadd -g TADDTest.case_float_64x64_64x64",
         "category": "test",
         "risk": "long-running",
         "long_running": true,
-        "duration_hint": "2-10m"
+        "duration_hint": "2-10m",
+        "container_notes": "No NPU reachable → the MCP auto-redirects this task into the pypto3-hw-native-sys:sim image (mounted pto-isa worktree)."
       },
       "build_all_sim": {
         "command": "./build.sh --run_all --a3 --sim",
         "category": "build",
         "risk": "writes-build-artifacts",
         "long_running": true,
-        "duration_hint": "10-40m"
+        "duration_hint": "10-40m",
+        "container_notes": "No NPU reachable → the MCP auto-redirects this task into the pypto3-hw-native-sys:sim image (mounted pto-isa worktree)."
       },
       "build_wheel": {
         "command": "python3 -m build --wheel",
@@ -205,7 +209,8 @@
         "duration_hint": "2-10m",
         "prerequisites": [
           "python build package installed"
-        ]
+        ],
+        "container_notes": "No NPU reachable → the MCP auto-redirects this task into the pypto3-hw-native-sys:sim image (mounted pto-isa worktree)."
       }
     },
     "pypto": {
@@ -217,14 +222,16 @@
         "duration_hint": "1-5m",
         "prerequisites": [
           "pytest and test dependencies installed"
-        ]
+        ],
+        "container_notes": "No NPU reachable → the MCP auto-redirects this task into the pypto3-hw-native-sys:sim image (mounted worktree + in-container pip install)."
       },
       "codegen_tests": {
         "command": "pytest tests/st/codegen -v --codegen-only",
         "category": "test",
         "risk": "long-running",
         "long_running": true,
-        "duration_hint": "2-8m"
+        "duration_hint": "2-8m",
+        "container_notes": "No NPU reachable → the MCP auto-redirects this task into the pypto3-hw-native-sys:sim image (mounted worktree + in-container pip install)."
       },
       "ruff_fix": {
         "command": "ruff check --fix pypto/",
@@ -250,7 +257,8 @@
         "long_running": true,
         "environment_sensitive": true,
         "duration_hint": "10-45m",
-        "warning": "Large simulator suite; use targeted paths for faster feedback when possible."
+        "warning": "Large simulator suite; use targeted paths for faster feedback when possible.",
+        "container_notes": "Sim-mode suite — without NPUs the MCP auto-redirects into the pypto3-hw-native-sys:sim image (mounted worktree + in-container pip install)."
       },
       "host_collectives_st_npu": {
         "command": "pytest tests/st/distributed/test_l3_host_tensor_barrier.py tests/st/distributed/test_l3_host_tensor_broadcast.py tests/st/distributed/test_l3_host_tensor_reduce_scatter.py tests/st/distributed/test_l3_host_tensor_allgather.py -v --platform=a2a3 --device=0,1",
@@ -311,21 +319,24 @@
         "category": "test",
         "risk": "long-running",
         "long_running": true,
-        "duration_hint": "1-6m"
+        "duration_hint": "1-6m",
+        "container_notes": "No NPU reachable → the MCP auto-redirects this task into the pypto-lib-hw-native-sys:sim image (mounted pypto-lib worktree)."
       },
       "example_hello_sim": {
         "command": "python examples/beginner/hello_world.py -p a2a3sim",
         "category": "test",
         "risk": "long-running",
         "long_running": true,
-        "duration_hint": "1-5m"
+        "duration_hint": "1-5m",
+        "container_notes": "No NPU reachable → the MCP auto-redirects this task into the pypto-lib-hw-native-sys:sim image (mounted pypto-lib worktree)."
       },
       "example_softmax_sim": {
         "command": "python examples/intermediate/softmax.py -p a5sim",
         "category": "test",
         "risk": "long-running",
         "long_running": true,
-        "duration_hint": "1-6m"
+        "duration_hint": "1-6m",
+        "container_notes": "No NPU reachable → the MCP auto-redirects this task into the pypto-lib-hw-native-sys:sim image (mounted pypto-lib worktree)."
       },
       "ruff_fix": {
         "command": "ruff check --fix examples/ models/",
@@ -352,6 +363,7 @@
         "long_running": true,
         "environment_sensitive": true,
         "duration_hint": "10-40m",
+        "sim_docker": true,
         "prerequisites": [
           "Docker daemon available"
         ],
@@ -364,6 +376,7 @@
         "long_running": true,
         "environment_sensitive": true,
         "duration_hint": "10-35m",
+        "sim_docker": true,
         "prerequisites": [
           "Docker daemon available"
         ]
@@ -375,6 +388,7 @@
         "long_running": true,
         "environment_sensitive": true,
         "duration_hint": "10-35m",
+        "sim_docker": true,
         "prerequisites": [
           "Docker daemon available",
           "Sibling pypto checkout at ../pypto"
@@ -388,6 +402,7 @@
         "long_running": true,
         "environment_sensitive": true,
         "duration_hint": "3-15m",
+        "sim_docker": true,
         "prerequisites": [
           "Docker image pypto3-hw-native-sys:sim (run docker_build_sim or docker_build_sim_pinned_pypto first)",
           "Sibling pypto checkout at ../pypto"
@@ -401,6 +416,7 @@
         "long_running": true,
         "environment_sensitive": true,
         "duration_hint": "10-35m",
+        "sim_docker": true,
         "prerequisites": [
           "Docker daemon available"
         ]
@@ -430,6 +446,7 @@
         "long_running": true,
         "environment_sensitive": true,
         "duration_hint": "3-10m",
+        "sim_docker": true,
         "prerequisites": [
           "Docker daemon available"
         ],
@@ -459,6 +476,7 @@
         "long_running": true,
         "environment_sensitive": true,
         "duration_hint": "2-10m",
+        "sim_docker": true,
         "arch_families": ["a2a3"],
         "requires": {
           "npu_count_min": 2
@@ -478,6 +496,7 @@
         "long_running": true,
         "environment_sensitive": true,
         "duration_hint": "2-12m",
+        "sim_docker": true,
         "arch_families": ["a2a3"],
         "requires": {
           "npu_count_min": 2
@@ -497,21 +516,24 @@
         "category": "test",
         "risk": "long-running",
         "long_running": true,
-        "duration_hint": "1-6m"
+        "duration_hint": "1-6m",
+        "container_notes": "No NPU reachable → the MCP auto-redirects this task into the simpler-hw-native-sys:sim image (mounted simpler worktree + in-container pip install)."
       },
       "test_sim": {
         "command": "pytest examples tests/st --platform a2a3sim",
         "category": "test",
         "risk": "long-running",
         "long_running": true,
-        "duration_hint": "3-20m"
+        "duration_hint": "3-20m",
+        "container_notes": "No NPU reachable → the MCP auto-redirects this task into the simpler-hw-native-sys:sim image (mounted simpler worktree + in-container pip install)."
       },
       "build_runtimes_sim": {
         "command": "python simpler_setup/build_runtimes.py --platforms a2a3sim a5sim",
         "category": "build",
         "risk": "writes-build-artifacts",
         "long_running": true,
-        "duration_hint": "5-20m"
+        "duration_hint": "5-20m",
+        "container_notes": "No NPU reachable → the MCP auto-redirects this task into the simpler-hw-native-sys:sim image (mounted simpler worktree + in-container pip install)."
       },
       "ruff_fix": {
         "command": "ruff check --fix simpler_setup/ python/ tests/",

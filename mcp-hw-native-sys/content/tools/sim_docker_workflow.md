@@ -2,6 +2,39 @@
 
 *MCP-owned — canonical source for sim Docker test loops.*
 
+## NPU-or-sim policy (MCP auto-redirect)
+
+The MCP server never builds/tests directly on a local repo unless NPUs are
+reachable. `run_task` checks `npu-smi` on every heavy (build/test/package)
+task:
+
+| NPU reachable? | Behaviour |
+|----------------|-----------|
+| Yes | Host build/test runs as configured — allowed by policy. |
+| No | The task is re-routed into the sim Docker image for the repo (mounted worktree + in-container install), or refused with guidance when the repo has no sim image (e.g. PTOAS). |
+| No + image missing | Refused with the exact `docker build` command to create the sim image first. |
+
+`run_command` refuses ad-hoc build/test commands (`cmake`, `make`, `ninja`,
+`pip install`, `pytest`, `build_runtimes`, `run_cpu.py`, `run_st.py`,
+`./build.sh`) when no NPU is reachable — use `run_task` (which auto-redirects)
+or run the command inside the container yourself. Commands that already run
+inside a container (`docker run …`, `docker exec …`) are always allowed.
+
+Sim image tags (built from `pypto-tooling/Dockerfile.*sim.ubuntu22.04`):
+
+| Repo | Image |
+|------|-------|
+| pypto / pto-isa | `pypto3-hw-native-sys:sim` |
+| simpler | `simpler-hw-native-sys:sim` |
+| pypto-lib | `pypto-lib-hw-native-sys:sim` |
+
+```bash
+# Build the sim images (pypto-tooling repo root)
+docker build -t pypto3-hw-native-sys:sim -f Dockerfile.hw-native-sys.sim.ubuntu22.04 .
+docker build -t simpler-hw-native-sys:sim -f Dockerfile.simpler.sim.ubuntu22.04 .
+docker build -t pypto-lib-hw-native-sys:sim -f Dockerfile.pypto-lib.sim.ubuntu22.04 .
+```
+
 ## The golden rule
 
 **Never run `cmake --build build --parallel` inside Docker.** `--parallel` without `-jN` spawns unlimited concurrent compiler jobs that compete with the host kernel scheduler, saturating all CPU cores and freezing the machine.
