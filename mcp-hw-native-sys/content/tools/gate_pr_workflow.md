@@ -71,9 +71,10 @@ The test step follows the [sim Docker workflow](sim_docker_workflow.md) golden r
 
 After the script completes successfully, the MCP tool returns `agent_instructions`:
 
-1. Run the **review-bugbot** skill to catch regressions
-2. Run the **review-security** skill for security issues
-3. If all green, the PR is ready for the **developer gate** (NPU verify)
+1. If the branch touches C++ files (`changed_cpp_files` is non-empty), run **clang-tidy** on them first — required before the PR (see [`tools/clang_tidy_workflow`](clang_tidy_workflow.md))
+2. Run the **review-bugbot** skill to catch regressions
+3. Run the **review-security** skill for security issues
+4. If all green, the PR is ready for the **developer gate** (NPU verify)
 
 ## Related resources
 

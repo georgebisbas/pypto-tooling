@@ -25,6 +25,24 @@ _VERIFY_RULES: list[tuple[str, str, list[str]]] = [
     ("pypto-tooling/profiling/", "pypto-tooling", []),
 ]
 
+# C++ repos and file extensions: a changed C/C++ file in one of these repos
+# requires a clang-tidy static check before commit (see tools/clang_tidy_workflow).
+_CPP_REPO_PREFIXES: tuple[tuple[str, str], ...] = (
+    ("pto-isa/", "pto-isa"),
+    ("PTOAS/", "PTOAS"),
+    ("pypto-lib/", "pypto-lib"),
+    ("pypto/", "pypto"),
+    ("simpler/", "simpler"),
+)
+_CPP_EXTENSIONS = (".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx", ".inl")
+
+
+def _needs_clang_tidy(path: str) -> bool:
+    """True when ``path`` is a C/C++ file in a C++ repo (clang-tidy applies)."""
+    return path.endswith(_CPP_EXTENSIONS) and any(
+        path.startswith(prefix) for prefix, _ in _CPP_REPO_PREFIXES
+    )
+
 
 def verify_ladder_impl(changed_paths: list[str]) -> dict[str, Any]:
     if not changed_paths:
@@ -76,10 +94,19 @@ def verify_ladder_impl(changed_paths: list[str]) -> dict[str, Any]:
             }
         ladder.append(entry)
 
+    needs_clang_tidy = any(_needs_clang_tidy(p) for p in normalized)
+    note = (
+        "Run agent_verify_tasks only; skip developer_only tasks unless explicitly asked. "
+        "C++ changes require clang-tidy on the changed files first (see tools/clang_tidy_workflow)."
+        if needs_clang_tidy
+        else "Run agent_verify_tasks only; skip developer_only tasks unless explicitly asked."
+    )
+
     return {
         "changed_paths": normalized,
         "matched_rules": matched_rules,
         "suggested_tasks": ordered_tasks,
         "ladder": ladder,
-        "note": "Run agent_verify_tasks only; skip developer_only tasks unless explicitly asked.",
+        "static_checks": ["clang-tidy"] if needs_clang_tidy else [],
+        "note": note,
     }

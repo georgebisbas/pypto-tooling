@@ -744,7 +744,12 @@ def register_knowledge(mcp: FastMCP) -> None:
     def verify_ladder(
         changed_paths: Annotated[list[str], Field(description='List of changed file paths (workspace-relative or repo-prefixed), e.g. ["pypto/src/codegen/pto/foo.cc", "simpler/src/common/comm/bar.cc"]. Used to derive minimal verify task set.')],
     ) -> dict[str, Any]:
-        """Suggest minimal verify tasks for a set of changed file paths."""
+        """Suggest minimal verify tasks for a set of changed file paths.
+
+        Returns ``static_checks`` (e.g. ``["clang-tidy"]``) when a changed path
+        is a C/C++ file in a C++ repo — run those before the pytest tasks
+        (see ``tools/clang_tidy_workflow``).
+        """
         from mcp_hwnative_sys.verify_ladder import verify_ladder_impl
 
         return verify_ladder_impl(changed_paths)

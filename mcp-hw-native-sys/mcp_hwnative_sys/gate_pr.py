@@ -45,6 +45,21 @@ def _docker_image_exists(image: str) -> bool:
     return proc.returncode == 0
 
 
+_CPP_EXTENSIONS = (".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx", ".inl")
+
+
+def _changed_cpp_files(repo_path: Path, base_branch: str) -> list[str]:
+    """Changed C/C++ files on this branch vs ``origin/<base_branch>``."""
+    proc = _git(repo_path, ["diff", "--name-only", f"origin/{base_branch}...HEAD"])
+    if proc.returncode != 0:
+        return []
+    return [
+        line.strip()
+        for line in proc.stdout.splitlines()
+        if line.strip().endswith(_CPP_EXTENSIONS)
+    ]
+
+
 def _resolve_repo_path(repo_name: str) -> Path:
     config = load_repos_config()
     root = workspace_root(config)
@@ -294,6 +309,8 @@ def gate_pr_script_impl(
     branch_result = _git(repo_path, ["rev-parse", "--abbrev-ref", "HEAD"])
     current_branch = branch_result.stdout.strip() if branch_result.returncode == 0 else "unknown"
 
+    changed_cpp = _changed_cpp_files(repo_path, base_branch)
+
     root = workspace_root()
 
     script = _generate_script(
@@ -334,12 +351,17 @@ def gate_pr_script_impl(
                 s["number"] -= 1
 
     abs_path = str(repo_path)
+    after_push = [
+        "Run the review-bugbot skill to catch regressions",
+        "Run the review-security skill for security issues",
+        "If all green, the PR is ready for the developer gate (NPU verify)",
+    ]
+    if changed_cpp:
+        after_push.insert(
+            0, "Run clang-tidy on the changed C++ files (see tools/clang_tidy_workflow)"
+        )
     agent_instructions = {
-        "after_push": [
-            "Run the review-bugbot skill to catch regressions",
-            "Run the review-security skill for security issues",
-            "If all green, the PR is ready for the developer gate (NPU verify)",
-        ],
+        "after_push": after_push,
         "review_hints": {
             "bugbot_prompt": f"Full Repository Path: {abs_path}\nDiff: branch changes",
             "security_prompt": f"Full Repository Path: {abs_path}\nDiff: branch changes",
@@ -364,6 +386,7 @@ def gate_pr_script_impl(
         "script": script,
         "step_count": step_count,
         "steps": step_labels,
+        "changed_cpp_files": changed_cpp,
         "agent_instructions": agent_instructions,
         "notes": [
             "Review the generated script before running it",

@@ -41,5 +41,24 @@ def test_unmatched_path_yields_no_tasks():
     assert result["matched_rules"] == []
 
 
+def test_cpp_change_requires_clang_tidy():
+    result = verify_ladder_impl(["pypto/src/codegen/pto/foo.cc"])
+    assert result["static_checks"] == ["clang-tidy"]
+    assert "clang-tidy" in result["note"]
+
+
+def test_header_in_include_requires_clang_tidy_even_without_task_match():
+    # pypto/include/ matches no verify rule but is still a C++ change needing clang-tidy.
+    result = verify_ladder_impl(["pypto/include/pypto/ir/expr.h"])
+    assert result["static_checks"] == ["clang-tidy"]
+    assert result["suggested_tasks"] == []
+
+
+def test_python_and_markdown_do_not_require_clang_tidy():
+    for path in ["pypto/python/pypto/language/distributed/op/collective_api.py", "README.md"]:
+        result = verify_ladder_impl([path])
+        assert result["static_checks"] == [], path
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

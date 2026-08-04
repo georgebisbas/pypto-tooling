@@ -78,7 +78,8 @@ Register a stdio MCP server manually:
 4. Use **`explain_pass`** / **`explain_abstraction`** / **`search_abstractions`** / **`trace_contract`** / **`trace_in_stack`** to pin down stack concepts before writing code.
 5. Call **`program_status`** for open PRs/blockers, and **`collective_status`** if the work touches collective communication ops.
 6. Implement.
-7. Run **`verify_ladder(changed_paths)`** to get the minimal test set, then run `agent_verify_tasks` via **`run_task`**. Never run `developer_verify_tasks` (NPU/hardware-gated) yourself — those are for the human developer.
+7. Run **`verify_ladder(changed_paths)`** to get the minimal verify set: `suggested_tasks` (pytest) plus `static_checks` — when a changed path is a C/C++ file in a C++ repo, `static_checks` is `["clang-tidy"]` and **clang-tidy on the changed files is required before committing** (see the `tools/clang_tidy_workflow` resource for the compile-db prerequisite and per-repo commands).
+8. Run `agent_verify_tasks` via **`run_task`**. Never run `developer_verify_tasks` (NPU/hardware-gated) yourself — those are for the human developer.
 
 ## Build & test policy (NPU-or-sim-Docker)
 

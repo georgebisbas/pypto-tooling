@@ -195,6 +195,11 @@
       "max_chars": 6000,
       "tier": "mcp-owned"
     },
+    "tools/clang_tidy_workflow": {
+      "path": "content/tools/clang_tidy_workflow.md",
+      "max_chars": 6000,
+      "tier": "mcp-owned"
+    },
     "notes/freshness": {
       "path": "pypto-3.0-notes/NOTES_FRESHNESS.md",
       "max_chars": 8000,
