@@ -66,12 +66,14 @@ Options:
                              strong-scaling  — one variant, sweep P
                              cross-variant   — two variants at same P/count
                              full-sweep      — all variants × all sizes
-  --variant VARIANT        Algorithm variant: mesh, ring, hccl (default: mesh)
+  --variant VARIANT        Algorithm variant: mesh, ring, twophase (default: mesh)
   --variants VA,VB         Two variants for cross-variant mode (default: mesh,ring)
   --p-values CSV           Comma-separated P values (default: 2,4,8)
   --count N                Override case payload element count
   --dtype TYPE             fp32 or fp16 (default: fp32)
-  --stacks CSV             Stacks to run: simpler,pypto,hccl (default: hccl,simpler,pypto)
+  --stacks CSV             Stacks: hccl,simpler,simpler-own,pypto-composite,
+                           pypto-host,pto-isa (default: hccl,simpler,pypto-composite,pypto-host)
+  --platform PLATFORM      Platform (a2a3, a2a3sim, a5, a5sim)
   --warmup-rounds N        Override warmup rounds
   --timed-rounds N         Override timed rounds
   --campaign NAME          Campaign name (default: auto)
@@ -85,7 +87,8 @@ VARIANTS_CSV="mesh,ring"
 P_VALUES_CSV="2,4,8"
 COUNT_OVERRIDE=""
 DTYPE="fp32"
-STACKS="hccl,simpler,pypto"
+STACKS="hccl,simpler,pypto-composite,pypto-host"
+PLATFORM=""
 WARMUP_OVERRIDE=""
 TIMED_OVERRIDE=""
 CAMPAIGN=""
@@ -118,6 +121,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --stacks)
             STACKS="$2"
+            shift 2
+            ;;
+        --platform)
+            PLATFORM="$2"
             shift 2
             ;;
         --warmup-rounds)
@@ -171,6 +178,9 @@ fi
 if [[ -n "$TIMED_OVERRIDE" ]]; then
     RUN_SWEEP_EXTRA_ARGS+=(--timed-rounds "$TIMED_OVERRIDE")
 fi
+if [[ -n "$PLATFORM" ]]; then
+    RUN_SWEEP_EXTRA_ARGS+=(--platform "$PLATFORM")
+fi
 
 echo "============================================"
 echo " Campaign:  ${CAMPAIGN}"
@@ -180,6 +190,9 @@ echo " Variant(s): ${VARIANTS[*]}"
 echo " P values:  ${P_VALUES[*]}"
 echo " Stacks:    ${STACKS}"
 echo " Dtype:     ${DTYPE}"
+if [[ -n "$PLATFORM" ]]; then
+    echo " Platform:  ${PLATFORM}"
+fi
 if [[ -n "$COUNT_OVERRIDE" ]]; then
     echo " Count:     ${COUNT_OVERRIDE}"
 fi
@@ -348,7 +361,7 @@ python3 -m collectives.summarize --run-dir "$RUN_DIR" --emit-report 2>/dev/null 
 echo ""
 echo "--- figures ---"
 python3 -m collectives.plot_figures --run-dir "$RUN_DIR" \
-    --figures strong_scaling_t_total,paired_stack_ratio,phase_breakdown,compile_breakdown 2>/dev/null || \
+    --figures strong_scaling_t_total,strong_scaling_efficiency,message_size_bw_eff,paired_stack_ratio,phase_breakdown,setup_breakdown,compile_breakdown,pmu_utilization 2>/dev/null || \
     echo "  (plot skipped — no plotter or no data)"
 
 echo ""

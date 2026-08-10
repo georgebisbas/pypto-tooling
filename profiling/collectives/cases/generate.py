@@ -6,6 +6,7 @@ Usage:
     python collectives/cases/generate.py --dry-run           # print without writing
     python collectives/cases/generate.py --variant mesh      # mesh only
     python collectives/cases/generate.py --variant ring      # ring only
+    python collectives/cases/generate.py --variant twophase  # twophase only
     python collectives/cases/generate.py --p-values 2,4      # specific P values
     python collectives/cases/generate.py --min-count 16384   # skip tiny payloads
 """
@@ -14,7 +15,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 from pathlib import Path
 
 from collectives.equivalence import EquivalenceCase
@@ -22,7 +22,7 @@ from collectives.equivalence import EquivalenceCase
 _CASES_DIR = Path(__file__).resolve().parent
 
 # ── Sweep axes ──────────────────────────────────────────────────────────
-VARIANTS = ["mesh", "ring"]
+VARIANTS = ["mesh", "ring", "twophase"]
 P_VALUES = [2, 4, 8]
 COUNTS = [
     256,          # 1 KiB   — correctness smoke, overhead-dominant
@@ -81,8 +81,8 @@ def generate_cases(
     for variant in variants:
         for p in p_values:
             for count in counts:
-                # Ring constraint: count must be evenly divisible by P
-                if variant == "ring" and count % p != 0:
+                # Ring/twophase constraint: count must be evenly divisible by P
+                if variant in ("ring", "twophase") and count % p != 0:
                     skipped.append(f"{variant}_p{p}_count{count}: count % P != 0")
                     continue
 

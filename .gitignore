@@ -15,6 +15,7 @@ KNOWN_ISSUES.md
 
 # Benchmark results (profiling outputs)
 profiling/results/campaigns/
+profiling/build_output/
 
 # IDE
 .vscode/

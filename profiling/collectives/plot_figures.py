@@ -20,12 +20,31 @@ from pathlib import Path
 FIGURE_IDS = (
     "paired_stack_ratio",
     "strong_scaling_t_total",
-    "phase_breakdown",
-    "compile_breakdown",
     "strong_scaling_efficiency",
     "message_size_bw_eff",
+    "phase_breakdown",
+    "setup_breakdown",
+    "compile_breakdown",
     "pmu_utilization",
 )
+
+# Canonical per-stack colors/markers, shared across figures.
+STACK_COLORS = {
+    "hccl": "#2ecc71",
+    "simpler": "#3498db",
+    "simpler-own": "#9b59b6",
+    "pypto-composite": "#e74c3c",
+    "pypto-host": "#e67e22",
+    "pto-isa": "#7f8c8d",
+}
+STACK_MARKERS = {
+    "hccl": "D",
+    "simpler": "o",
+    "simpler-own": "v",
+    "pypto-composite": "s",
+    "pypto-host": "^",
+    "pto-isa": "P",
+}
 
 
 def _primary_time(run: dict) -> float | None:
@@ -59,32 +78,36 @@ def _plot_paired_stack_ratio(runs: list[dict], fig_dir: Path) -> Path:
         groups.setdefault(cid, {})[r["stack"]] = _primary_time(r)
 
     case_ids = sorted(groups)
-    ratios = []
-    labels = []
+    ratios: list[float] = []
+    labels: list[str] = []
+    stack_names: list[str] = []
     for cid in case_ids:
-        s = groups[cid].get("simpler")
-        p = groups[cid].get("pypto")
-        if s and p and s > 0:
-            ratios.append(p / s)
-            labels.append(cid.rsplit("_", 2)[0])
+        base = groups[cid].get("simpler")
+        for stack, t in sorted(groups[cid].items()):
+            if stack in ("simpler", "hccl"):
+                continue
+            if base and t and base > 0:
+                ratios.append(t / base)
+                labels.append(f"{cid.rsplit('_', 2)[0]}\n{stack}")
+                stack_names.append(stack)
 
     if not ratios:
         print("  paired_stack_ratio: no valid pairs")
         return fig_dir / "paired_stack_ratio.png"
 
     fig, ax = plt.subplots(figsize=(max(6, len(ratios) * 1.2), 4))
-    colors = ["#2ecc71" if r <= 1.5 else "#e67e22" if r <= 3.0 else "#e74c3c" for r in ratios]
+    colors = [STACK_COLORS.get(s, "#95a5a6") for s in stack_names]
     bars = ax.bar(range(len(ratios)), ratios, color=colors, edgecolor="white")
     ax.axhline(y=1.0, color="gray", linestyle="--", linewidth=0.8, label="parity (1.0×)")
     ax.set_xticks(range(len(ratios)))
-    ax.set_xticklabels(labels, rotation=30, ha="right", fontsize=8)
-    ax.set_ylabel("pypto / simpler execute-time ratio")
-    ax.set_title("Paired stack ratio (lower = pypto closer to simpler)")
+    ax.set_xticklabels(labels, rotation=30, ha="right", fontsize=7)
+    ax.set_ylabel("stack / simpler execute-time ratio")
+    ax.set_title("Paired stack ratio vs simpler (lower = closer to simpler)")
     ax.legend()
 
     for rect, val in zip(bars, ratios):
         ax.text(rect.get_x() + rect.get_width() / 2, rect.get_height() + 0.02,
-                f"{val:.2f}×", ha="center", va="bottom", fontsize=8)
+                f"{val:.2f}×", ha="center", va="bottom", fontsize=7)
 
     fig.tight_layout()
     path = fig_dir / "paired_stack_ratio.png"
@@ -114,14 +137,12 @@ def _plot_strong_scaling_t_total(runs: list[dict], fig_dir: Path) -> Path:
         return fig_dir / "strong_scaling_t_total.png"
 
     fig, ax = plt.subplots(figsize=(8, 5))
-    colors = {"simpler": "#3498db", "pypto": "#e74c3c", "hccl": "#2ecc71"}
-    markers = {"simpler": "o", "pypto": "s", "hccl": "D"}
 
     for stack in sorted(groups):
         ps = sorted(groups[stack])
         walls = [groups[stack][p] for p in ps]
-        ax.plot(ps, walls, marker=markers.get(stack, "x"),
-                color=colors.get(stack, None), label=stack, linewidth=1.5, markersize=8)
+        ax.plot(ps, walls, marker=STACK_MARKERS.get(stack, "x"),
+                color=STACK_COLORS.get(stack), label=stack, linewidth=1.5, markersize=8)
 
     ax.set_xlabel("Number of ranks (P)")
     ax.set_ylabel("Execute time (s)")
@@ -136,6 +157,251 @@ def _plot_strong_scaling_t_total(runs: list[dict], fig_dir: Path) -> Path:
     print(f"  strong_scaling_t_total → {path}")
     return path
 
+def _plot_strong_scaling_efficiency(runs: list[dict], fig_dir: Path) -> Path:
+    """Parallel efficiency E(P) = T(P_min)*P_min / (T(P)*P), per stack.
+
+    Normalised to the smallest P in the campaign (1.0 there); a flat line at
+    1.0 is perfect scaling. Needs a multi-P campaign.
+    """
+    plt = _load_matplotlib()
+    if plt is None:
+        return _text_fallback(runs, fig_dir, "strong_scaling_efficiency")
+
+    groups: dict[str, dict[int, float]] = {}
+    for r in runs:
+        stack = r["stack"]
+        p = r.get("p", 0)
+        mean = _primary_time(r)
+        if p > 0 and mean and mean > 0:
+            groups.setdefault(stack, {})[p] = mean
+
+    # Restrict to stacks with >= 2 distinct P values.
+    groups = {s: g for s, g in groups.items() if len(g) >= 2}
+    if not groups:
+        print("  strong_scaling_efficiency: need >=2 P values per stack")
+        return fig_dir / "strong_scaling_efficiency.png"
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+    for stack in sorted(groups):
+        ps = sorted(groups[stack])
+        p_min = ps[0]
+        t_min = groups[stack][p_min]
+        eff = [t_min * p_min / (groups[stack][p] * p) for p in ps]
+        ax.plot(ps, eff, marker=STACK_MARKERS.get(stack, "x"),
+                color=STACK_COLORS.get(stack), label=stack,
+                linewidth=1.5, markersize=8)
+
+    ax.set_xlabel("Number of ranks (P)")
+    ax.set_ylabel("Parallel efficiency (normalised to smallest P)")
+    ax.set_title("Strong scaling efficiency vs P")
+    ax.set_ylim(0.0, 1.15)
+    ax.axhline(1.0, color="gray", linestyle="--", linewidth=0.8)
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    fig.tight_layout()
+
+    path = fig_dir / "strong_scaling_efficiency.png"
+    fig.savefig(path, dpi=150)
+    plt.close(fig)
+    print(f"  strong_scaling_efficiency → {path}")
+    return path
+
+
+def _plot_message_size_bw_eff(runs: list[dict], fig_dir: Path) -> Path:
+    """Bandwidth (MB/s) vs payload count per stack — log-x crossover plot.
+
+    Needs a multi-count campaign (message-size sweep)."""
+    plt = _load_matplotlib()
+    if plt is None:
+        return _text_fallback(runs, fig_dir, "message_size_bw_eff")
+
+    groups: dict[str, dict[int, float]] = {}
+    for r in runs:
+        stack = r["stack"]
+        count = r.get("count", 0)
+        bw = r.get("bw_execute_mb_s")
+        if count > 0 and bw:
+            groups.setdefault(stack, {})[count] = float(bw)
+
+    groups = {s: g for s, g in groups.items() if len(g) >= 2}
+    if not groups:
+        print("  message_size_bw_eff: need >=2 counts per stack")
+        return fig_dir / "message_size_bw_eff.png"
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+    for stack in sorted(groups):
+        counts = sorted(groups[stack])
+        bws = [groups[stack][c] for c in counts]
+        ax.plot(counts, bws, marker=STACK_MARKERS.get(stack, "x"),
+                color=STACK_COLORS.get(stack), label=stack,
+                linewidth=1.5, markersize=8)
+
+    ax.set_xscale("log", base=2)
+    ax.set_xticks(sorted({c for g in groups.values() for c in g}))
+    ax.get_xaxis().set_major_formatter(plt.FuncFormatter(lambda v, _: f"{int(v):,}"))
+    ax.set_xlabel("Payload element count (log2)")
+    ax.set_ylabel("Bandwidth (MB/s)")
+    ax.set_title("Bandwidth vs message size (crossover view)")
+    ax.legend()
+    ax.grid(True, alpha=0.3, which="both")
+    fig.tight_layout()
+
+    path = fig_dir / "message_size_bw_eff.png"
+    fig.savefig(path, dpi=150)
+    plt.close(fig)
+    print(f"  message_size_bw_eff → {path}")
+    return path
+
+
+def _plot_setup_breakdown(runs: list[dict], fig_dir: Path) -> Path:
+    """Grouped bars: compile vs init vs execute per (case, stack).
+
+    Uses ``phase_means`` (campaign stacks); subprocess stacks without phase
+    data are skipped."""
+    plt = _load_matplotlib()
+    if plt is None:
+        return _text_fallback(runs, fig_dir, "setup_breakdown")
+
+    filtered = [run for run in runs if run.get("phase_means")]
+    if not filtered:
+        print("  setup_breakdown: no phase data")
+        return fig_dir / "setup_breakdown.png"
+
+    def _key(run: dict) -> tuple[int, str, str]:
+        return (run.get("p", 0), run.get("case_id", ""), run.get("stack", ""))
+
+    filtered.sort(key=_key)
+    labels = [f"P{run.get('p', '?')}\n{run['stack']}" for run in filtered]
+    x = range(len(filtered))
+    width = 0.25
+    offsets = (-width, 0.0, width)
+    colors = {"compile": "#3498db", "init": "#9b59b6", "execute": "#2ecc71"}
+    keys = ("compile", "init", "execute")
+
+    fig, ax = plt.subplots(figsize=(max(8, len(filtered) * 1.25), 5))
+    for key, off in zip(keys, offsets):
+        values = [float(run.get("phase_means", {}).get(key, 0.0)) for run in filtered]
+        ax.bar([i + off for i in x], values, width=width, color=colors[key],
+               edgecolor="white", label=key)
+
+    ax.set_xticks(list(x))
+    ax.set_xticklabels(labels, fontsize=8, rotation=30, ha="right")
+    ax.set_ylabel("Mean time (s)")
+    ax.set_title("Setup breakdown: compile / init / execute")
+    ax.legend(ncols=3, fontsize=8)
+    ax.grid(True, axis="y", alpha=0.25)
+    fig.tight_layout()
+
+    path = fig_dir / "setup_breakdown.png"
+    fig.savefig(path, dpi=150)
+    plt.close(fig)
+    print(f"  setup_breakdown → {path}")
+    return path
+
+
+def _find_pmu_csvs(run_dir: Path, runs: list[dict]) -> list[Path]:
+    """Locate pmu.csv files: prefer artifact-bundle dirs, then a run-dir scan."""
+    found: list[Path] = []
+    seen: set[Path] = set()
+    for r in runs:
+        bundle = r.get("artifact_bundle")
+        if not bundle:
+            continue
+        for p in Path(bundle).rglob("pmu.csv"):
+            if p not in seen:
+                found.append(p)
+                seen.add(p)
+    for p in run_dir.rglob("pmu.csv"):
+        if p not in seen:
+            found.append(p)
+            seen.add(p)
+    return sorted(found)
+
+
+def _plot_pmu_utilization(runs: list[dict], fig_dir: Path, run_dir: Path) -> Path:
+    """Bar chart of numeric PMU columns from collected pmu.csv files.
+
+    Defensive: only fully-numeric columns are plotted (mean across rows).
+    Requires runs collected with ``--profile pmu``."""
+    import csv
+
+    pmu_files = _find_pmu_csvs(run_dir, runs)
+    if not pmu_files:
+        path = fig_dir / "pmu_utilization.txt"
+        path.write_text(
+            "# pmu_utilization\n\nNo pmu.csv found. Collect data with "
+            "--profile pmu (pypto stacks route DFX artifacts into the bundle).\n",
+            encoding="utf-8",
+        )
+        print(f"  pmu_utilization → {path} (no pmu data)")
+        return path
+
+    plt = _load_matplotlib()
+    if plt is None:
+        path = fig_dir / "pmu_utilization.txt"
+        lines = ["# pmu_utilization (text fallback)", ""]
+        for f in pmu_files:
+            lines.append(f"  {f}")
+        path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        print(f"  pmu_utilization → {path} (text)")
+        return path
+
+    # Aggregate numeric columns across all pmu files (mean per column).
+    totals: dict[str, float] = {}
+    counts: dict[str, int] = {}
+    for f in pmu_files:
+        try:
+            with f.open(newline="", encoding="utf-8") as fh:
+                reader = csv.DictReader(fh)
+                for row in reader:
+                    for name, value in row.items():
+                        try:
+                            totals[name] = totals.get(name, 0.0) + float(value)
+                            counts[name] = counts.get(name, 0) + 1
+                        except (TypeError, ValueError):
+                            continue
+        except OSError as exc:
+            print(f"  pmu_utilization: skip {f}: {exc}")
+            continue
+
+    if not totals:
+        print("  pmu_utilization: pmu.csv present but no numeric columns")
+        return fig_dir / "pmu_utilization.png"
+
+    means = {n: totals[n] / counts[n] for n in totals}
+
+    # Utilisation ratios (busy cycles / total cycles) when the total is known.
+    ratio_cols = [c for c in ("vec_busy_cycles", "cube_busy_cycles",
+                              "scalar_busy_cycles", "mte1_busy_cycles",
+                              "mte2_busy_cycles", "mte3_busy_cycles")
+                  if c in means]
+    if means.get("pmu_total_cycles", 0.0) > 0:
+        names = ratio_cols + (["icache_miss_rate"] if "icache_miss" in means and "icache_req" in means else [])
+        values = [means[c] / means["pmu_total_cycles"] for c in ratio_cols]
+        if "icache_miss_rate" in names:
+            values.append(means["icache_miss"] / means["icache_req"] if means["icache_req"] > 0 else 0.0)
+        ylabel = "Utilisation (busy cycles / total)"
+        title = f"PMU pipe utilisation across {len(pmu_files)} pmu.csv"
+    else:
+        names = sorted(means)
+        values = [means[n] for n in names]
+        ylabel = "Mean PMU value"
+        title = f"PMU columns across {len(pmu_files)} pmu.csv"
+
+    fig, ax = plt.subplots(figsize=(max(8, len(names) * 0.9), 5))
+    ax.bar(range(len(names)), values, color="#16a085", edgecolor="white")
+    ax.set_xticks(range(len(names)))
+    ax.set_xticklabels(names, rotation=45, ha="right", fontsize=7)
+    ax.set_ylabel(ylabel)
+    ax.set_title(title)
+    ax.grid(True, axis="y", alpha=0.25)
+    fig.tight_layout()
+
+    path = fig_dir / "pmu_utilization.png"
+    fig.savefig(path, dpi=150)
+    plt.close(fig)
+    print(f"  pmu_utilization → {path} (from {len(pmu_files)} files)")
+    return path
 
 def _plot_phase_breakdown(runs: list[dict], fig_dir: Path) -> Path:
     """Stacked bars: canonical phase means per (case, stack)."""
@@ -144,7 +410,7 @@ def _plot_phase_breakdown(runs: list[dict], fig_dir: Path) -> Path:
         return _text_fallback(runs, fig_dir, "phase_breakdown")
 
     phase_order = ("startup", "compile", "init", "execute")
-    stack_order = ("hccl", "simpler", "pypto")
+    stack_order = ("hccl", "simpler", "simpler-own", "pypto-composite", "pypto-host", "pto-isa")
     stack_colors = {
         "startup": "#95a5a6",
         "compile": "#3498db",
@@ -204,7 +470,7 @@ def _plot_compile_breakdown(runs: list[dict], fig_dir: Path) -> Path:
 
     filtered = []
     for run in runs:
-        if run.get("stack") != "pypto":
+        if run.get("stack") not in ("pypto-composite", "pypto-host"):
             continue
         profile = run.get("compile_profile_means", {})
         if not profile:
@@ -214,7 +480,7 @@ def _plot_compile_breakdown(runs: list[dict], fig_dir: Path) -> Path:
         codegen = float(profile.get("codegen", 0.0))
         other = max(0.0, total - passes - codegen)
         filtered.append({
-            "label": f"P{run.get('p', '?')}\npypto",
+            "label": f"P{run.get('p', '?')}\n{run['stack']}",
             "passes": passes,
             "codegen": codegen,
             "other": other,
@@ -272,9 +538,45 @@ def _text_fallback(runs: list[dict], fig_dir: Path, fig_id: str) -> Path:
                 continue
             phase_text = ", ".join(f"{name}={value:.4f}s" for name, value in sorted(phases.items()))
             lines.append(f"  {run['case_id']} {run['stack']}: {phase_text}")
+    elif fig_id == "setup_breakdown":
+        for run in sorted(runs, key=lambda r: (r.get("p", 0), r.get("stack", ""))):
+            phases = run.get("phase_means", {})
+            if not phases:
+                continue
+            parts = ", ".join(
+                f"{name}={phases.get(name, 0.0):.4f}s" for name in ("compile", "init", "execute")
+            )
+            lines.append(f"  {run['case_id']} {run['stack']}: {parts}")
+    elif fig_id == "strong_scaling_efficiency":
+        for stack in sorted({r.get("stack") for r in runs}):
+            pts = sorted(
+                (r.get("p"), _primary_time(r))
+                for r in runs
+                if r.get("stack") == stack and r.get("p") and _primary_time(r)
+            )
+            if len(pts) < 2:
+                continue
+            p0, t0 = pts[0]
+            line = "  " + stack + ": " + " ".join(
+                f"P{p}={t0 * p0 / (t * p):.2f}" for p, t in pts
+            )
+            lines.append(line)
+    elif fig_id == "message_size_bw_eff":
+        for stack in sorted({r.get("stack") for r in runs}):
+            pts = sorted(
+                (r.get("count"), r.get("bw_execute_mb_s"))
+                for r in runs
+                if r.get("stack") == stack and r.get("count") and r.get("bw_execute_mb_s")
+            )
+            if len(pts) < 2:
+                continue
+            line = "  " + stack + ": " + " ".join(
+                f"count{c}={bw:.1f}MB/s" for c, bw in pts
+            )
+            lines.append(line)
     elif fig_id == "compile_breakdown":
         for run in sorted(runs, key=lambda r: (r.get("p", 0), r.get("stack", ""))):
-            if run.get("stack") != "pypto":
+            if run.get("stack") not in ("pypto-composite", "pypto-host"):
                 continue
             profile = run.get("compile_profile_means", {})
             if not profile:
@@ -291,10 +593,16 @@ def _text_fallback(runs: list[dict], fig_dir: Path, fig_id: str) -> Path:
         for r in runs:
             groups.setdefault(r["case_id"], {})[r["stack"]] = _primary_time(r)
         for cid in sorted(groups):
-            s = groups[cid].get("simpler")
-            p = groups[cid].get("pypto")
-            ratio = f"{p/s:.2f}×" if s and p and s > 0 else "—"
-            lines.append(f"  {cid}: simpler={s} pypto={p} ratio={ratio}")
+            cells = ", ".join(
+                f"{s}={t:.4f}" for s, t in sorted(groups[cid].items()) if t is not None
+            )
+            base = groups[cid].get("simpler")
+            ratios = " ".join(
+                f"{s}:{t / base:.2f}x"
+                for s, t in sorted(groups[cid].items())
+                if s not in ("simpler", "hccl") and base and t and base > 0
+            )
+            lines.append(f"  {cid}: {cells} | vs simpler: {ratios}")
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     print(f"  {fig_id} → {path} (text)")
     return path
@@ -329,10 +637,18 @@ def main(argv: list[str] | None = None) -> int:
             _plot_paired_stack_ratio(runs, fig_dir)
         elif fig_id == "strong_scaling_t_total":
             _plot_strong_scaling_t_total(runs, fig_dir)
+        elif fig_id == "strong_scaling_efficiency":
+            _plot_strong_scaling_efficiency(runs, fig_dir)
+        elif fig_id == "message_size_bw_eff":
+            _plot_message_size_bw_eff(runs, fig_dir)
         elif fig_id == "phase_breakdown":
             _plot_phase_breakdown(runs, fig_dir)
+        elif fig_id == "setup_breakdown":
+            _plot_setup_breakdown(runs, fig_dir)
         elif fig_id == "compile_breakdown":
             _plot_compile_breakdown(runs, fig_dir)
+        elif fig_id == "pmu_utilization":
+            _plot_pmu_utilization(runs, fig_dir, args.run_dir)
         else:
             print(f"  {fig_id}: not yet implemented")
 

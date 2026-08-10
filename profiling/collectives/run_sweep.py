@@ -15,9 +15,18 @@ from pathlib import Path
 from typing import Any
 
 from collectives.artifacts import RunArtifactBundle
-from collectives.config import profiling_root, pypto_root, simpler_root, pto_isa_root
+from collectives.config import simpler_root
 from collectives.equivalence import EquivalenceCase
 from collectives.golden import fill_rank_inputs, verify_outputs
+from collectives.stacks import (
+    CAMPAIGN_STACKS,
+    DEFAULT_STACKS,
+    STACK_REGISTRY,
+    count_allowed,
+    count_constraint,
+    stack_supports,
+    supported_variants,
+)
 from collectives.treduce_bench import run_treduce_once
 
 _HERE = Path(__file__).resolve().parent
@@ -134,6 +143,8 @@ def _apply_case_overrides(case: EquivalenceCase, args: argparse.Namespace) -> Eq
     """Apply CLI overrides to a loaded case file."""
     if getattr(args, "count", None) is not None:
         case.count = args.count
+    if getattr(args, "platform", None) is not None:
+        case.platform = args.platform
     if getattr(args, "warmup_rounds", None) is not None:
         case.warmup_rounds = args.warmup_rounds
     if getattr(args, "timed_rounds", None) is not None:
@@ -162,22 +173,18 @@ def _devices_comma(device_ids: list[int]) -> str:
 
 
 def _profile_flags(profile_spec: str) -> dict[str, list[str]]:
-    """Translate --profile l2,pmu,dep into per-stack CLI flags."""
-    flags: dict[str, list[str]] = {"simpler": [], "pypto": []}
-    for tok in profile_spec.split(","):
-        tok = tok.strip()
-        if tok == "l2":
-            flags["pypto"].extend(["--enable-l2-swimlane"])
-        elif tok == "pmu":
-            flags["pypto"].extend(["--enable-pmu", "2"])
-        elif tok == "dep":
-            flags["pypto"].extend(["--enable-dep-gen"])
-    return flags
+    """Translate ``--profile l2,pmu,dep`` for subprocess stacks.
+
+    The pypto in-process stacks consume the profile spec directly as
+    per-dispatch ``RunConfig`` DFX fields (see ``_pypto_run_config``).
+    """
+    del profile_spec
+    return {}
 
 
 ResultOk = tuple[bool, str, float]  # (ok, error, wall_s)
 
-_CAMPAIGN_STACKS = frozenset({"hccl", "simpler-own"})
+_CAMPAIGN_STACKS = CAMPAIGN_STACKS
 
 
 def _parse_hccl_per_rank(line: str) -> list[float] | None:
@@ -232,7 +239,7 @@ def _compute_setup_s(
 ) -> float | None:
     if stack == "hccl":
         return hccl_setup_s
-    if stack == "simpler-own":
+    if stack in ("simpler-own", "pypto-composite", "pypto-host"):
         setup = 0.0
         if "compile" in phases:
             setup += float(phases["compile"])
@@ -266,6 +273,7 @@ def _build_sample(
     n_bytes: int,
     phases: dict[str, float] | None = None,
     per_rank_execute_s: list[float] | None = None,
+    compile_profile: dict[str, float] | None = None,
 ) -> dict[str, Any]:
     sample: dict[str, Any] = {
         "round": round_idx,
@@ -281,6 +289,8 @@ def _build_sample(
         sample["phases"] = {k: round(v, 6) for k, v in phases.items()}
     if per_rank_execute_s is not None:
         sample["per_rank_execute_s"] = [round(v, 6) for v in per_rank_execute_s]
+    if compile_profile is not None:
+        sample["compile_profile"] = compile_profile
     return sample
 
 # Phase markers for simpler stdout parsing.
@@ -412,16 +422,6 @@ def _run_simpler_own_once(case: EquivalenceCase, extra_flags: list[str] | None =
     except Exception as exc:
         return False, str(exc), [], 0.0, {}
 
-
-_PYPTO_MARKERS = [
-    ("startup", "PYPTO_COMPILE_BEGIN"),
-    ("compile", "PYPTO_RUNTIME_INIT_BEGIN"),
-    ("init", "PYPTO_RUNTIME_EXECUTE_BEGIN"),
-    ("execute", "PYPTO_ALLREDUCE_OK"),
-    ("test_result", "PASSED"),
-    ("test_result", "FAILED"),
-    ("test_result", "ERROR"),
-]
 
 _HCCL_MARKERS = [
     ("init", "HCCL_COMM_SETUP_OK"),
@@ -623,38 +623,81 @@ def _run_pto_isa_once(case: EquivalenceCase, extra_flags: list[str] | None = Non
     return run_treduce_once(case, extra_flags)
 
 
-def _run_pypto_once(case: EquivalenceCase, extra_flags: list[str] | None = None) -> tuple[bool, str, list[str], float, dict[str, float]]:
-    """Single pypto pytest invocation. Returns (ok, error, lines, total_s, phases)."""
-    if case.count != 256:
-        return False, (
-            f"pypto supports only count=256 (hardcoded SIZE in test file); "
-            f"got {case.count}. Use 'hccl' stack for size sweeps."
-        ), [], 0.0, {}
-    if case.variant == "ring":
-        return False, "pypto ring allreduce ST not yet implemented", [], 0.0, {}
-    # Use the composite intrinsic test (pld.tensor.allreduce) to measure
-    # the lowering tax. The hand-rolled test_l3_allreduce.py is the reference
-    # implementation — comparing it against simpler measures "hand-coded DSL
-    # vs hand-coded C++", not the abstraction cost.
-    test_file = pypto_root() / "tests" / "st" / "distributed" / "test_l3_tensor_allreduce_intrinsic.py"
-    if not test_file.is_file():
-        return False, f"pypto test not found: {test_file}", [], 0.0, {}
+def _pypto_run_config(profile_spec: str, platform: str) -> Any:
+    """Build a per-dispatch RunConfig for the pypto in-process stacks from --profile tokens."""
+    from pypto.runtime import RunConfig  # noqa: PLC0415
 
-    env = {**os.environ, "PYTHONUNBUFFERED": "1", "PYPTO_COMPILE_PROFILING": "1"}
-    # DON'T add pypto/python to PYTHONPATH — pypto is already pip-installed
-    # in the Docker image. Prepending the source tree shadows the installed
-    # pypto_core .so and causes import errors.
+    toks = profile_spec.split(",") if profile_spec else []
+    kwargs: dict[str, Any] = {"platform": platform}
+    if "l2" in toks:
+        kwargs["enable_l2_swimlane"] = True
+    if "pmu" in toks:
+        kwargs["enable_pmu"] = 2
+    if "dep" in toks:
+        kwargs["enable_dep_gen"] = True
+    return RunConfig(**kwargs)
 
-    cmd = [
-        sys.executable, "-m", "pytest", str(test_file),
-        "-v", "--platform", case.platform, "--device", _devices_comma(case.device_ids),
-        "-k", f"n_ranks-{case.p}",  # only run the parametrized case matching P
-        "-s",
-    ] + (extra_flags or [])
-    return _run_with_phases(
-        cmd, str(pypto_root()), env,
-        timeout=600, markers=_PYPTO_MARKERS,
-    )
+
+def _run_pypto_campaign(
+    case: EquivalenceCase,
+    warmup_rounds: int,
+    timed_rounds: int,
+    mode: str,
+    profile_spec: str = "",
+    dfx_dir: str | None = None,
+) -> tuple[list[dict[str, Any]], str]:
+    """Run warmup+timed pypto rounds in-process with one session (composite or host builtin)."""
+    from collectives.runners.pypto_own import close_pypto_session, get_pypto_session
+
+    stack_name = f"pypto-{mode}"
+    samples: list[dict[str, Any]] = []
+    try:
+        session = get_pypto_session(case, mode=mode, dfx_dir=dfx_dir)
+        run_config = _pypto_run_config(profile_spec, case.platform)
+        compile_profile = getattr(session, "compile_profile", None)
+        round_idx = 0
+        for r in range(warmup_rounds):
+            ok, execute_s, err = session.execute(config=run_config)
+            if not ok:
+                return samples, err
+            phases = session.execute_phases(execute_s)
+            setup_s = _compute_setup_s(stack_name, phases)
+            samples.append(_build_sample(
+                round_idx=round_idx,
+                label="warmup" if warmup_rounds == 1 else f"warmup-{r + 1}",
+                ok=True,
+                wall_s=execute_s,
+                execute_s=execute_s,
+                setup_s=setup_s if round_idx == 0 else None,
+                n_bytes=case.n_bytes,
+                phases=phases,
+                compile_profile=compile_profile,
+            ))
+            round_idx += 1
+
+        for r in range(timed_rounds):
+            ok, execute_s, err = session.execute(config=run_config)
+            if not ok:
+                return samples, err
+            phases = session.execute_phases(execute_s)
+            samples.append(_build_sample(
+                round_idx=round_idx,
+                label=f"timed-{r + 1}",
+                ok=True,
+                wall_s=execute_s,
+                execute_s=execute_s,
+                setup_s=None,
+                n_bytes=case.n_bytes,
+                phases=phases,
+                compile_profile=compile_profile,
+            ))
+            round_idx += 1
+    except Exception as exc:
+        return samples, str(exc)
+    finally:
+        close_pypto_session()
+
+    return samples, ""
 
 
 def _format_execute_s(execute_s: float) -> str:
@@ -723,8 +766,23 @@ def _run_stack_multi(
         print(f"  [{stack:>7}] campaign ({warmup} warmup + {timed_rounds} timed)...", flush=True)
         if stack == "hccl":
             campaign_samples, err = _run_hccl_campaign(case, warmup, timed_rounds, extra)
-        else:
+        elif stack == "simpler-own":
             campaign_samples, err = _run_simpler_own_campaign(case, warmup, timed_rounds, extra)
+        elif stack in ("pypto-composite", "pypto-host"):
+            # Route DFX artifacts (pmu.csv, deps.json, swimlane) into the
+            # bundle when --profile requests them, so plots can find them.
+            toks = profile_spec.split(",") if profile_spec else []
+            dfx_dir = (
+                str(bundle.bundle_dir / "dfx")
+                if any(t in toks for t in ("l2", "pmu", "dep"))
+                else None
+            )
+            mode = "composite" if stack == "pypto-composite" else "host"
+            campaign_samples, err = _run_pypto_campaign(
+                case, warmup, timed_rounds, mode, profile_spec, dfx_dir=dfx_dir
+            )
+        else:
+            return False, f"unknown campaign stack: {stack}", [], 0.0, 0.0, 0.0, None
 
         if err and not campaign_samples:
             return False, err, [], 0.0, 0.0, 0.0, None
@@ -745,8 +803,6 @@ def _run_stack_multi(
     else:
         if stack == "simpler":
             runner = _run_simpler_once
-        elif stack == "pypto":
-            runner = _run_pypto_once
         elif stack == "pto-isa":
             runner = _run_pto_isa_once
         else:
@@ -775,24 +831,6 @@ def _run_stack_multi(
                 phases=phases,
                 per_rank_execute_s=per_rank_list,
             )
-            if stack == "pypto":
-                for line in lines:
-                    if line.startswith("PYPTO_COMPILE_PROFILE "):
-                        parts = line.strip().split()
-                        compile_fields: dict[str, Any] = {}
-                        for part in parts[1:]:
-                            if "=" not in part:
-                                continue
-                            key, value = part.split("=", 1)
-                            if key == "path":
-                                compile_fields[key] = value
-                            else:
-                                try:
-                                    compile_fields[key] = round(float(value), 6)
-                                except ValueError:
-                                    compile_fields[key] = value
-                        sample["compile_profile"] = compile_fields
-                        break
             samples.append(sample)
             _print_sample_line(stack, sample, case.n_bytes, lines)
             if not ok and lines:
@@ -884,7 +922,7 @@ def _print_diagnostics(case: EquivalenceCase, args) -> None:
             print(f"  libhccl.so: FAILED — {str(e)[:50]}")
 
     # PyPTO import
-    if "pypto" in stacks:
+    if any(s in ("pypto-composite", "pypto-host") for s in stacks):
         try:
             import pypto as _pypto
             ver = getattr(_pypto, "__version__", "?")
@@ -983,7 +1021,7 @@ def _cmd_pair_impl(
           f"profile={args.profile or 'none'}")
 
     stacks = [s.strip() for s in args.stacks.split(",")]
-    unknown = [s for s in stacks if s not in ("simpler", "simpler-own", "pypto", "hccl", "pto-isa")]
+    unknown = [s for s in stacks if s not in STACK_REGISTRY]
     if unknown:
         print(f"ERROR: unknown stacks: {unknown}", file=sys.stderr)
         return 1
@@ -1012,6 +1050,14 @@ def _cmd_pair_impl(
     payload_desc = f"{case.count}×{case.dtype} ({nbytes} B/rank, P={case.p})"
     for stack in stacks:
         bundle = bundles[stack]
+        if not stack_supports(stack, case.variant):
+            print(f"  skipping {stack}: variant={case.variant} not supported "
+                  f"(supported: {', '.join(supported_variants(stack))})")
+            continue
+        if not count_allowed(stack, case.count):
+            print(f"  skipping {stack}: count={case.count} not allowed "
+                  f"(allowed: {', '.join(str(c) for c in count_constraint(stack))})")
+            continue
         print(f"\n[phase 1] {stack} ({case.warmup_rounds} warmup + {case.timed_rounds} timed)  "
               f"payload: {payload_desc}")
 
@@ -1057,8 +1103,7 @@ def _cmd_pair_impl(
         print(f"  {stack}: execute={exec_mean:.4f}s±{exec_stdev:.4f}s{setup_str} {status}")
         if not all_ok and last_error:
             print(f"  first error: {last_error[:200]}")
-            print(f"  stopping after {stack} failure; skipping remaining stacks")
-            break
+            print(f"  {stack} FAILED — continuing with remaining stacks")
 
     # Write results.json
     results = {
@@ -1115,11 +1160,12 @@ def main(argv: list[str] | None = None) -> int:
 
     p_pair = sub.add_parser("pair-mesh", help="Run same case on simpler, pypto, and/or hccl")
     p_pair.add_argument("--case-file", required=True)
-    p_pair.add_argument("--stacks", default="hccl,simpler,pypto",
-                        help="Comma-separated: hccl,simpler,simpler-own,pypto,pto-isa")
+    p_pair.add_argument("--stacks", default=",".join(DEFAULT_STACKS),
+                        help="Comma-separated: hccl,simpler,simpler-own,pypto-composite,pypto-host,pto-isa")
     p_pair.add_argument("--campaign", default="default")
     p_pair.add_argument("--profile", default="", help="Comma: l2,pmu,dep")
-    p_pair.add_argument("--count", type=int, default=None, help="Override case payload element count (HCCL only; simpler/pypto pinned to 256)")
+    p_pair.add_argument("--count", type=int, default=None, help="Override case payload element count (unbounded stacks only)")
+    p_pair.add_argument("--platform", default=None, help="Override case platform (e.g. a2a3sim for sim testing)")
     p_pair.add_argument("--warmup-rounds", type=int, default=None, help="Override case warmup rounds")
     p_pair.add_argument("--timed-rounds", type=int, default=None, help="Override case timed rounds")
     p_pair.add_argument("--out", required=True, help="results.json path under results/campaigns/")
@@ -1128,9 +1174,10 @@ def main(argv: list[str] | None = None) -> int:
     p_cross.add_argument("--case-file-a", required=True, help="First variant EquivalenceCase JSON")
     p_cross.add_argument("--case-file-b", required=True, help="Second variant EquivalenceCase JSON")
     p_cross.add_argument("--stacks", default="hccl,simpler",
-                         help="Comma-separated: hccl,simpler,simpler-own,pypto,pto-isa")
+                         help="Comma-separated: hccl,simpler,simpler-own,pypto-composite,pypto-host,pto-isa")
     p_cross.add_argument("--campaign", default="cross_variant")
     p_cross.add_argument("--profile", default="", help="Comma: l2,pmu,dep")
+    p_cross.add_argument("--platform", default=None, help="Override case platform (e.g. a2a3sim for sim testing)")
     p_cross.add_argument("--count", type=int, default=None, help="Override case payload element count")
     p_cross.add_argument("--warmup-rounds", type=int, default=None, help="Override case warmup rounds")
     p_cross.add_argument("--timed-rounds", type=int, default=None, help="Override case timed rounds")

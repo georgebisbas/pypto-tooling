@@ -7,6 +7,15 @@ import json
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
+from collectives.stacks import (
+    STACK_REGISTRY,
+    count_allowed,
+    count_constraint,
+    stack_supports,
+    supported_variants,
+    validate_stack_name,
+)
+
 ORCH_PROFILES: dict[str, dict[str, Any]] = {
     "mesh_l3_host_domain_v1": {
         "description": "L3 HOST: 1 comm domain, P chip submits, 0 sub-workers, 4-phase mesh InCore",
@@ -15,15 +24,14 @@ ORCH_PROFILES: dict[str, dict[str, Any]] = {
         "comm_domains_per_execute": 1,
         "chip_submissions": "P",
         "incore_phases": 4,
-        # simpler and pypto kernels hardcode ALLREDUCE_COUNT=256.
-        # simpler-own (our kernel in profiling/kernels/) accepts arbitrary count.
-        # HCCL has no such constraint — any count is valid.
-        "count_constraints": {
-            "simpler": [256],
-            "simpler-own": None,  # unbounded — dynamic-count kernel
-            "pypto": [256],
-            "hccl": None,  # unbounded
-        },
+    },
+    "mesh_l3_host_builtin_v1": {
+        "description": "L3 HOST: 1 comm domain, host builtin dispatch (no per-rank chip submit), 0 sub-workers",
+        "linqu_level": "L3_HOST",
+        "num_sub_workers": 0,
+        "comm_domains_per_execute": 1,
+        "chip_submissions": "1 (host builtin)",
+        "incore_phases": "n/a (runtime builtin)",
     },
 }
 
@@ -107,33 +115,46 @@ class EquivalenceCase:
         return hashlib.sha256(blob.encode()).hexdigest()[:16]
 
     def validate(self) -> None:
-        if self.variant not in ("mesh", "ring", "hccl"):
+        if self.variant not in ("mesh", "ring", "twophase", "hccl"):
             raise ValueError(f"unknown variant: {self.variant}")
         if self.p < 2:
             raise ValueError(f"p must be >= 2, got {self.p}")
         if self.count <= 0:
             raise ValueError(f"count must be positive, got {self.count}")
         if self.variant == "ring" and self.count % self.p != 0:
-            raise ValueError(f"ring requires count % p == 0, got {self.count} % {self.p}")
+            # pypto composite/host ring support non-divisible sizes; simpler
+            # ring requires divisibility and will skip at runtime (registry).
+            print(
+                f"WARNING: ring with count % p != 0 ({self.count} % {self.p}) — "
+                "pypto ring supports non-divisible sizes; simpler ring will skip."
+            )
         if self.orch_profile not in ORCH_PROFILES:
             raise ValueError(f"unknown orch_profile: {self.orch_profile}")
-        if self.variant == "mesh" and self.orch_profile != "mesh_l3_host_domain_v1":
-            raise ValueError("mesh variant requires mesh_l3_host_domain_v1 orch profile")
-        # Validate count against per-stack constraints (e.g. simpler/pypto pinned to 256).
-        # This is a soft check — the runner can still override count for HCCL-only sweeps.
-        profile = ORCH_PROFILES[self.orch_profile]
-        constraints = profile.get("count_constraints", {})
-        if constraints:
-            issues: list[str] = []
-            for stack_name, allowed in constraints.items():
-                if allowed is not None and self.count not in allowed:
-                    allowed_str = ", ".join(str(c) for c in allowed)
-                    issues.append(f"  stack={stack_name}: count must be in [{allowed_str}], got {self.count}")
-            if issues:
-                print(f"WARNING: count={self.count} is outside stack constraints for orch_profile={self.orch_profile}:")
-                for issue in issues:
-                    print(issue)
-                print("  Size sweeps are valid for HCCL baseline only. Non-HCCL stacks will skip at runtime.")
+        if self.variant == "mesh" and self.orch_profile not in (
+            "mesh_l3_host_domain_v1",
+            "mesh_l3_host_builtin_v1",
+        ):
+            raise ValueError("mesh variant requires a mesh_l3_* orch profile")
+        # Per-stack capability warnings come from the STACK_REGISTRY — which
+        # variants each stack supports and which counts it accepts. These are
+        # soft checks: a runner still errors at runtime when a stack cannot
+        # handle the case, but mixed-stack campaigns want a heads-up up front.
+        for stack in sorted(STACK_REGISTRY):
+            try:
+                validate_stack_name(stack)
+            except ValueError:
+                continue
+            if not stack_supports(stack, self.variant):
+                print(
+                    f"WARNING: stack={stack} does not support variant={self.variant} "
+                    f"(supported: {', '.join(supported_variants(stack))}); it will skip at runtime."
+                )
+            elif not count_allowed(stack, self.count):
+                print(
+                    f"WARNING: stack={stack} count must be in "
+                    f"[{', '.join(str(c) for c in count_constraint(stack))}], got {self.count}; "
+                    "it will skip at runtime."
+                )
 
     @classmethod
     def from_json_file(cls, path: str) -> EquivalenceCase:
