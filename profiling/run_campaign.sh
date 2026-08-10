@@ -9,6 +9,11 @@
 #   bash run_campaign.sh --variant mesh --p-values 2,4,8
 #   bash run_campaign.sh --variant ring --p-values 2,4,8 --count 65536
 #
+#   # Message-size sweep: one variant, sweep P × count (asymptotic BW regime)
+#   bash run_campaign.sh --variant mesh --p-values 2,4,8 \
+#       --counts 4096,16384,65536,262144,1048576 \
+#       --stacks hccl,pypto-composite,pypto-host
+#
 #   # Single P, cross-variant: mesh vs ring vs HCCL
 #   bash run_campaign.sh --mode cross-variant --p-values 4 --count 65536
 #
@@ -70,6 +75,10 @@ Options:
   --variants VA,VB         Two variants for cross-variant mode (default: mesh,ring)
   --p-values CSV           Comma-separated P values (default: 2,4,8)
   --count N                Override case payload element count
+  --counts CSV             Message-size sweep: comma-separated payload counts
+                           (e.g. 4096,16384,65536,262144,1048576); runs P × count,
+                           one result file per (P, count). Takes precedence over
+                           --count. Feeds message_size_bw_eff / summarize.
   --dtype TYPE             fp32 or fp16 (default: fp32)
   --stacks CSV             Stacks: hccl,simpler,simpler-own,pypto-composite,
                            pypto-host,pto-isa (default: hccl,simpler,pypto-composite,pypto-host)
@@ -86,6 +95,7 @@ VARIANT="mesh"
 VARIANTS_CSV="mesh,ring"
 P_VALUES_CSV="2,4,8"
 COUNT_OVERRIDE=""
+COUNTS_CSV=""
 DTYPE="fp32"
 STACKS="hccl,simpler,pypto-composite,pypto-host"
 PLATFORM=""
@@ -113,6 +123,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --count)
             COUNT_OVERRIDE="$2"
+            shift 2
+            ;;
+        --counts)
+            COUNTS_CSV="$2"
             shift 2
             ;;
         --dtype)
@@ -172,6 +186,12 @@ RUN_SWEEP_EXTRA_ARGS=()
 if [[ -n "$COUNT_OVERRIDE" ]]; then
     RUN_SWEEP_EXTRA_ARGS+=(--count "$COUNT_OVERRIDE")
 fi
+# --counts sweep: per-iteration --count is appended AFTER the extra args, so it
+# wins over any --count override (documented precedence).
+IFS=',' read -r -a COUNTS <<< "$COUNTS_CSV"
+if [[ ${#COUNTS[@]} -eq 1 && -z "${COUNTS[0]}" ]]; then
+    COUNTS=()
+fi
 if [[ -n "$WARMUP_OVERRIDE" ]]; then
     RUN_SWEEP_EXTRA_ARGS+=(--warmup-rounds "$WARMUP_OVERRIDE")
 fi
@@ -195,6 +215,9 @@ if [[ -n "$PLATFORM" ]]; then
 fi
 if [[ -n "$COUNT_OVERRIDE" ]]; then
     echo " Count:     ${COUNT_OVERRIDE}"
+fi
+if [[ ${#COUNTS[@]} -gt 0 ]]; then
+    echo " Counts:    ${COUNTS[*]}"
 fi
 if [[ ${#RUN_SWEEP_EXTRA_ARGS[@]} -gt 0 ]]; then
     echo " Overrides:  ${RUN_SWEEP_EXTRA_ARGS[*]}"
@@ -232,20 +255,45 @@ if [[ "$MODE" == "strong-scaling" ]]; then
             echo "  Run: python collectives/cases/generate.py --variant ${VARIANT} --p-values ${P}"
             exit 1
         fi
-        OUT_FILE="${RUN_DIR}/results_p${P}.json"
 
-        echo ""
-        echo "--- P=${P} (${VARIANT}) ---"
-        python3 -m collectives.run_sweep pair-mesh \
-            --case-file "$CASE_FILE" \
-            --stacks "$STACKS" \
-            --campaign "$CAMPAIGN" \
-            "${RUN_SWEEP_EXTRA_ARGS[@]}" \
-            --out "$OUT_FILE" || {
-            echo "FATAL: P=${P} failed (exit $?), stopping."
-            exit 1
-        }
-        RESULTS_FILES+=("$OUT_FILE")
+        # Message-size sweep: one result file per (P, count). The merge,
+        # summarize and plot stages key on the per-run `count`, so multi-count
+        # results land in the same results.json and the message_size_bw_eff
+        # crossover figure just works.
+        if [[ ${#COUNTS[@]} -gt 0 ]]; then
+            for COUNT in "${COUNTS[@]}"; do
+                OUT_FILE="${RUN_DIR}/results_p${P}_count${COUNT}.json"
+
+                echo ""
+                echo "--- P=${P} count=${COUNT} (${VARIANT}) ---"
+                python3 -m collectives.run_sweep pair-mesh \
+                    --case-file "$CASE_FILE" \
+                    --stacks "$STACKS" \
+                    --campaign "$CAMPAIGN" \
+                    "${RUN_SWEEP_EXTRA_ARGS[@]}" \
+                    --count "$COUNT" \
+                    --out "$OUT_FILE" || {
+                    echo "WARNING: P=${P} count=${COUNT} failed (exit $?), continuing."
+                    continue
+                }
+                RESULTS_FILES+=("$OUT_FILE")
+            done
+        else
+            OUT_FILE="${RUN_DIR}/results_p${P}.json"
+
+            echo ""
+            echo "--- P=${P} (${VARIANT}) ---"
+            python3 -m collectives.run_sweep pair-mesh \
+                --case-file "$CASE_FILE" \
+                --stacks "$STACKS" \
+                --campaign "$CAMPAIGN" \
+                "${RUN_SWEEP_EXTRA_ARGS[@]}" \
+                --out "$OUT_FILE" || {
+                echo "FATAL: P=${P} failed (exit $?), stopping."
+                exit 1
+            }
+            RESULTS_FILES+=("$OUT_FILE")
+        fi
     done
 
 # ── Mode: cross-variant ──────────────────────────────────────────────────

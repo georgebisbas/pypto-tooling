@@ -160,6 +160,14 @@ PYTHONPATH=. python -m collectives.run_sweep pair-mesh \
 # Strong scaling campaign: mesh P=2,4,8
 bash run_campaign.sh --variant mesh --p-values 2,4,8 --count 65536
 
+# Message-size sweep: mesh P × count — finds the latency→bandwidth crossover
+# (feeds figures/message_size_bw_eff.png). Bigger counts amortize launch/sync
+# overhead so the collective's asymptotic bandwidth shows up.
+bash run_campaign.sh --variant mesh --p-values 2,4,8 \
+  --counts 4096,16384,65536,262144,1048576 \
+  --stacks hccl,pypto-composite,pypto-host \
+  --platform a2a3 --campaign strong_mesh_sizes
+
 # Cross-variant: mesh vs ring at P=4
 bash run_campaign.sh --mode cross-variant --variants mesh,ring \
   --p-values 4 --count 65536 --stacks hccl,simpler,pypto-composite,pypto-host
