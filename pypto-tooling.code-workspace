@@ -7,7 +7,16 @@
 			"path": "../pypto-3.0-notes"
 		},
 		{
-			"path": "../hw-native-sys/simpler"
+			"path": "../simpler"
+		},
+		{
+			"path": "../mcp-hw-native-sys"
+		},
+		{
+			"path": "../pypto-docker"
+		},
+		{
+			"path": "../pypto-profiling"
 		}
 	],
 	"settings": {}

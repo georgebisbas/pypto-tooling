@@ -13,10 +13,6 @@ venv/
 # Local-only known-issues tracking (see problem-handling convention in sibling repos)
 KNOWN_ISSUES.md
 
-# Benchmark results (profiling outputs)
-profiling/results/campaigns/
-profiling/build_output/
-
 # IDE
 .vscode/
 .idea/
