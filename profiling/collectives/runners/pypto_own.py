@@ -36,6 +36,8 @@ from __future__ import annotations
 
 import argparse
 import importlib.util
+import os
+import re
 import sys
 import tempfile
 import time
@@ -375,6 +377,22 @@ def _flatten_compile_profile(profile: dict) -> dict[str, float] | None:
     }
 
 
+_DEVICE_WALL_RE = re.compile(r"device_wall[^\n]*?dur=(\d+)")
+
+
+def _parse_device_wall_s(text: str) -> float | None:
+    """Extract the slowest-rank ``device_wall`` span duration (seconds).
+
+    The runtime emits one ``[STRACE] ... name=simpler_run.runner_run.device_wall
+    ... dur=<ns> clk=dev`` span per rank; the slowest rank is the collective
+    completion. Returns ``None`` when the runtime did not emit the span.
+    """
+    durs = [int(m) for m in _DEVICE_WALL_RE.findall(text)]
+    if not durs:
+        return None
+    return max(durs) / 1e9
+
+
 class PyptoCollectiveSession:
     """One compile + one worker init; call execute() many times before close()."""
 
@@ -449,28 +467,82 @@ class PyptoCollectiveSession:
             self._compiled = module.host_orch.compile(sample_in, sample_out, config=cfg)
         self.compile_s = time.perf_counter() - t0
         self.compile_profile = _flatten_compile_profile(prof.to_dict())
+        self.last_device_wall_s: float | None = None
 
-        # Prepare the reusable dispatch handle (worker init + registration).
-        t1 = time.perf_counter()
-        self._rt = self._compiled.prepare()
-        self.init_s = time.perf_counter() - t1
+        # Redirect stderr at the fd level for the worker's lifetime BEFORE
+        # prepare(): the chip workers are forked there and inherit fd 2, so a
+        # redirect set up after the fork would miss their [STRACE] markers
+        # (pypto/runtime/bench.py documents the same requirement for L3). Only
+        # runtime stderr is diverted — harness prints go to stdout. Restored in
+        # close(); the buffered text is drained per-round by execute().
+        self._strace_fh = tempfile.TemporaryFile(mode="w+", encoding="utf-8")
+        self._strace_offset = 0
+        self._saved_err_fd = os.dup(2)
+        os.dup2(self._strace_fh.fileno(), 2)
+        try:
+            # Prepare the reusable dispatch handle (worker init + registration).
+            t1 = time.perf_counter()
+            self._rt = self._compiled.prepare()
+            self.init_s = time.perf_counter() - t1
+        except BaseException:
+            self._restore_stderr()
+            raise
+
+    def _restore_stderr(self) -> None:
+        """Restore fd 2 to its pre-session target; idempotent."""
+        if getattr(self, "_saved_err_fd", None) is not None:
+            os.dup2(self._saved_err_fd, 2)
+            os.close(self._saved_err_fd)
+            self._saved_err_fd = None
+
+    def _drain_device_wall(self) -> float | None:
+        """Read new ``[STRACE]`` spans since the last drain; return slowest-rank
+        ``device_wall`` (seconds) or None when the runtime did not emit one."""
+        self._strace_fh.flush()
+        self._strace_fh.seek(self._strace_offset)
+        text = self._strace_fh.read()
+        self._strace_offset = self._strace_fh.tell()
+        return _parse_device_wall_s(text)
 
     def execute(self, config: Any | None = None) -> tuple[bool, float, str]:
         """Run one collective round; returns (ok, execute_s, error).
 
-        ``config`` is an optional per-dispatch :class:`RunConfig` carrying DFX
-        flags (``enable_l2_swimlane`` / ``enable_pmu`` / ``enable_dep_gen``).
+        ``execute_s`` is the wall time of ``rt.run()`` (host dispatch + device
+        collective). The pure on-device collective time — the slowest-rank
+        ``device_wall`` STRACE span, when the runtime emits one — is recorded
+        on ``self.last_device_wall_s`` (``None`` when unavailable).
         """
         t0 = time.perf_counter()
         self.outputs.zero_()
         self._rt.run(self._compiled, self.inputs, self.outputs, config=config)
         wall = time.perf_counter() - t0
+        self.last_device_wall_s = self._drain_device_wall()
 
         per_rank = [row[0] for row in self.outputs.tolist()]
         ok, msg = verify_outputs(
             self.case, per_rank, rtol=_RTOL[self.dtype], atol=_ATOL[self.dtype]
         )
         return ok, wall, "" if ok else msg
+
+    def execute_batch(self, config: Any | None = None, n: int = 10) -> tuple[bool, float, float | None, str]:
+        """Run ``n`` back-to-back rounds; returns (ok, mean_execute_s, mean_device_wall_s, error).
+
+        Amortises per-dispatch host overhead across rounds — a second view of
+        the collective cost alongside single-round ``execute()``.
+        """
+        total = 0.0
+        dev_total = 0.0
+        dev_count = 0
+        for _ in range(n):
+            ok, execute_s, err = self.execute(config=config)
+            if not ok:
+                return False, execute_s, self.last_device_wall_s, err
+            total += execute_s
+            if self.last_device_wall_s is not None:
+                dev_total += self.last_device_wall_s
+                dev_count += 1
+        mean_dev = dev_total / dev_count if dev_count else None
+        return True, total / n, mean_dev, ""
 
     def execute_phases(self, wall: float) -> dict[str, float]:
         """Phase breakdown: compile + init once, execute per round."""
@@ -481,6 +553,10 @@ class PyptoCollectiveSession:
         }
 
     def close(self) -> None:
+        self._restore_stderr()
+        if getattr(self, "_strace_fh", None) is not None:
+            self._strace_fh.close()
+            self._strace_fh = None
         if getattr(self, "_rt", None) is not None:
             self._rt.close()
             self._rt = None
@@ -535,6 +611,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--mode", choices=("composite", "host"), default="composite")
     parser.add_argument("--dtype", choices=("fp32", "fp16"), default="fp32")
     parser.add_argument("--rounds", type=int, default=3)
+    parser.add_argument("--batch", type=int, default=1, help="Back-to-back rt.run per round (amortises dispatch)")
     args = parser.parse_args(argv)
 
     case = EquivalenceCase(
@@ -550,11 +627,15 @@ def main(argv: list[str] | None = None) -> int:
     session = get_pypto_session(case, mode=args.mode)
     try:
         for r in range(args.rounds):
-            ok, execute_s, err = session.execute()
+            if args.batch > 1:
+                ok, execute_s, dev_s, err = session.execute_batch(config=None, n=args.batch)
+            else:
+                ok, execute_s, err = session.execute()
+                dev_s = session.last_device_wall_s
             phases = session.execute_phases(execute_s)
             print(
                 f"round {r + 1}: ok={ok} execute={execute_s:.6f}s "
-                f"phases={phases} {err}"
+                f"device_wall={dev_s} phases={phases} {err}"
             )
             if not ok:
                 return 1

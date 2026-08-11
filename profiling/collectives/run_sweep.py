@@ -274,6 +274,7 @@ def _build_sample(
     phases: dict[str, float] | None = None,
     per_rank_execute_s: list[float] | None = None,
     compile_profile: dict[str, float] | None = None,
+    device_wall_s: float | None = None,
 ) -> dict[str, Any]:
     sample: dict[str, Any] = {
         "round": round_idx,
@@ -291,6 +292,8 @@ def _build_sample(
         sample["per_rank_execute_s"] = [round(v, 6) for v in per_rank_execute_s]
     if compile_profile is not None:
         sample["compile_profile"] = compile_profile
+    if device_wall_s is not None:
+        sample["device_wall_s"] = round(device_wall_s, 6)
     return sample
 
 # Phase markers for simpler stdout parsing.
@@ -645,6 +648,7 @@ def _run_pypto_campaign(
     mode: str,
     profile_spec: str = "",
     dfx_dir: str | None = None,
+    batch: int = 1,
 ) -> tuple[list[dict[str, Any]], str]:
     """Run warmup+timed pypto rounds in-process with one session (composite or host builtin)."""
     from collectives.runners.pypto_own import close_pypto_session, get_pypto_session
@@ -672,11 +676,18 @@ def _run_pypto_campaign(
                 n_bytes=case.n_bytes,
                 phases=phases,
                 compile_profile=compile_profile,
+                device_wall_s=getattr(session, "last_device_wall_s", None),
             ))
             round_idx += 1
 
         for r in range(timed_rounds):
-            ok, execute_s, err = session.execute(config=run_config)
+            if batch > 1:
+                ok, execute_s, device_wall_s, err = session.execute_batch(
+                    config=run_config, n=batch
+                )
+            else:
+                ok, execute_s, err = session.execute(config=run_config)
+                device_wall_s = getattr(session, "last_device_wall_s", None)
             if not ok:
                 return samples, err
             phases = session.execute_phases(execute_s)
@@ -690,6 +701,7 @@ def _run_pypto_campaign(
                 n_bytes=case.n_bytes,
                 phases=phases,
                 compile_profile=compile_profile,
+                device_wall_s=device_wall_s,
             ))
             round_idx += 1
     except Exception as exc:
@@ -698,6 +710,15 @@ def _run_pypto_campaign(
         close_pypto_session()
 
     return samples, ""
+
+
+def _aggregate_timed_device_wall_mean(samples: list[dict[str, Any]]) -> float | None:
+    """Mean ``device_wall_s`` across timed rounds, or None when never captured."""
+    timed = [s for s in samples if str(s.get("phase", "")).startswith("timed")]
+    vals = [float(s["device_wall_s"]) for s in timed if s.get("device_wall_s") is not None]
+    if not vals:
+        return None
+    return round(statistics.mean(vals), 6)
 
 
 def _format_execute_s(execute_s: float) -> str:
@@ -717,6 +738,8 @@ def _print_sample_line(stack: str, sample: dict[str, Any], n_bytes: int, lines: 
     for key, value in phases.items():
         if key not in ("fail",):
             details.append(f"{key}={float(value):.2f}s")
+    if sample.get("device_wall_s") is not None:
+        details.append(f"device_wall={float(sample['device_wall_s']):.6f}s")
     details.append(_format_bw(n_bytes, execute_s))
     if sample.get("per_rank_execute_s"):
         details.append(f"ranks={sample['per_rank_execute_s']}")
@@ -747,6 +770,7 @@ def _run_stack_multi(
     stack: str,
     bundle: RunArtifactBundle,
     profile_spec: str,
+    batch: int = 1,
 ) -> tuple[bool, str, list[dict[str, Any]], float, float, float, float | None]:
     """Run warmup + timed rounds for one stack.
 
@@ -779,7 +803,7 @@ def _run_stack_multi(
             )
             mode = "composite" if stack == "pypto-composite" else "host"
             campaign_samples, err = _run_pypto_campaign(
-                case, warmup, timed_rounds, mode, profile_spec, dfx_dir=dfx_dir
+                case, warmup, timed_rounds, mode, profile_spec, dfx_dir=dfx_dir, batch=batch
             )
         else:
             return False, f"unknown campaign stack: {stack}", [], 0.0, 0.0, 0.0, None
@@ -1062,7 +1086,7 @@ def _cmd_pair_impl(
               f"payload: {payload_desc}")
 
         all_ok, last_error, samples, exec_mean, exec_stdev, wall_mean, setup_s = _run_stack_multi(
-            case, stack, bundle, args.profile,
+            case, stack, bundle, args.profile, batch=getattr(args, "batch", 1),
         )
 
         bundle.write_manifest(
@@ -1088,6 +1112,7 @@ def _cmd_pair_impl(
             "correctness": "pass" if all_ok else "fail",
             "execute_s_mean": round(exec_mean, 6),
             "execute_s_stdev": round(exec_stdev, 6),
+            "device_wall_s_mean": _aggregate_timed_device_wall_mean(samples),
             "setup_s": round(setup_s, 6) if setup_s is not None else None,
             "bw_execute_mb_s": bw_execute,
             "wall_s_mean": round(wall_mean, 6),
@@ -1168,6 +1193,8 @@ def main(argv: list[str] | None = None) -> int:
     p_pair.add_argument("--platform", default=None, help="Override case platform (e.g. a2a3sim for sim testing)")
     p_pair.add_argument("--warmup-rounds", type=int, default=None, help="Override case warmup rounds")
     p_pair.add_argument("--timed-rounds", type=int, default=None, help="Override case timed rounds")
+    p_pair.add_argument("--batch", type=int, default=1,
+                        help="Back-to-back rt.run per timed round (pypto stacks; amortises dispatch)")
     p_pair.add_argument("--out", required=True, help="results.json path under results/campaigns/")
 
     p_cross = sub.add_parser("cross-variant", help="Compare two algorithm variants at same (P,count,dtype,devices)")
@@ -1181,6 +1208,8 @@ def main(argv: list[str] | None = None) -> int:
     p_cross.add_argument("--count", type=int, default=None, help="Override case payload element count")
     p_cross.add_argument("--warmup-rounds", type=int, default=None, help="Override case warmup rounds")
     p_cross.add_argument("--timed-rounds", type=int, default=None, help="Override case timed rounds")
+    p_cross.add_argument("--batch", type=int, default=1,
+                         help="Back-to-back rt.run per timed round (pypto stacks; amortises dispatch)")
     p_cross.add_argument("--out", required=True, help="results.json path under results/campaigns/")
 
     args = parser.parse_args(argv)

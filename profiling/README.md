@@ -45,10 +45,19 @@ All stacks in `run_sweep.py` report a shared metric schema in `results.json`:
 | Field | Meaning |
 |-------|---------|
 | `setup_s` | One-time compile + init + comm setup (first warmup round only) |
-| `execute_s` | **Primary timed metric** — collective execution only |
+| `execute_s` | **Primary timed metric** — `rt.run()` wall (host dispatch + collective) |
+| `device_wall_s_mean` | Pure on-device collective time (slowest-rank `[STRACE] device_wall` span); `None` when the runtime did not emit it |
 | `wall_s` | Total round wall (kept for debugging / subprocess stacks) |
 | `bw_execute_mb_s` | `n_bytes / execute_s` |
 | `per_rank_execute_s` | HCCL only: per-rank times from `HCCL_TIMED` lines |
+
+**`execute_s` vs `device_wall_s`:** for the pypto stacks `execute_s` includes
+per-dispatch host overhead (on the 2026-08-10 NPU run that was ~16 ms at P=2,
+scaling to ~240 ms at P=8 — larger than the collective itself).
+`device_wall_s_mean` is the true apples-to-apples number vs HCCL's 200 µs.
+Pass `--batch N` to run N back-to-back `rt.run()` per timed round and divide,
+amortising that dispatch overhead for a second view (each round still reports
+both metrics).
 
 **Per-stack `execute_s` definition:**
 
@@ -108,6 +117,7 @@ Current figure outputs from a full campaign include:
 - `figures/setup_breakdown.png` — grouped `compile` / `init` / `execute` bars per stack
 - `figures/compile_breakdown.png` — PyPTO compile sub-stages (`passes` / `codegen` / residual other), captured via the thread-local `CompileProfiler` around `host_orch.compile`
 - `figures/pmu_utilization.png` — pipe utilisation ratios from `pmu.csv` (needs `--profile pmu`; pypto stacks route DFX artifacts into the bundle under `cases/<case>/<stack>/dfx/`)
+- `figures/wall_vs_device.png` — `execute_s` vs `device_wall_s` per pypto (case, stack), exposing the per-dispatch overhead directly
 
 Without matplotlib (e.g. the minimal sim container) every figure falls back to a
 `.txt` sibling with the same data — `plot_figures.py` never fails on a missing

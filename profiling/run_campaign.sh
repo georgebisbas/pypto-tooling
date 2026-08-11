@@ -409,7 +409,7 @@ python3 -m collectives.summarize --run-dir "$RUN_DIR" --emit-report 2>/dev/null 
 echo ""
 echo "--- figures ---"
 python3 -m collectives.plot_figures --run-dir "$RUN_DIR" \
-    --figures strong_scaling_t_total,strong_scaling_efficiency,message_size_bw_eff,paired_stack_ratio,phase_breakdown,setup_breakdown,compile_breakdown,pmu_utilization 2>/dev/null || \
+    --figures strong_scaling_t_total,strong_scaling_efficiency,message_size_bw_eff,paired_stack_ratio,phase_breakdown,setup_breakdown,compile_breakdown,pmu_utilization,wall_vs_device 2>/dev/null || \
     echo "  (plot skipped — no plotter or no data)"
 
 echo ""

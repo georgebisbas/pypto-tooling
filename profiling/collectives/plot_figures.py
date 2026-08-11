@@ -26,6 +26,7 @@ FIGURE_IDS = (
     "setup_breakdown",
     "compile_breakdown",
     "pmu_utilization",
+    "wall_vs_device",
 )
 
 # Canonical per-stack colors/markers, shared across figures.
@@ -403,6 +404,46 @@ def _plot_pmu_utilization(runs: list[dict], fig_dir: Path, run_dir: Path) -> Pat
     print(f"  pmu_utilization → {path} (from {len(pmu_files)} files)")
     return path
 
+
+def _plot_wall_vs_device(runs: list[dict], fig_dir: Path) -> Path:
+    """Grouped bars: ``execute_s`` (dispatch + collective) vs ``device_wall_s``
+    (collective only) per pypto (case, stack). Exposes the per-dispatch
+    overhead directly."""
+    plt = _load_matplotlib()
+    if plt is None:
+        return _text_fallback(runs, fig_dir, "wall_vs_device")
+
+    filtered = [r for r in runs if r.get("device_wall_s_mean") is not None]
+    if not filtered:
+        print("  wall_vs_device: no device_wall data")
+        return fig_dir / "wall_vs_device.png"
+
+    filtered.sort(key=lambda r: (r.get("p", 0), r.get("case_id", ""), r.get("stack", "")))
+    labels = [f"P{run.get('p', '?')}\n{run['stack']}" for run in filtered]
+    x = range(len(filtered))
+    width = 0.35
+
+    fig, ax = plt.subplots(figsize=(max(8, len(filtered) * 1.2), 5))
+    wall = [float(r["execute_s_mean"]) for r in filtered]
+    dev = [float(r["device_wall_s_mean"]) for r in filtered]
+    ax.bar([i - width / 2 for i in x], wall, width=width, color="#e74c3c",
+           edgecolor="white", label="execute_s (dispatch + collective)")
+    ax.bar([i + width / 2 for i in x], dev, width=width, color="#2ecc71",
+           edgecolor="white", label="device_wall_s (collective only)")
+    ax.set_xticks(list(x))
+    ax.set_xticklabels(labels, fontsize=8, rotation=30, ha="right")
+    ax.set_ylabel("Time (s)")
+    ax.set_title("Dispatch overhead vs pure collective (pypto stacks)")
+    ax.legend(fontsize=8)
+    ax.grid(True, axis="y", alpha=0.25)
+    fig.tight_layout()
+
+    path = fig_dir / "wall_vs_device.png"
+    fig.savefig(path, dpi=150)
+    plt.close(fig)
+    print(f"  wall_vs_device → {path}")
+    return path
+
 def _plot_phase_breakdown(runs: list[dict], fig_dir: Path) -> Path:
     """Stacked bars: canonical phase means per (case, stack)."""
     plt = _load_matplotlib()
@@ -588,6 +629,15 @@ def _text_fallback(runs: list[dict], fig_dir: Path, fig_id: str) -> Path:
             lines.append(
                 f"  {run['case_id']} pypto: passes={passes:.4f}s, codegen={codegen:.4f}s, other={other:.4f}s, total={total:.4f}s"
             )
+    elif fig_id == "wall_vs_device":
+        for run in sorted(runs, key=lambda r: (r.get("p", 0), r.get("stack", ""))):
+            dev = run.get("device_wall_s_mean")
+            if dev is None:
+                continue
+            wall = _primary_time(run) or 0.0
+            lines.append(
+                f"  {run['case_id']} {run['stack']}: execute={wall:.6f}s device_wall={float(dev):.6f}s"
+            )
     else:
         groups: dict[str, dict[str, float | None]] = {}
         for r in runs:
@@ -649,6 +699,8 @@ def main(argv: list[str] | None = None) -> int:
             _plot_compile_breakdown(runs, fig_dir)
         elif fig_id == "pmu_utilization":
             _plot_pmu_utilization(runs, fig_dir, args.run_dir)
+        elif fig_id == "wall_vs_device":
+            _plot_wall_vs_device(runs, fig_dir)
         else:
             print(f"  {fig_id}: not yet implemented")
 

@@ -136,6 +136,7 @@ def _print_table(
             row[f"{s}_correctness"] = r.get("correctness", "?")
             row[f"{s}_setup_s"] = r.get("setup_s")
             row[f"{s}_bw_mb_s"] = r.get("bw_execute_mb_s")
+            row[f"{s}_device_wall_s"] = r.get("device_wall_s_mean")
         hccl_t = row.get("hccl_execute_s")
         base_t = row.get(f"{baseline}_execute_s")
         for s in stacks:
@@ -165,6 +166,14 @@ def _time_str_fmt(row: dict[str, Any], stack: str) -> str:
     if val is None:
         return "—"
     return f"{val:.4f}"
+
+
+def _device_time_str_fmt(row: dict[str, Any], stack: str) -> str:
+    """Format the pure on-device collective time (device_wall), or a dash."""
+    val = row.get(f"{stack}_device_wall_s")
+    if val is None:
+        return "—"
+    return f"{val:.6f}"
 
 
 def _stacks_from_rows(rows: list[dict[str, Any]]) -> list[str]:
@@ -286,6 +295,42 @@ def _write_report(
             f"min={min(effs):.2f}×  max={max(effs):.2f}×  "
             f"mean={sum(effs)/len(effs):.2f}×",
         ]
+
+    # Device-only comparison: the pure on-device collective (device_wall) vs
+    # the dispatch+collective wall time, and vs HCCL's pure collective.
+    dev_stacks = [
+        s for s in stacks
+        if any(r.get(f"{s}_device_wall_s") is not None for r in rows)
+    ]
+    if dev_stacks:
+        lines += [
+            "",
+            "## Device-time comparison (pure collective)",
+            "",
+            "`device_wall_s` = slowest-rank on-device span when the runtime "
+            "emits STRACE; `—` = not captured.",
+            "",
+            "| case_id | " + " | ".join(f"{s} dev(s)" for s in dev_stacks) + " |",
+            "|---------|-" + "|-".join(["----"] * len(dev_stacks)) + "|",
+        ]
+        for r in rows:
+            cells = " | ".join(_device_time_str_fmt(r, s) for s in dev_stacks)
+            lines.append(f"| {r['case_id']} | {cells} |")
+
+        dev_hccl = [
+            (r.get("pypto-composite_device_wall_s"), r.get("hccl_execute_s"))
+            for r in rows
+            if r.get("pypto-composite_device_wall_s") is not None
+            and r.get("hccl_execute_s") is not None
+        ]
+        ratios = [dw / h for dw, h in dev_hccl if h > 0]
+        if ratios:
+            lines += [
+                "",
+                f"- **HCCL efficiency (pypto-composite, device-only):** "
+                f"min={min(ratios):.2f}×  max={max(ratios):.2f}×  "
+                f"mean={sum(ratios)/len(ratios):.2f}×",
+            ]
 
     lines += [
         "",
