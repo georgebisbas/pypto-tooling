@@ -18,7 +18,7 @@
   "block_dim": null,
   "aicpu_thread_num": null,
   "warmup_rounds": 1,
-  "timed_rounds": 5,
+  "timed_rounds": 10,
   "measure": "execute_only",
   "n_bytes": 524288,
   "window_nbytes": 524288,

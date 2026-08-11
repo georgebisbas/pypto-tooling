@@ -132,11 +132,13 @@ def _print_table(
         for s in stacks:
             r = st.get(s, {})
             row[f"{s}_execute_s"] = _primary_time(r)
+            row[f"{s}_execute_s_median"] = r.get("execute_s_median")
             row[f"{s}_wall_s"] = r.get("wall_s_mean") or r.get("wall_s")
             row[f"{s}_correctness"] = r.get("correctness", "?")
             row[f"{s}_setup_s"] = r.get("setup_s")
             row[f"{s}_bw_mb_s"] = r.get("bw_execute_mb_s")
             row[f"{s}_device_wall_s"] = r.get("device_wall_s_mean")
+            row[f"{s}_device_wall_s_median"] = r.get("device_wall_s_median")
         hccl_t = row.get("hccl_execute_s")
         base_t = row.get(f"{baseline}_execute_s")
         for s in stacks:
@@ -174,6 +176,14 @@ def _device_time_str_fmt(row: dict[str, Any], stack: str) -> str:
     if val is None:
         return "—"
     return f"{val:.6f}"
+
+
+def _median_str_fmt(row: dict[str, Any], stack: str) -> str:
+    """Format the median execute time, or a dash."""
+    val = row.get(f"{stack}_execute_s_median")
+    if val is None:
+        return "—"
+    return f"{val:.4f}"
 
 
 def _stacks_from_rows(rows: list[dict[str, Any]]) -> list[str]:
@@ -295,6 +305,27 @@ def _write_report(
             f"min={min(effs):.2f}×  max={max(effs):.2f}×  "
             f"mean={sum(effs)/len(effs):.2f}×",
         ]
+
+    # Median execute times — robust to the per-round spike pattern seen on the
+    # shared NPU box (consecutive rounds can differ 7x; medians resist that).
+    median_stacks = [
+        s for s in stacks
+        if any(r.get(f"{s}_execute_s_median") is not None for r in rows)
+    ]
+    if median_stacks:
+        lines += [
+            "",
+            "## Median execute times",
+            "",
+            "Median of the timed-round ``execute_s`` — robust to outlier rounds "
+            "(shared-box contention / dispatch spikes).",
+            "",
+            "| case_id | " + " | ".join(f"{s} med(s)" for s in median_stacks) + " |",
+            "|---------|-" + "|-".join(["----"] * len(median_stacks)) + "|",
+        ]
+        for r in rows:
+            cells = " | ".join(_median_str_fmt(r, s) for s in median_stacks)
+            lines.append(f"| {r['case_id']} | {cells} |")
 
     # Device-only comparison: the pure on-device collective (device_wall) vs
     # the dispatch+collective wall time, and vs HCCL's pure collective.

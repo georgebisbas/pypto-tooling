@@ -41,7 +41,7 @@ def _warmup_rounds(count: int) -> int:
     if count <= 4096:
         return 3
     if count <= 65536:
-        return 2
+        return 3
     return 1
 
 
@@ -51,10 +51,10 @@ def _timed_rounds(count: int) -> int:
     if count <= 4096:
         return 20
     if count <= 65536:
-        return 10
+        return 15
     if count <= 262144:
-        return 5
-    return 3         # 4 MiB — 3 samples enough
+        return 10
+    return 5         # 1 MiB+ — spiky shared box needs median over >=5 samples
 
 
 def generate_cases(

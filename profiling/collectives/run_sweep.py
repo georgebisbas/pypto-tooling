@@ -712,13 +712,13 @@ def _run_pypto_campaign(
     return samples, ""
 
 
-def _aggregate_timed_device_wall_mean(samples: list[dict[str, Any]]) -> float | None:
-    """Mean ``device_wall_s`` across timed rounds, or None when never captured."""
+def _aggregate_timed_device_wall_stats(samples: list[dict[str, Any]]) -> tuple[float | None, float | None]:
+    """(mean, median) ``device_wall_s`` across timed rounds; None when never captured."""
     timed = [s for s in samples if str(s.get("phase", "")).startswith("timed")]
     vals = [float(s["device_wall_s"]) for s in timed if s.get("device_wall_s") is not None]
     if not vals:
-        return None
-    return round(statistics.mean(vals), 6)
+        return None, None
+    return round(statistics.mean(vals), 6), round(statistics.median(vals), 6)
 
 
 def _format_execute_s(execute_s: float) -> str:
@@ -753,16 +753,17 @@ def _print_sample_line(stack: str, sample: dict[str, Any], n_bytes: int, lines: 
     print(f"{_format_execute_s(execute_s)} {status}  [{', '.join(details)}]")
 
 
-def _aggregate_execute_stats(samples: list[dict[str, Any]]) -> tuple[float, float, float | None]:
+def _aggregate_execute_stats(samples: list[dict[str, Any]]) -> tuple[float, float, float | None, float]:
     timed = [s for s in samples if str(s.get("phase", "")).startswith("timed")]
     execute_values = [float(s["execute_s"]) for s in timed if "execute_s" in s]
     if execute_values:
         mean = statistics.mean(execute_values)
         stdev = statistics.stdev(execute_values) if len(execute_values) > 1 else 0.0
+        median = statistics.median(execute_values)
     else:
-        mean, stdev = 0.0, 0.0
+        mean, stdev, median = 0.0, 0.0, 0.0
     setup_s = next((float(s["setup_s"]) for s in samples if s.get("setup_s") is not None), None)
-    return mean, stdev, setup_s
+    return mean, stdev, setup_s, median
 
 
 def _run_stack_multi(
@@ -771,7 +772,7 @@ def _run_stack_multi(
     bundle: RunArtifactBundle,
     profile_spec: str,
     batch: int = 1,
-) -> tuple[bool, str, list[dict[str, Any]], float, float, float, float | None]:
+) -> tuple[bool, str, list[dict[str, Any]], float, float, float, float | None, float]:
     """Run warmup + timed rounds for one stack.
 
     Returns (all_ok, error, samples, execute_s_mean, execute_s_stdev, wall_s_mean, setup_s).
@@ -806,10 +807,10 @@ def _run_stack_multi(
                 case, warmup, timed_rounds, mode, profile_spec, dfx_dir=dfx_dir, batch=batch
             )
         else:
-            return False, f"unknown campaign stack: {stack}", [], 0.0, 0.0, 0.0, None
+            return False, f"unknown campaign stack: {stack}", [], 0.0, 0.0, 0.0, None, 0.0
 
         if err and not campaign_samples:
-            return False, err, [], 0.0, 0.0, 0.0, None
+            return False, err, [], 0.0, 0.0, 0.0, None, 0.0
 
         for sample in campaign_samples:
             label = str(sample.get("phase", ""))
@@ -830,7 +831,7 @@ def _run_stack_multi(
         elif stack == "pto-isa":
             runner = _run_pto_isa_once
         else:
-            return False, f"unknown stack: {stack}", [], 0.0, 0.0, 0.0, None
+            return False, f"unknown stack: {stack}", [], 0.0, 0.0, 0.0, None, 0.0
 
         for r in range(total):
             label = "warmup" if r < warmup else f"timed-{r - warmup + 1}"
@@ -872,12 +873,12 @@ def _run_stack_multi(
     bundle.log_path.write_text(json.dumps(samples, indent=2) + "\n", encoding="utf-8")
     bundle.write_timing(samples)
 
-    execute_mean, execute_stdev, setup_s = _aggregate_execute_stats(samples)
+    execute_mean, execute_stdev, setup_s, execute_median = _aggregate_execute_stats(samples)
     timed_wall = [
         float(s["wall_s"]) for s in samples if str(s.get("phase", "")).startswith("timed")
     ]
     wall_mean = statistics.mean(timed_wall) if timed_wall else execute_mean
-    return all_ok, last_error, samples, execute_mean, execute_stdev, wall_mean, setup_s
+    return all_ok, last_error, samples, execute_mean, execute_stdev, wall_mean, setup_s, execute_median
 
 
 def _aggregate_timed_phase_means(samples: list[dict[str, Any]]) -> dict[str, float]:
@@ -1085,7 +1086,7 @@ def _cmd_pair_impl(
         print(f"\n[phase 1] {stack} ({case.warmup_rounds} warmup + {case.timed_rounds} timed)  "
               f"payload: {payload_desc}")
 
-        all_ok, last_error, samples, exec_mean, exec_stdev, wall_mean, setup_s = _run_stack_multi(
+        all_ok, last_error, samples, exec_mean, exec_stdev, wall_mean, setup_s, exec_median = _run_stack_multi(
             case, stack, bundle, args.profile, batch=getattr(args, "batch", 1),
         )
 
@@ -1112,7 +1113,9 @@ def _cmd_pair_impl(
             "correctness": "pass" if all_ok else "fail",
             "execute_s_mean": round(exec_mean, 6),
             "execute_s_stdev": round(exec_stdev, 6),
-            "device_wall_s_mean": _aggregate_timed_device_wall_mean(samples),
+            "execute_s_median": round(exec_median, 6),
+            "device_wall_s_mean": _aggregate_timed_device_wall_stats(samples)[0],
+            "device_wall_s_median": _aggregate_timed_device_wall_stats(samples)[1],
             "setup_s": round(setup_s, 6) if setup_s is not None else None,
             "bw_execute_mb_s": bw_execute,
             "wall_s_mean": round(wall_mean, 6),
@@ -1125,7 +1128,8 @@ def _cmd_pair_impl(
         })
         status = "PASS" if all_ok else "FAIL"
         setup_str = f" setup={setup_s:.2f}s" if setup_s is not None else ""
-        print(f"  {stack}: execute={exec_mean:.4f}s±{exec_stdev:.4f}s{setup_str} {status}")
+        print(f"  {stack}: execute={exec_mean:.4f}s±{exec_stdev:.4f}s "
+              f"(med {exec_median:.4f}s){setup_str} {status}")
         if not all_ok and last_error:
             print(f"  first error: {last_error[:200]}")
             print(f"  {stack} FAILED — continuing with remaining stacks")
