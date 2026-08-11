@@ -28,19 +28,19 @@
 extern "C" {
 
 __attribute__((visibility("default"))) PTO2OrchestrationConfig
-allreduce_mesh_orch_config(const ChipStorageTaskArgs &orch_args) {
+allreduce_mesh_orch_config(const L2TaskArgs &orch_args) {
     (void)orch_args;
     return PTO2OrchestrationConfig{
         .expected_arg_count = 6,  // 3 tensors + 3 scalars
     };
 }
 
-__attribute__((visibility("default"))) void allreduce_mesh_orch(const ChipStorageTaskArgs &orch_args) {
-    Tensor input = from_tensor_arg(orch_args.tensor(0));
-    Tensor output = from_tensor_arg(orch_args.tensor(1));
-    Tensor scratch = from_tensor_arg(orch_args.tensor(2));
+__attribute__((visibility("default"))) void allreduce_mesh_orch(const L2TaskArgs &orch_args) {
+    const Tensor &input = orch_args.tensor(0).ref();
+    const Tensor &output = orch_args.tensor(1).ref();
+    const Tensor &scratch = orch_args.tensor(2).ref();
 
-    Arg params;
+    L0TaskArgs params;
     params.add_input(input);
     params.add_output(output);
     params.add_inout(scratch);

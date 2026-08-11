@@ -65,15 +65,17 @@ both metrics).
 | Stack | Source |
 |-------|--------|
 | **hccl** | `max(per_rank)` from `HCCL_WARMUP` / `HCCL_TIMED` (slowest rank = collective completion) |
-| **simpler-own** | `worker.run()` wall time via in-process session reuse (persistent HCCL window via `Worker.allocate_persistent_domain`) |
+| **simpler-own** | `worker.run()` wall time via in-process session reuse (compile + worker init once; comm domain allocated per run via `orch.allocate_domain`) |
 | **pypto-composite / pypto-host** | `rt.run()` wall time via in-process session reuse (compile + `prepare()` once; each timed round is a fresh `rt.run`) |
 | **simpler / pto-isa** | `phases["execute"]` when available, else subprocess wall (includes framework overhead) |
 
 HCCL, simpler-own, pypto-composite and pypto-host run warmup + timed rounds in **one
 process** (campaign mode), so `setup_s` is amortized once and excluded from timed means.
-simpler-own allocates its comm scratch window once via `Worker.allocate_persistent_domain()`
-(simpler runtime API) instead of `orch.allocate_domain()` per execute; the pypto runners
-compile + `prepare()` their distributed worker once and reuse it across rounds. Subprocess
+simpler-own compiles its dynamic-count AIV kernel + orch shim and initialises the
+`Worker` once, then allocates the HCCL comm window per run with
+`with orch.allocate_domain(...)` inside the orchestration function (current simpler
+API — see `examples/workers/l3/allreduce`); the pypto runners compile +
+`prepare()` their distributed worker once and reuse it across rounds. Subprocess
 stacks still pay full init per round; their `execute_s` is the best available phase marker
 until session wrappers land.
 
