@@ -98,7 +98,7 @@ for cross-stack comparison — use `execute_s_mean` and `bw_execute_mb_s` instea
 | Stack | kind | Variants | Count constraint | Notes |
 |-------|------|----------|------------------|-------|
 | **hccl** | campaign | mesh, ring, twophase | unbounded | CANN `HcclAllReduce` baseline; algorithm internal to HCCL |
-| **simpler** | subprocess | mesh, ring, twophase | `[256]` only | hand-written L3 C++ allreduce (`--mode mesh\|ring\|twophase`) |
+| **simpler** | subprocess | mesh, ring, twophase | `[256]` only | hand-written L3 C++ allreduce; current `examples/workers/l3/allreduce/main.py` is mesh-only (ring/twophase need the legacy `allreduce_distributed` example) |
 | **simpler-own** | campaign | mesh | unbounded | our dynamic-count AIV kernel via simpler `KernelCompiler` |
 | **pypto-composite** | campaign | mesh, ring | unbounded | InCore `pld.tensor.allreduce` composite via `@pl.jit.host` |
 | **pypto-host** | campaign | mesh, ring | unbounded | HOST builtin `pld.tensor.allreduce` via `@pl.jit.host`; ring = Sum + FP32 only |

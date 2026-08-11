@@ -30,7 +30,9 @@ STACK_REGISTRY: dict[str, dict[str, Any]] = {
         "variants": ("mesh", "ring", "twophase"),
         "count_constraint": [256],  # ALLREDUCE_COUNT hardcoded in the C++ kernel
         "orch_profile": "mesh_l3_host_domain_v1",
-        "description": "hand-written L3 C++ allreduce (--mode mesh|ring|twophase)",
+        "description": "hand-written L3 C++ allreduce via simpler's "
+        "examples/workers/l3/allreduce/main.py (mesh one-phase, count 256; "
+        "ring/twophase only when the legacy allreduce_distributed example is present)",
     },
     "simpler-own": {
         "kind": "campaign",

@@ -375,14 +375,27 @@ def _run_simpler_once(case: EquivalenceCase, extra_flags: list[str] | None = Non
             f"simpler supports only count=256 (hardcoded ALLREDUCE_COUNT); "
             f"got {case.count}. Use 'hccl' stack for size sweeps."
         ), [], 0.0, {}
-    script = simpler_root() / "examples" / "workers" / "l3" / "allreduce_distributed" / "main.py"
-    mode_flags: list[str] = []
-    if case.variant == "ring":
-        mode_flags = ["--mode", "ring"]
-    elif case.variant == "twophase":
-        mode_flags = ["--mode", "twophase"]
+    script = simpler_root() / "examples" / "workers" / "l3" / "allreduce" / "main.py"
+    legacy = simpler_root() / "examples" / "workers" / "l3" / "allreduce_distributed" / "main.py"
     if not script.is_file():
-        return False, f"simpler script not found: {script}", [], 0.0, {}
+        script = legacy
+    if not script.is_file():
+        return False, f"simpler script not found (tried {script} and {legacy})", [], 0.0, {}
+
+    mode_flags: list[str] = []
+    if script == legacy:
+        # Legacy allreduce_distributed example: --mode ring|twophase.
+        if case.variant == "ring":
+            mode_flags = ["--mode", "ring"]
+        elif case.variant == "twophase":
+            mode_flags = ["--mode", "twophase"]
+    elif case.variant in ("ring", "twophase"):
+        # Current examples/workers/l3/allreduce/main.py is a mesh-only one-phase
+        # kernel (no --mode); ring/twophase need the legacy example.
+        return False, (
+            f"simpler example {script} is mesh-only; ring/twophase need the "
+            f"legacy allreduce_distributed example ({legacy})"
+        ), [], 0.0, {}
 
     cmd = [
         sys.executable, str(script),
@@ -958,7 +971,9 @@ def _print_diagnostics(case: EquivalenceCase, args) -> None:
     # simpler scripts
     if "simpler" in stacks:
         from collectives.config import simpler_root as _sr
-        mesh = _sr() / "examples" / "workers" / "l3" / "allreduce_distributed" / "main.py"
+        mesh = _sr() / "examples" / "workers" / "l3" / "allreduce" / "main.py"
+        if not mesh.is_file():
+            mesh = _sr() / "examples" / "workers" / "l3" / "allreduce_distributed" / "main.py"
         print(f"  simpler mesh script: {'✅' if mesh.is_file() else '❌ not found'}")
 
     # pto-isa treduce binary
