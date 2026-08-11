@@ -1,2 +1,0 @@
-[console_scripts]
-hw-native-sys-mcp = mcp_hwnative_sys.server:main
