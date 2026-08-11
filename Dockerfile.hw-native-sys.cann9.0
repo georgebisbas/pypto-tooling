@@ -24,7 +24,7 @@
 #   docker build -t pypto3-hw-native-sys:cann9 - < Dockerfile.hw-native-sys.cann9.0
 #
 # BUILD (custom prefix / pinned pto-isa / different commit):
-#   docker build --build-arg PYPTO_COMMIT=d315f62d243d0208c6a0e539c3646359a5fc3876 -t pypto3-hw-native-sys:cann9 - < Dockerfile.hw-native-sys.cann9.0
+#   docker build --build-arg PYPTO_COMMIT=0be6431ec8df97cf177839140244ba97981feb6a -t pypto3-hw-native-sys:cann9 - < Dockerfile.hw-native-sys.cann9.0
 #
 # RUN (single-device, NO HCCL):
 #   docker run --rm -it --privileged --ipc=host -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi:ro -v /usr/local/Ascend/driver:/usr/local/Ascend/driver:ro -v /dev:/dev pypto3-hw-native-sys:cann9
@@ -154,7 +154,7 @@ RUN pip install torch --index-url https://download.pytorch.org/whl/cpu
 # Clone pypto at the pinned commit (changing PYPTO_COMMIT busts the layer cache automatically).
 # Uses a blobless clone (--filter=blob:none) so any commit SHA can be checked out;
 # GitHub does not allow shallow-fetching arbitrary SHAs directly.
-ARG PYPTO_COMMIT=d315f62d243d0208c6a0e539c3646359a5fc3876
+ARG PYPTO_COMMIT=0be6431ec8df97cf177839140244ba97981feb6a
 RUN git clone --filter=blob:none https://github.com/hw-native-sys/pypto.git "${PYPTO_DIR}" && \
     if ! git -C "${PYPTO_DIR}" cat-file -e "${PYPTO_COMMIT}^{commit}" 2>/dev/null; then \
       git -C "${PYPTO_DIR}" fetch origin "${PYPTO_COMMIT}"; \
