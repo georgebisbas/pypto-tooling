@@ -8,6 +8,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from collectives import model as bw_model
+
 
 def _load_runs(run_dir: Path) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     """Load results.json. Returns (header, runs_list)."""
@@ -198,11 +200,45 @@ def _stacks_from_rows(rows: list[dict[str, Any]]) -> list[str]:
     return [s for s in STACK_ORDER if s in stacks] + [s for s in stacks if s not in STACK_ORDER]
 
 
+def _model_scorecard_lines(models: list[bw_model.BandwidthModel]) -> list[str]:
+    """Markdown section for the O + N/B pipelining scorecard."""
+    if not models:
+        return []
+    lines = [
+        "",
+        "## Pipelining / bandwidth-model scorecard",
+        "",
+        "`T(N) = O + N/B` fitted over the message-size sweep (least squares, "
+        "per stack/P/variant). `O` = fixed per-collective latency, "
+        "`B` = asymptotic marginal bandwidth, `pipe@maxN` = fraction of the "
+        "largest-payload time that is actual transfer (→1.0 = bandwidth-bound "
+        "/ pipelined steady state), `BW vs HCCL` = `B / B_hccl`. `source` = "
+        "timing field the fit used (device_wall preferred).",
+        "",
+        "| stack | P | variant | source | O (µs) | B (MB/s) | r² | pipe@maxN | BW vs HCCL |",
+        "|-------|---|---------|--------|---------|----------|----|-----------|------------|",
+    ]
+    for m in sorted(models, key=lambda m: (m.stack, m.p, m.variant)):
+        bw = bw_model.format_bandwidth(m.bandwidth_b_s)
+        lat = bw_model.format_latency(m.latency_s)
+        eff = f"{m.bw_eff_vs_hccl:.2f}" if m.bw_eff_vs_hccl is not None else "—"
+        lines.append(
+            f"| {m.stack} | {m.p} | {m.variant} | {m.source} | "
+            f"{lat} | {bw} | {m.r2:.3f} | {m.pipeline_score:.2f} | {eff} |"
+        )
+    lines += [
+        "",
+        "Raw fits (latency_s, bandwidth_b_s, points) in `reports/model_fit.json`.",
+    ]
+    return lines
+
+
 def _write_report(
     run_dir: Path,
     rows: list[dict[str, Any]],
     header: dict[str, Any],
     baseline: str = "simpler",
+    models: list[bw_model.BandwidthModel] | None = None,
 ) -> Path:
     """Write reports/summary.md with N-stack tables and metadata."""
     report_dir = run_dir / "reports"
@@ -372,6 +408,9 @@ def _write_report(
         "Run `python -m collectives.plot_figures --run-dir <dir>` to generate figures.",
     ]
 
+    if models:
+        lines += _model_scorecard_lines(models)
+
     out = report_dir / "summary.md"
     out.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return out
@@ -384,6 +423,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--baseline", default="simpler", help="Reference stack for paired ratios")
     parser.add_argument("--emit-report", action="store_true", help="Write reports/summary.md")
     parser.add_argument("--json", type=Path, default=None, help="Write summary rows as JSON")
+    parser.add_argument("--model", action="store_true",
+                        help="Fit the O + N/B pipelining model over the message-size "
+                             "sweep and emit the scorecard + reports/model_fit.json")
     args = parser.parse_args(argv)
 
     try:
@@ -399,12 +441,42 @@ def main(argv: list[str] | None = None) -> int:
 
     rows = _print_table(groups, baseline=args.baseline)
 
+    models: list[bw_model.BandwidthModel] = []
+    if args.model:
+        models = bw_model.score_runs(runs)
+        print()
+        if not models:
+            print("model: no group with >=3 distinct payload sizes — "
+                  "run a message-size sweep (--counts) first")
+        else:
+            print("Pipelining / bandwidth-model scorecard (T(N) = O + N/B):")
+            header_line = (f"{'stack':<16}{'P':>3}  {'variant':<8}"
+                           f"{'O':>12}{'B':>14}{'r²':>8}{'pipe@maxN':>10}"
+                           f"{'BW vs HCCL':>12}")
+            print(header_line)
+            print("-" * len(header_line))
+            for m in sorted(models, key=lambda m: (m.stack, m.p, m.variant)):
+                eff = f"{m.bw_eff_vs_hccl:.2f}" if m.bw_eff_vs_hccl is not None else "—"
+                print(
+                    f"{m.stack:<16}{m.p:>3}  {m.variant:<8}"
+                    f"{bw_model.format_latency(m.latency_s):>12}"
+                    f"{bw_model.format_bandwidth(m.bandwidth_b_s):>14}"
+                    f"{m.r2:>8.3f}{m.pipeline_score:>10.2f}{eff:>12}"
+                )
+            fit_path = args.run_dir / "reports" / "model_fit.json"
+            fit_path.parent.mkdir(parents=True, exist_ok=True)
+            fit_path.write_text(
+                json.dumps([m.to_dict() for m in models], indent=2) + "\n",
+                encoding="utf-8",
+            )
+            print(f"\nwrote {fit_path}")
+
     if args.json:
         args.json.write_text(json.dumps(rows, indent=2) + "\n", encoding="utf-8")
         print(f"\nwrote {args.json}")
 
     if args.emit_report:
-        path = _write_report(args.run_dir, rows, header, baseline=args.baseline)
+        path = _write_report(args.run_dir, rows, header, baseline=args.baseline, models=models)
         print(f"\nwrote {path}")
 
     return 0

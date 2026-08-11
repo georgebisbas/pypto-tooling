@@ -54,6 +54,16 @@ _SETUP_S = {
     "pypto-composite": 2.9,
     "pypto-host": 6.4,
 }
+# Fraction of execute_s that is the pure on-device collective (device_wall).
+# HCCL reports device time directly; the pypto stacks carry framework overhead
+# that execute_s includes but device_wall excludes.
+_DEVICE_FRAC = {
+    "hccl": 1.0,
+    "simpler": 0.90,
+    "simpler-own": 0.85,
+    "pypto-composite": 0.80,
+    "pypto-host": 0.70,
+}
 _COMPILE_S = {"pypto-composite": 0.8, "pypto-host": 1.4}
 _INIT_S = {"pypto-composite": 2.1, "pypto-host": 5.0}
 _COMPILE_PROFILE = {
@@ -109,6 +119,7 @@ def generate(run_dir: Path) -> Path:
                         continue  # simpler-own is mesh-only
                     execute = base[stack]
                     nbytes = count * _BYTES_PER_ELT
+                    device_wall = execute * _DEVICE_FRAC[stack]
                     phases: dict[str, float] = {"execute": execute}
                     compile_profile: dict[str, float] | None = None
                     if stack in _COMPILE_S:
@@ -127,6 +138,9 @@ def generate(run_dir: Path) -> Path:
                         "correctness": "pass",
                         "execute_s_mean": execute,
                         "execute_s_stdev": execute * 0.03,
+                        "execute_s_median": execute * 0.98,
+                        "device_wall_s_mean": device_wall,
+                        "device_wall_s_median": device_wall * 0.98,
                         "setup_s": _SETUP_S[stack] if stack in _SETUP_S else None,
                         "bw_execute_mb_s": round((nbytes / execute) / 1e6, 3),
                         "wall_s_mean": _SETUP_S[stack] + execute

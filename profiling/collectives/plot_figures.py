@@ -17,6 +17,8 @@ import importlib
 import json
 from pathlib import Path
 
+from collectives import model as bw_model
+
 FIGURE_IDS = (
     "paired_stack_ratio",
     "strong_scaling_t_total",
@@ -27,6 +29,7 @@ FIGURE_IDS = (
     "compile_breakdown",
     "pmu_utilization",
     "wall_vs_device",
+    "bw_model_fit",
 )
 
 # Canonical per-stack colors/markers, shared across figures.
@@ -251,6 +254,63 @@ def _plot_message_size_bw_eff(runs: list[dict], fig_dir: Path) -> Path:
     fig.savefig(path, dpi=150)
     plt.close(fig)
     print(f"  message_size_bw_eff → {path}")
+    return path
+
+
+def _plot_bw_model_fit(runs: list[dict], fig_dir: Path) -> Path:
+    """Measured T(N) points + fitted O + N/B lines per stack (projected vs HCCL).
+
+    Picks, per stack, the (P, variant) group with the most fitted points (ties
+    resolved to the largest P), then plots the raw points and the model line
+    on a log-x payload-byte axis. HCCL's fit is included as the reference.
+    """
+    plt = _load_matplotlib()
+    if plt is None:
+        return _text_fallback(runs, fig_dir, "bw_model_fit")
+
+    models = bw_model.score_runs(runs)
+    if not models:
+        print("  bw_model_fit: need >=3 distinct payload sizes per stack "
+              "(message-size sweep)")
+        return fig_dir / "bw_model_fit.png"
+
+    # Per stack: the fit with the most points (largest P on ties).
+    chosen: dict[str, bw_model.BandwidthModel] = {}
+    for m in models:
+        cur = chosen.get(m.stack)
+        if cur is None or (m.n_points, m.p) > (cur.n_points, cur.p):
+            chosen[m.stack] = m
+    if "hccl" not in chosen:
+        print("  bw_model_fit: no HCCL fit to reference — run hccl in the sweep")
+
+    fig, ax = plt.subplots(figsize=(9, 5.5))
+    for stack in sorted(chosen):
+        m = chosen[stack]
+        color = STACK_COLORS.get(stack, "#95a5a6")
+        marker = STACK_MARKERS.get(stack, "x")
+        xs = [pt[0] for pt in m.points]
+        ys = [pt[1] for pt in m.points]
+        ax.scatter(xs, ys, color=color, marker=marker, s=45,
+                   label=f"{stack} (P={m.p}, {m.source})")
+        lo, hi = min(xs), max(xs)
+        span = [lo * (hi / lo) ** (i / 99) for i in range(100)]
+        fit_ys = [m.latency_s + n / m.bandwidth_b_s for n in span]
+        eff = f" {m.bw_eff_vs_hccl:.2f}×HCCL" if m.bw_eff_vs_hccl is not None else ""
+        ax.plot(span, fit_ys, color=color, linestyle="--", linewidth=1.4,
+                label=f"{stack} fit O+N/B (pipe {m.pipeline_score:.2f}{eff})")
+
+    ax.set_xscale("log", base=2)
+    ax.set_xlabel("Payload bytes per rank (log2)")
+    ax.set_ylabel("Collective time (s)")
+    ax.set_title("T(N) = O + N/B fit — measured points vs bandwidth model")
+    ax.legend(fontsize=7)
+    ax.grid(True, alpha=0.3, which="both")
+    fig.tight_layout()
+
+    path = fig_dir / "bw_model_fit.png"
+    fig.savefig(path, dpi=150)
+    plt.close(fig)
+    print(f"  bw_model_fit → {path}")
     return path
 
 
@@ -638,6 +698,18 @@ def _text_fallback(runs: list[dict], fig_dir: Path, fig_id: str) -> Path:
             lines.append(
                 f"  {run['case_id']} {run['stack']}: execute={wall:.6f}s device_wall={float(dev):.6f}s"
             )
+    elif fig_id == "bw_model_fit":
+        models = bw_model.score_runs(runs)
+        if not models:
+            lines.append("  (need >=3 distinct payload sizes per stack — message-size sweep)")
+        for m in sorted(models, key=lambda m: (m.stack, m.p, m.variant)):
+            eff = f" bw={m.bw_eff_vs_hccl:.2f}xHCCL" if m.bw_eff_vs_hccl is not None else ""
+            lines.append(
+                f"  {m.stack} P={m.p} {m.variant} ({m.source}): "
+                f"O={bw_model.format_latency(m.latency_s)} "
+                f"B={bw_model.format_bandwidth(m.bandwidth_b_s)} "
+                f"r2={m.r2:.3f} pipe@maxN={m.pipeline_score:.2f}{eff}"
+            )
     else:
         groups: dict[str, dict[str, float | None]] = {}
         for r in runs:
@@ -701,6 +773,8 @@ def main(argv: list[str] | None = None) -> int:
             _plot_pmu_utilization(runs, fig_dir, args.run_dir)
         elif fig_id == "wall_vs_device":
             _plot_wall_vs_device(runs, fig_dir)
+        elif fig_id == "bw_model_fit":
+            _plot_bw_model_fit(runs, fig_dir)
         else:
             print(f"  {fig_id}: not yet implemented")
 

@@ -19,9 +19,10 @@ Profiling playbook: [pypto-3.0-notes/performance_tuning.md/profiling.md](../../p
 
 ```text
 profiling/
-  collectives/          # Python package (stacks, equivalence, golden, runners, plots)
+  collectives/          # Python package (stacks, equivalence, golden, runners, plots, model)
   collectives/stacks.py # stack capability registry (single source of truth)
   collectives/runners/  # per-stack in-process session runners
+  collectives/model.py  # O + N/B bandwidth-model fit + pipelining scorecard
   results/              # gitignored campaign outputs
   requirements.txt      # matplotlib, pandas
 ```
@@ -90,7 +91,7 @@ for cross-stack comparison — use `execute_s_mean` and `bw_execute_mb_s` instea
 | `run_campaign.sh` (strong-scaling, cross-variant, full-sweep modes) | ✅ Implemented |
 | `cases/generate.py` (case generator for sweeps) | ✅ Implemented (72 cases generated) |
 | `summarize.py` (aggregation, paired comparison, reports) | ✅ Implemented (E2) |
-| `plot_figures.py` (8 figures: scaling, efficiency, bw-crossover, ratios, phase/setup/compile breakdown, PMU) | ✅ Working |
+| `plot_figures.py` (10 figures: scaling, efficiency, bw-crossover, ratios, phase/setup/compile breakdown, PMU, wall-vs-device, bw model fit) | ✅ Working |
 | `hccl_bench.py` / `hccl_bench.cc` (HCCL baseline microbenchmark) | ✅ Implemented |
 
 ## Stack capability matrix
@@ -118,6 +119,35 @@ Current figure outputs from a full campaign include:
 - `figures/compile_breakdown.png` — PyPTO compile sub-stages (`passes` / `codegen` / residual other), captured via the thread-local `CompileProfiler` around `host_orch.compile`
 - `figures/pmu_utilization.png` — pipe utilisation ratios from `pmu.csv` (needs `--profile pmu`; pypto stacks route DFX artifacts into the bundle under `cases/<case>/<stack>/dfx/`)
 - `figures/wall_vs_device.png` — `execute_s` vs `device_wall_s` per pypto (case, stack), exposing the per-dispatch overhead directly
+- `figures/bw_model_fit.png` — measured T(N) points + fitted `O + N/B` line per stack (projected vs HCCL), from the pipelining model
+
+## Pipelining / bandwidth-model scorecard (`--model`)
+
+`summarize.py --model` fits each (stack, P, variant) across a message-size
+sweep to `T(N) = O + N/B` (least squares over payload bytes):
+
+- `O` — fixed per-collective latency (dispatch, barrier rounds, neighbour handshakes)
+- `B` — asymptotic marginal bandwidth (the steady-state rate a fully-pipelined kernel reaches)
+- `pipe@maxN` — `(N_max/B)/T(N_max)`: the fraction of the largest-payload time
+  that is actual transfer. →1.0 means the stack is already bandwidth-bound
+  (pipelined steady state); well below means latency/barrier-bound — the exact
+  quantity pipelining (multi-buffering, async issue, neighbour-local barriers)
+  moves.
+- `BW vs HCCL` — `B / B_hccl` at the same (P, variant), the headline
+  "how close to HCCL's data plane" number.
+
+Timing source precedence: `device_wall_s_mean` (pure on-device) →
+`execute_s_mean` → wall times. Raw fits land in `reports/model_fit.json` and
+the scorecard renders as a report section under `--emit-report`.
+
+```bash
+# Message-size sweep first, then score it
+bash run_campaign.sh --variant mesh --p-values 8 \
+    --counts 4096,16384,65536,262144,1048576 \
+    --stacks hccl,pypto-composite,pypto-host
+python3 -m collectives.summarize --run-dir <run_dir> --model --emit-report
+python3 -m collectives.plot_figures --run-dir <run_dir> --figures bw_model_fit
+```
 
 Without matplotlib (e.g. the minimal sim container) every figure falls back to a
 `.txt` sibling with the same data — `plot_figures.py` never fails on a missing
