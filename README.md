@@ -17,14 +17,16 @@ repos, siblings under `hw-native-sys/`:
 
 ## What stays here
 
-- `build_skills/` — container rebuild skills for PyPTO (`pypto_core`) after branch pulls
 - `debugging_skills/` — NPU / docker debugging skills + error-code reference
-- `dockerfile_skills/` — Dockerfile construction / incident notes (used by `pypto-docker`)
 - `task-submit/` — reference doc for the `task-submit` device-locking CLI
 - `diagnose_npu.py` — 10-point NPU hardware health check (copy into a container and run)
 - `bz910b-reproduce.md` — Ascend 910B server image repro runbook
 - `personal_setup.md` — personal git / env setup notes
 - `.mcp.json` — Claude Code MCP registration for `mcp-hw-native-sys`
+
+The docker-specific skills moved to `pypto-docker`:
+- `pypto-docker/build_skills/` — in-container PyPTO (`pypto_core`) rebuild workflow
+- `pypto-docker/dockerfile_skills/` — Dockerfile construction skill + incident logs
 
 ## MCP registration
 

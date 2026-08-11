@@ -403,7 +403,7 @@ When a multi-rank L3 test produces wrong output but no diagnostic:
    the recipe below).
 3. Only after the IR and the orchestration look correct, treat it as a runtime
    issue and use the `debugging_skills/SKILL.md` NPU diagnostics or
-   `dockerfile_skills/SKILL.md` runtime tips.
+   `../pypto-docker/dockerfile_skills/SKILL.md` runtime tips.
 
 ## 1. Multi-rank dispatch needs a comm window (`CollectCommGroups` recipe)
 
