@@ -13,6 +13,9 @@ venv/
 # Local-only known-issues tracking (see problem-handling convention in sibling repos)
 KNOWN_ISSUES.md
 
+# Leftover root-owned build artifacts from pre-split docker runs (cannot be removed without sudo)
+profiling/
+
 # IDE
 .vscode/
 .idea/

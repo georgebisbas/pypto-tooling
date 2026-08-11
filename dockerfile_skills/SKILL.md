@@ -22,6 +22,11 @@ triggers:
 
 # PyPTO Dockerfile construction
 
+> **Location:** the Dockerfiles, `scripts/`, and `docker-entrypoint-cann.sh` described
+> here live in the sibling [`../pypto-docker`](../pypto-docker/) repo. Run build and
+> update commands from `../pypto-docker/`; this file is the construction knowledge that
+> accompanies them.
+
 ## When to use this skill
 
 ```text
@@ -95,7 +100,7 @@ Note: Uses **x86_64** `ptoas-bin-x86_64.tar.gz` with a **different SHA256** than
 | 2 | pto-isa commit changed? | Read `simpler/pto_isa.pin` — the single source of truth (auto-derived at Docker build time). | Auto-derived; no ARG update needed unless you want to hard-pin via `--build-arg` |
 | 3 | L3 sim pytest flags match `st-sim-a2a3`? | Compare `simpler/.github/workflows/ci.yml` `pytest examples tests/st --platform a2a3sim` with `scripts/run-simpler-l3-sim.sh` | Update script + Dockerfile header |
 
-Note: No pypto, CANN, or ptoas — simpler-only sim image. Build context must include `scripts/run-simpler-l3-sim.sh` (build from `pypto-tooling/`).
+Note: No pypto, CANN, or ptoas — simpler-only sim image. Build context must include `scripts/run-simpler-l3-sim.sh` (build from `../pypto-docker/`).
 
 ### `Dockerfile.pypto-lib.sim.ubuntu22.04` — pypto-lib on `pypto3-hw-native-sys:sim`
 

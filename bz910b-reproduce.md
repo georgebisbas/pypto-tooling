@@ -1,6 +1,6 @@
 ## PyPTO 3.0 (hw-native-sys) Server Test Tutorial
 
-Use this when you want to run PyPTO tests on `hng-atlas01` with the CANN 9.0 image from `Dockerfile.server.cann:9.0`.
+Use this when you want to run PyPTO tests on `hng-atlas01` with the CANN 9.0 image from `Dockerfile.server.cann:9.0` (in the sibling [`pypto-docker`](../pypto-docker/) repo).
 
 ### 1) SSH to the server
 
@@ -18,10 +18,10 @@ cd ~/hw-native-sys
 
 ### 3) Build image (recommended)
 
-Rebuild whenever `Dockerfile.server.cann:9.0` changes.
+Rebuild whenever `pypto-docker/Dockerfile.server.cann:9.0` changes.
 
 ```bash
-docker build --no-cache -f "Dockerfile.server.cann:9.0" -t pypto3-dev-env:cann9 .
+docker build --no-cache -f "pypto-docker/Dockerfile.server.cann:9.0" -t pypto3-dev-env:cann9 .
 ```
 
 Quick sanity checks:
@@ -155,7 +155,7 @@ Simulator mode (`a2a3sim`) is not supported in this image.
 - **Image uses old behavior after Dockerfile updates**
   - Fix:
     ```bash
-    docker build --no-cache -f "Dockerfile.server.cann:9.0" -t pypto3-dev-env:cann9 .
+    docker build --no-cache -f "pypto-docker/Dockerfile.server.cann:9.0" -t pypto3-dev-env:cann9 .
     docker image inspect pypto3-dev-env:cann9 --format '{{json .Config.Cmd}}'
     ```
     Confirm:
