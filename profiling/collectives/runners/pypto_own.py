@@ -37,12 +37,13 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import os
-import re
 import sys
 import tempfile
 import time
 from pathlib import Path
 from typing import Any
+
+from collectives.metrics import parse_device_wall_s
 
 import torch
 
@@ -377,22 +378,6 @@ def _flatten_compile_profile(profile: dict) -> dict[str, float] | None:
     }
 
 
-_DEVICE_WALL_RE = re.compile(r"device_wall[^\n]*?dur=(\d+)")
-
-
-def _parse_device_wall_s(text: str) -> float | None:
-    """Extract the slowest-rank ``device_wall`` span duration (seconds).
-
-    The runtime emits one ``[STRACE] ... name=simpler_run.runner_run.device_wall
-    ... dur=<ns> clk=dev`` span per rank; the slowest rank is the collective
-    completion. Returns ``None`` when the runtime did not emit the span.
-    """
-    durs = [int(m) for m in _DEVICE_WALL_RE.findall(text)]
-    if not durs:
-        return None
-    return max(durs) / 1e9
-
-
 class PyptoCollectiveSession:
     """One compile + one worker init; call execute() many times before close()."""
 
@@ -502,7 +487,7 @@ class PyptoCollectiveSession:
         self._strace_fh.seek(self._strace_offset)
         text = self._strace_fh.read()
         self._strace_offset = self._strace_fh.tell()
-        return _parse_device_wall_s(text)
+        return parse_device_wall_s(text)
 
     def execute(self, config: Any | None = None) -> tuple[bool, float, str]:
         """Run one collective round; returns (ok, execute_s, error).
@@ -512,8 +497,10 @@ class PyptoCollectiveSession:
         ``device_wall`` STRACE span, when the runtime emits one — is recorded
         on ``self.last_device_wall_s`` (``None`` when unavailable).
         """
-        t0 = time.perf_counter()
+        # Host-side zeroing is not part of the collective — it must not land in
+        # the timed region, so execute_s stays dispatch + device time only.
         self.outputs.zero_()
+        t0 = time.perf_counter()
         self._rt.run(self._compiled, self.inputs, self.outputs, config=config)
         wall = time.perf_counter() - t0
         self.last_device_wall_s = self._drain_device_wall()

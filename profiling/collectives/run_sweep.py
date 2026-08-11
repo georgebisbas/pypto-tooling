@@ -18,6 +18,7 @@ from collectives.artifacts import RunArtifactBundle
 from collectives.config import simpler_root
 from collectives.equivalence import EquivalenceCase
 from collectives.golden import fill_rank_inputs, verify_outputs
+from collectives.metrics import parse_device_wall_s, parse_hccl_per_rank
 from collectives.stacks import (
     CAMPAIGN_STACKS,
     DEFAULT_STACKS,
@@ -185,17 +186,6 @@ def _profile_flags(profile_spec: str) -> dict[str, list[str]]:
 ResultOk = tuple[bool, str, float]  # (ok, error, wall_s)
 
 _CAMPAIGN_STACKS = CAMPAIGN_STACKS
-
-
-def _parse_hccl_per_rank(line: str) -> list[float] | None:
-    if "per_rank=" not in line:
-        return None
-    try:
-        payload = line.split("per_rank=", 1)[1].strip()
-        end = payload.index("]")
-        return [float(x) for x in json.loads(payload[: end + 1])]
-    except (ValueError, json.JSONDecodeError):
-        return None
 
 
 def _parse_hccl_setup_s(lines: list[str]) -> float | None:
@@ -513,7 +503,7 @@ def _run_hccl_campaign(
     timed_lines: list[tuple[int, list[float]]] = []
     for line in lines:
         if line.startswith("HCCL_WARMUP"):
-            per_rank = _parse_hccl_per_rank(line)
+            per_rank = parse_hccl_per_rank(line)
             if per_rank is None:
                 continue
             try:
@@ -522,7 +512,7 @@ def _run_hccl_campaign(
                 round_no = len(warmup_lines) + 1
             warmup_lines.append((round_no, per_rank))
         elif line.startswith("HCCL_TIMED"):
-            per_rank = _parse_hccl_per_rank(line)
+            per_rank = parse_hccl_per_rank(line)
             if per_rank is None:
                 continue
             try:
@@ -607,6 +597,7 @@ def _run_simpler_own_campaign(
                 setup_s=setup_s if round_idx == 0 else None,
                 n_bytes=case.n_bytes,
                 phases=phases,
+                device_wall_s=getattr(session, "last_device_wall_s", None),
             ))
             round_idx += 1
 
@@ -624,6 +615,7 @@ def _run_simpler_own_campaign(
                 setup_s=None,
                 n_bytes=case.n_bytes,
                 phases=phases,
+                device_wall_s=getattr(session, "last_device_wall_s", None),
             ))
             round_idx += 1
     except Exception as exc:
@@ -758,7 +750,7 @@ def _print_sample_line(stack: str, sample: dict[str, Any], n_bytes: int, lines: 
         details.append(f"ranks={sample['per_rank_execute_s']}")
     elif stack == "hccl" and lines:
         for line in lines:
-            per_rank = _parse_hccl_per_rank(line)
+            per_rank = parse_hccl_per_rank(line)
             if per_rank is not None:
                 details.append(f"ranks={per_rank}")
                 break
@@ -852,7 +844,7 @@ def _run_stack_multi(
             ok, err, lines, wall, phases = runner(case, extra)
             per_rank = None
             for line in lines:
-                parsed = _parse_hccl_per_rank(line)
+                parsed = parse_hccl_per_rank(line)
                 if parsed is not None:
                     per_rank = parsed
                     break
@@ -868,6 +860,7 @@ def _run_stack_multi(
                 n_bytes=case.n_bytes,
                 phases=phases,
                 per_rank_execute_s=per_rank_list,
+                device_wall_s=parse_device_wall_s("\n".join(lines)),
             )
             samples.append(sample)
             _print_sample_line(stack, sample, case.n_bytes, lines)

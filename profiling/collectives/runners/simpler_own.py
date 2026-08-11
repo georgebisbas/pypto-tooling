@@ -24,6 +24,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+import tempfile
 import time
 from pathlib import Path
 from typing import Any
@@ -31,6 +32,7 @@ from typing import Any
 import torch
 
 from collectives.config import simpler_root
+from collectives.metrics import parse_device_wall_s
 
 # simpler's Python packages (simpler_setup, simpler) live under the simpler root.
 _simpler_root = simpler_root()
@@ -176,17 +178,29 @@ class MeshAllreduceSession:
         chip_callable = build_chip_callable(platform, pto_isa_commit)
         self.compile_s = time.perf_counter() - t0
 
-        t1 = time.perf_counter()
-        self.worker = Worker(
-            level=3,
-            platform=platform,
-            runtime="tensormap_and_ringbuffer",
-            device_ids=devices,
-            num_sub_workers=0,
-        )
-        self.chip_handle = self.worker.register(chip_callable)
-        self.worker.init()
-        self.init_s = time.perf_counter() - t1
+        # Redirect stderr at the fd level BEFORE worker.init() forks the chip
+        # workers (they inherit fd 2): the [STRACE] device_wall spans land here
+        # and are drained per round. Restored in close().
+        self._strace_fh = tempfile.TemporaryFile(mode="w+", encoding="utf-8")
+        self._strace_offset = 0
+        self._saved_err_fd = os.dup(2)
+        os.dup2(self._strace_fh.fileno(), 2)
+        self.last_device_wall_s: float | None = None
+        try:
+            t1 = time.perf_counter()
+            self.worker = Worker(
+                level=3,
+                platform=platform,
+                runtime="tensormap_and_ringbuffer",
+                device_ids=devices,
+                num_sub_workers=0,
+            )
+            self.chip_handle = self.worker.register(chip_callable)
+            self.worker.init()
+            self.init_s = time.perf_counter() - t1
+        except BaseException:
+            self._restore_stderr()
+            raise
 
         # The comm domain is allocated per run inside the orchestration
         # function — the current simpler API (see examples/workers/l3/allreduce).
@@ -202,6 +216,21 @@ class MeshAllreduceSession:
         self._execute_count = 0
         self._CallConfig = CallConfig
 
+    def _restore_stderr(self) -> None:
+        """Restore fd 2 to its pre-session target; idempotent."""
+        if getattr(self, "_saved_err_fd", None) is not None:
+            os.dup2(self._saved_err_fd, 2)
+            os.close(self._saved_err_fd)
+            self._saved_err_fd = None
+
+    def _drain_device_wall(self) -> float | None:
+        """Read new [STRACE] spans since the last drain; slowest-rank device_wall."""
+        self._strace_fh.flush()
+        self._strace_fh.seek(self._strace_offset)
+        text = self._strace_fh.read()
+        self._strace_offset = self._strace_fh.tell()
+        return parse_device_wall_s(text)
+
     def execute(self, verify: bool = True) -> tuple[bool, float, str]:
         """Run one allreduce. Returns (ok, execute_s, error).
 
@@ -211,6 +240,7 @@ class MeshAllreduceSession:
         self.worker.run(self._orch_fn, args=None, config=self._CallConfig())
         execute_s = time.perf_counter() - t0
         self._execute_count += 1
+        self.last_device_wall_s = self._drain_device_wall()
 
         if not verify:
             return True, execute_s, ""
@@ -267,6 +297,10 @@ class MeshAllreduceSession:
             )
 
     def close(self) -> None:
+        self._restore_stderr()
+        if getattr(self, "_strace_fh", None) is not None:
+            self._strace_fh.close()
+            self._strace_fh = None
         self.worker.close()
 
 

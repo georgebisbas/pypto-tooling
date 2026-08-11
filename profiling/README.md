@@ -82,6 +82,32 @@ until session wrappers land.
 `wall_s_mean` in aggregate rows is retained for backward compatibility but **deprecated**
 for cross-stack comparison — use `execute_s_mean` and `bw_execute_mb_s` instead.
 
+## Methodology notes (measurement hygiene)
+
+These keep the numbers honest; a change here affects every campaign, so they are
+deliberate:
+
+- **`device_wall_s` is the apples-to-apples metric** and is now captured for every
+  stack: the in-process pypto/simpler-own runners redirect stderr at the fd level
+  *before* `prepare()`/`init()` (chip workers fork there and inherit fd 2) and drain
+  the slowest-rank `[STRACE] device_wall` span per round; the `simpler`/`pto-isa`
+  subprocess runners parse the same spans from their captured stderr. The model fit
+  (`summarize.py --model`) prefers it over `execute_s`.
+- **Host-side zeroing is outside the timed region** — `outputs.zero_()` runs before
+  `t0`, so `execute_s` is dispatch + device time only, not dispatch + memset + device.
+- **Known residual biases (documented, not yet fixed):**
+  - *Fixed stack order* per (P, count): `hccl → simpler-own → pypto-*`. On a shared
+    box, thermal/tenant drift can bias later stacks; the median + `device_wall`
+    metrics resist this, but interleaving or randomising stack order per round would
+    remove it (needs cross-stack session coordination).
+  - *No CPU pinning / NUMA control* for the host dispatch path — the ~100 ms-scale
+    `execute_s` spikes on shared boxes are partly other tenants; `taskset`/`numactl`
+    would reduce variance for the `--batch` execute view.
+  - *HCCL vs pypto timing asymmetry*: HCCL measures host-observed
+    `HcclAllReduce` + `aclrtSynchronizeStream`; pypto `execute_s` is `rt.run()` wall.
+    Both are host-wall around an async device collective; `device_wall` removes the
+    remaining host component on the pypto side.
+
 ## Status
 
 | Component | Status |
