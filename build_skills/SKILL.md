@@ -12,7 +12,7 @@ Use this skill when working **inside a running Docker container** after `git pul
 `git checkout`, or `git reset` on PyPTO — not when building the image itself (see
 [dockerfile_skills/SKILL.md](../dockerfile_skills/SKILL.md)).
 
-The images and `scripts/` live in the sibling [`../pypto-docker`](../pypto-docker/)
+The images and `scripts/` live in the sibling [`../../pypto-docker`](../../pypto-docker/)
 repo; only the in-container rebuild knowledge stays here.
 
 The hw-native-sys images pre-install PyPTO via `pip install --no-build-isolation`
@@ -45,7 +45,7 @@ Use the **same** `python` / `pip` for configure and install (`which python3 pip`
 
 ## Preferred path (after branch pull or C++ edit)
 
-Aligns with image build in [Dockerfile.hw-native-sys.cann9.0](../pypto-docker/Dockerfile.hw-native-sys.cann9.0):
+Aligns with image build in [Dockerfile.hw-native-sys.cann9.0](../../pypto-docker/Dockerfile.hw-native-sys.cann9.0):
 
 ```bash
 cd /opt/pypto   # or /workspace/hw-native-sys/pypto
