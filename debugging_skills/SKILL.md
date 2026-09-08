@@ -256,7 +256,7 @@ this skill is about **tile row stride** (logical shape), which is independent.
 |-------|------------|-------|
 | **pto-isa** | C++ `static_assert` in generated kernel | e.g. A5 `TStore.hpp`: `Cols * sizeof(T) % 32 == 0` |
 | **PTOAS** | MLIR `verify()` on ops | Large verifier pass **2026-03-16** (`4051849` in PTOAS). Store/expand failures may surface as other op errors or kernel compile |
-| **PyPTO CI** | ST / codegen | **ptoas v0.48** pinned from `pypto/toolchain/versions.env` (v0.50 was bumped then reverted — see timeline). Older ptoas may not catch the same cases |
+| **PyPTO CI** | ST / codegen | **ptoas v0.60** pinned from `pypto/toolchain/versions.env` (see timeline — not monotonic: v0.50, then back to v0.48, then v0.54/v0.57/v0.60 with a v0.57 re-pin in between). Older ptoas may not catch the same cases |
 | **PyPTO tests** | Documented shapes | `test_scatter_update` (INT32 `cols >= 8`), `test_gather`, `test_l3_notify_wait` |
 
 The rule is **not** a recent PyPTO DSL change; new code paths (e.g. `pl.tile.full`) **expose** it.
@@ -350,6 +350,11 @@ Reference: `pypto/tests/st/distributed/test_l3_notify_wait.py` (comment explains
 | 2026-06-30 | PyPTO CI ptoas **v0.40 → v0.48** (#1921) |
 | 2026-07-24 | PyPTO CI ptoas **v0.48 → v0.50** (#2076, with the `InsertCommFence` pass) |
 | 2026-07-27 | PyPTO CI ptoas **v0.50 → v0.48** — reverted (#2138): `InsertCommFence` targeted a buggy ptoas 0.50 build. Pass, codegen changes, and toolchain bump all backed out until a fixed ptoas ships |
+| 2026-07-30 | PyPTO CI ptoas **v0.48 → v0.54** (#2168) — relands `InsertCommFence` on the fixed ptoas |
+| 2026-08-11 | PyPTO CI ptoas **v0.54 → v0.57** (#2291) |
+| 2026-08-28 | PyPTO CI ptoas **v0.57 → v0.60** (#2523, with a runtime pin bump) |
+| 2026-08-31 | PyPTO CI ptoas **v0.60 → v0.57** — reverted (#2563): #2523's level3 TMP change backed out |
+| 2026-09-07 | PyPTO CI ptoas **v0.57 → v0.60** — restored (#2650) once the #2523 level3 TMP fix relanded |
 | 2026-05-26 | `test_l3_notify_wait` — scalar workaround documented |
 | 2026-05-28 | GEMM comm anchor `[1,1]` → fix `[1,8]` |
 
