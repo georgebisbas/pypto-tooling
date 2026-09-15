@@ -35,3 +35,14 @@ git pull
 cmake --build build --parallel
 pip install --no-build-isolation -e .
 ```
+
+
+```
+git clone https://github.com/hw-native-sys/pypto-lib.git
+git clone https://github.com/hw-native-sys/simpler.git
+git clone https://github.com/hw-native-sys/pto-isa.git
+git clone https://github.com/georgebisbas/pypto-tooling.git
+git clone https://github.com/georgebisbas/pypto-profiling.git
+git clone https://github.com/hw-native-sys/PTOAS
+
+```
